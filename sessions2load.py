@@ -7,8 +7,8 @@
 Load sessions with tracking data/spikes.
 
 The method data_loader allows one to extract any combination of cluster activity
-and variables possible; special methods __type__ and _description__ return the
-type and description of each queried describe, respectively.
+and variables possible; the special method __str__ returns the type and description
+of each queried variable, respectively.
 
 """
 
@@ -17,6 +17,7 @@ import sys
 import pickle
 
 
+# noinspection PyUnresolvedReferences
 class Session:
 
     # class object attribute
@@ -47,10 +48,12 @@ class Session:
                  'speeds': {'type': 'np.ndarray (total frame number, 2)', 'description': 'Speed of the animal in the XY plane / there are 2 because of 2 ways of calculating speed - speeds[:, 1] is the one we use.'},
                  'selfmotion': {'type': 'np.ndarray (total frame number, 4)', 'description': 'Self-motion of the animal in the XY plane / there are 4 (dx0, dy0, dx1, dy1) because of 2 ways of calculating speed.'},
                  'speeds_1st_der': {'type': 'np.ndarray (total frame number, 2)', 'description': 'First derivative of speed / there are 2 because of 2 ways of calculating speed - speeds[:, 1] is the one we use.'},
+                 'neck_1st_der': {'type': 'np.ndarray (total frame number, )', 'description': 'First derivative of neck elevation.'},
+                 'neck_2nd_der': {'type': 'np.ndarray (total frame number, )', 'description': 'Second derivative of neck elevation.'},
                  'allo_head_1st_der': {'type': 'np.ndarray (total frame number, 3)', 'description': 'First derivative of allocentric head angles: roll (X), pitch (Y) and azimuth (Z).'},
                  'allo_head_2nd_der': {'type': 'np.ndarray (total frame number, 3)', 'description': 'Second derivative of allocentric head angles: roll (X), pitch (Y) and azimuth (Z).'},
-                 'body_direction_1sr_der': {'type': 'np.ndarray (total frame number, )', 'description': 'Allocentric body direction first derivative.'},
-                 'body_direction_2nd_der': {'type': 'np.ndarray (total frame number, )', 'description': 'Allocentric body direction second derivative.'},
+                 'bodydir_1sr_der': {'type': 'np.ndarray (total frame number, )', 'description': 'Allocentric body direction first derivative.'},
+                 'bodydir_2nd_der': {'type': 'np.ndarray (total frame number, )', 'description': 'Allocentric body direction second derivative.'},
                  'ego3_head_1st_der': {'type': 'np.ndarray (total frame number, 3)', 'description': 'First derivative of 3D egocentric head angles: roll (X), pitch (Y) and azimuth (Z).'},
                  'ego3_head_2nd_der': {'type': 'np.ndarray (total frame number, 3)', 'description': 'Second derivative of 3D egocentric head angles: roll (X), pitch (Y) and azimuth (Z).'},
                  'ego2_head_1st_der': {'type': 'np.ndarray (total frame number, 3)', 'description': 'First derivative of XY egocentric head angles: roll (X), pitch (Y) and azimuth (Z).'},
@@ -151,5 +154,8 @@ class Session:
         ----------
         """
 
-        return f"Type: {self.data_info[self.describe]['type']} \n" \
+        return f"Type: {self.data_info[self.describe]['type']}. \n" \
                f"Description: {self.data_info[self.describe]['description']}"
+
+    if __name__ == '__main__':
+        Session(session_list=sys.argv[0], describe=sys.argv[1]).data_loader()
