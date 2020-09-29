@@ -160,4 +160,4 @@ class Session:
 
 if __name__ == '__main__':
     # sys.argv[0] is name of script
-    print(Session(describe=str(sys.argv[1])))
+    Session(describe=str(sys.argv[1]))
