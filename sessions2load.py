@@ -17,7 +17,6 @@ import sys
 import pickle
 
 
-# noinspection PyUnresolvedReferences
 class Session:
 
     # class object attribute
