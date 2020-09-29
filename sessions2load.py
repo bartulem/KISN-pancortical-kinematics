@@ -79,7 +79,7 @@ class Session:
     def data_loader(self, **kwargs):
 
         """
-        Params
+        Parameters
         ----------
         **kwargs: dictionary
         extract_clusters : str/int/list
