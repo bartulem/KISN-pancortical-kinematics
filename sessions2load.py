@@ -157,5 +157,7 @@ class Session:
         return f"Type: {self.data_info[self.describe]['type']}. \n" \
                f"Description: {self.data_info[self.describe]['description']}"
 
-    if __name__ == '__main__':
-        Session(session_list=sys.argv[0], describe=sys.argv[1]).data_loader()
+
+if __name__ == '__main__':
+    # sys.argv[0] is name of script
+    print(Session(describe=str(sys.argv[1])))
