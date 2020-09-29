@@ -8,7 +8,7 @@ Load sessions with tracking data/spikes.
 
 The method data_loader allows one to extract any combination of cluster activity
 and variables possible; special methods __type__ and _description__ return the
-type and description of each queried variable, respectively.
+type and description of each queried describe, respectively.
 
 """
 
@@ -70,9 +70,9 @@ class Session:
                  'imu_ego2_head_2nd_der': {'type': 'np.ndarray (total frame number, 3)', 'description': 'Second derivative of IMU XY egocentric head angles: roll (X), pitch (Y) and azimuth (Z).'},
                  'imu_sound': {'type': 'np.ndarray (total frame number, )', 'description': 'Was the white noise sound ON (1) or OFF (0).'}}
 
-    def __init__(self, session_list, variable='file_info'):
+    def __init__(self, session_list=0, describe='file_info'):
         self.session_list = session_list
-        self.variable = variable
+        self.describe = describe
 
     def data_loader(self, **kwargs):
 
@@ -90,7 +90,7 @@ class Session:
         ----------
         data : dictionary
             The data dictionary tree; outer dictionary - file names are keys, inner dictionary is the value;
-            inner dictionary - variable names are keys, variable arrays are values.
+            inner dictionary - describe names are keys, describe arrays are values.
         ----------
         """
 
@@ -140,34 +140,16 @@ class Session:
 
             return data
 
-    # returns specific variable type
-    def __type__(self):
+    # returns type & description of desired variable
+    def __str__(self):
 
         """
         Returns
         ----------
         type : str
-            Variable type.
+            Variable type & description.
         ----------
         """
 
-        return f"{self.data_info[self.variable]['type']}"
-
-    # returns specific variable description
-    def __description__(self):
-
-        """
-        Returns
-        ----------
-        type : str
-            Variable description.
-        ----------
-        """
-
-        return f"{self.data_info[self.variable]['description']}"
-
-
-lissst = ['/home/bartulm/Insync/mimica.bartul@gmail.com/OneDrive/Work/data/posture_2020/data_for_rate_maps_kavorka_190620_s1_distal_light_reheaded_XYZeuler_notricks.pkl']
-print(Session(session_list=lissst, variable='framerate').__description__())
-
-# print(swag['kavorka_190620_s1_distal_light_reheaded_XYZeuler_notricks'].keys())
+        return f"Type: {self.data_info[self.describe]['type']} \n" \
+               f"Description: {self.data_info[self.describe]['description']}"
