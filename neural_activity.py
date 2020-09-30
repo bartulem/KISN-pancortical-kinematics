@@ -11,6 +11,8 @@ Load spike data, bin and smooth.
 import numpy as np
 from sessions2load import Session
 from numba import njit
+from numba import types
+from numba.typed import Dict
 
 
 @njit(parallel=False)
@@ -106,10 +108,11 @@ def convert_spikes_to_frame_events(purged_spike_train, frames_total, camera_fram
 
 class Spikes:
 
-    def __init__(self, input_data):
-        self.input_data = input_data
+    def __init__(self, input_files):
+        self.input_files = input_files
 
     def convert_activity_to_frames(self, **kwargs):
+
         """
         Parameters
         ----------
@@ -127,3 +130,43 @@ class Spikes:
 
         get_clusters = kwargs['get_clusters'] if 'get_clusters' in kwargs.keys() \
                                                  and (kwargs['get_clusters'] == 'all' or type(kwargs['get_clusters']) == int or type(kwargs['get_clusters']) == list) else 'all'
+
+        # get spike data in seconds and tracking start and end time
+        extracted_data = Session(session_list=self.input_files).data_loader(extract_clusters=get_clusters, extract_variables=['tracking_ts'])
+
+        #
+        for file_id in extracted_data.keys():
+            track_ts = extracted_data[file_id]['tracking_ts']
+            extracted_activity = extracted_data[file_id]['cell_spikes']
+
+            # initialize and fill in numba-type dictionary with purged spike trains
+            numba_extracted_activity = Dict.empty(key_type=types.unicode_type, value_type=types.float64[:])
+
+            for cell_id, spikes in extracted_activity.items():
+                numba_extracted_activity[cell_id] = purge_spikes_beyond_tracking(spike_train=spikes, tracking_ts=track_ts)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
