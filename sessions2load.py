@@ -97,10 +97,10 @@ class Session:
         """
 
         extract_clusters = kwargs['extract_clusters'] if 'extract_clusters' in kwargs.keys() \
-                                                         and (type(kwargs['extract_clusters']) == str or type(kwargs['extract_clusters']) == int or type(kwargs['extract_clusters']) == list) else 'None'
+                                                         and (kwargs['extract_clusters'] == 'all' or type(kwargs['extract_clusters']) == int or type(kwargs['extract_clusters']) == list) else 'None'
 
         extract_variables = kwargs['extract_variables'] if 'extract_variables' in kwargs.keys() \
-                                                           and (type(kwargs['extract_variables']) == str or type(kwargs['extract_variables']) == list) else 'None'
+                                                           and (kwargs['extract_variables'] == 'all' or type(kwargs['extract_variables']) == list) else 'None'
 
         # load sessions
         if extract_clusters != 'None' or extract_variables != 'None':
