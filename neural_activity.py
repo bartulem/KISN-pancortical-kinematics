@@ -11,8 +11,6 @@ Load spike data, bin and smooth.
 import numpy as np
 from sessions2load import Session
 from numba import njit
-from numba import types
-from numba.typed import Dict
 
 
 @njit(parallel=False)
@@ -46,7 +44,7 @@ def get_shuffling_shifts(number_of_shuffles=1000, shuffle_range=(20, 60)):
 
 
 @njit(parallel=False)
-def purge_spikes_beyond_tracking(spike_train, tracking_ts):
+def purge_spikes_beyond_tracking(spike_train, tracking_ts, full_purge=True):
     """
     Parameters
     ----------
@@ -54,6 +52,8 @@ def purge_spikes_beyond_tracking(spike_train, tracking_ts):
         Spike times in seconds.
     tracking_ts : np.ndarray (2, )
         The start and end of tracking relative to sessions start.
+    full_purge : bool
+        Remove spikes before and after tracking; defaults to True.
     ----------
 
     Returns
@@ -63,11 +63,15 @@ def purge_spikes_beyond_tracking(spike_train, tracking_ts):
     ----------
     """
 
-    # re-calculate spike times relative to tracking start
-    purged_spike_train = spike_train - tracking_ts[0]
+    if full_purge:
+        # re-calculate spike times relative to tracking start
+        purged_spike_train = spike_train - tracking_ts[0]
 
-    # remove spikes that precede or succeed tracking
-    purged_spike_train = purged_spike_train[(purged_spike_train >= 0) & (purged_spike_train < tracking_ts[1] - tracking_ts[0])]
+        # remove spikes that precede or succeed tracking
+        purged_spike_train = purged_spike_train[(purged_spike_train >= 0) & (purged_spike_train < tracking_ts[1] - tracking_ts[0])]
+    else:
+        # remove spikes that succeed tracking
+        purged_spike_train = spike_train[spike_train < tracking_ts[1] - tracking_ts[0]]
 
     return purged_spike_train
 
@@ -79,8 +83,8 @@ def convert_spikes_to_frame_events(purged_spike_train, frames_total, camera_fram
     ----------
     purged_spike_train : np.ndarray
         Spike times in seconds (relative to tracking start).
-    frames_total : np.ndarray (2, )
-        The start and end of tracking relative to sessions start.
+    frames_total : int
+        The total number of tracking frames in the recording.
     camera_framerate : np.float64
         The sampling frequency of the tracking system; defaults to 120.
     ----------
@@ -101,17 +105,49 @@ def convert_spikes_to_frame_events(purged_spike_train, frames_total, camera_fram
 
     # categorize spikes
     for frame in spikes_tracking:
-        spikes_frames[frame] += 1
+        spikes_frames[int(frame)] += 1
 
     return spikes_frames
 
 
+@njit(parallel=False)
+def shuffle_spike_train(spike_train, random_shifts):
+    """
+    Parameters
+    ----------
+    spike_train : np.ndarray (number_of_spikes, )
+        Spike times in seconds (relative to tracking start).
+    random_shifts : np.ndarray (number_of_shuffles, )
+        The pseudorandom shifts for generating shuffled spike trains.
+    ----------
+
+    Returns
+    ----------
+    shuffled_spike_train : (number_of_shuffles, number_of_spikes)
+        The shuffled spike trains without spikes that precede or succeed tracking, relative to tracking start.
+    ----------
+    """
+
+    # create array of zeroed values to store shuffled spikes in
+    shuffled_spike_train_sec = np.zeros((random_shifts.shape[0], spike_train.shape[0]))
+
+    # get shuffled spike time values
+    for shuffle_idx in range(random_shifts.shape[0]):
+        shuffled_spike_train_sec[shuffle_idx, :] = spike_train + random_shifts[shuffle_idx]
+
+    return shuffled_spike_train_sec
+
+
 class Spikes:
+
+    # get shuffling shifts
+    shuffle_seed, shuffle_shifts = get_shuffling_shifts()
+    print(f"The pseudorandom number generator was seeded at {shuffle_seed}.")
 
     def __init__(self, input_files):
         self.input_files = input_files
 
-    def convert_activity_to_frames(self, **kwargs):
+    def convert_activity_to_frames_with_shuffles(self, **kwargs):
 
         """
         Parameters
@@ -124,7 +160,7 @@ class Spikes:
         Returns
         ----------
         spike_data : np.ndarray (frames_total, )
-            How .
+            How .extracted_activity
         ----------
         """
 
@@ -132,41 +168,37 @@ class Spikes:
                                                  and (kwargs['get_clusters'] == 'all' or type(kwargs['get_clusters']) == int or type(kwargs['get_clusters']) == list) else 'all'
 
         # get spike data in seconds and tracking start and end time
-        extracted_data = Session(session_list=self.input_files).data_loader(extract_clusters=get_clusters, extract_variables=['tracking_ts'])
+        extracted_data = Session(session_list=self.input_files).data_loader(extract_clusters=get_clusters, extract_variables=['tracking_ts', 'framerate', 'total_frame_num'])
 
-        #
+        # convert spike arrays to frame arrays
+        activity_dictionary = {}
         for file_id in extracted_data.keys():
+            activity_dictionary[file_id] = {}
             track_ts = extracted_data[file_id]['tracking_ts']
             extracted_activity = extracted_data[file_id]['cell_spikes']
-
-            # initialize and fill in numba-type dictionary with purged spike trains
-            numba_extracted_activity = Dict.empty(key_type=types.unicode_type, value_type=types.float64[:])
+            empirical_camera_fr = extracted_data[file_id]['framerate']
+            total_frame_num = extracted_data[file_id]['total_frame_num']
 
             for cell_id, spikes in extracted_activity.items():
-                numba_extracted_activity[cell_id] = purge_spikes_beyond_tracking(spike_train=spikes, tracking_ts=track_ts)
+                activity_dictionary[file_id][cell_id] = {}
 
+                # eliminate spikes that happen prior to and post tracking
+                purged_spikes_sec = purge_spikes_beyond_tracking(spike_train=spikes, tracking_ts=track_ts)
 
+                # covert spikes to frame arrays
+                activity_dictionary[file_id][cell_id]['activity'] = convert_spikes_to_frame_events(purged_spike_train=purged_spikes_sec,
+                                                                                                   frames_total=total_frame_num,
+                                                                                                   camera_framerate=empirical_camera_fr)
+                activity_dictionary[file_id][cell_id]['shuffled'] = np.zeros((Spikes.shuffle_shifts.shape[0], total_frame_num))
 
+                # shuffle the purged spike train N times
+                shuffled_spikes_sec = shuffle_spike_train(purged_spikes_sec, Spikes.shuffle_shifts)
 
+                # convert shuffles to frame arrays
+                for shuffle_idx in range(shuffled_spikes_sec.shape[0]):
+                    purged_shuffle = purge_spikes_beyond_tracking(spike_train=shuffled_spikes_sec[shuffle_idx, :], tracking_ts=track_ts, full_purge=False)
+                    activity_dictionary[file_id][cell_id]['shuffled'][shuffle_idx, :] = convert_spikes_to_frame_events(purged_spike_train=purged_shuffle,
+                                                                                                                       frames_total=total_frame_num,
+                                                                                                                       camera_framerate=empirical_camera_fr)
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+        return activity_dictionary

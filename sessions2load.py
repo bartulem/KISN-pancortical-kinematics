@@ -21,6 +21,7 @@ class Session:
 
     # class object attribute
     data_info = {'file_info': {'type': 'str', 'description': 'Name of origin file.'},
+                 'total_frame_num': {'type': 'int', 'description': 'Total number of frames in origin file.'},
                  'framerate': {'type': 'np.float64', 'description': 'The camera framerate for the session.'},
                  'point_data_dimensions': {'type': 'np.ndarray (1, 5, total frame number)', 'description': 'The second number refers to X, Y, Z, labels, nans; last is number of frames.'},
                  'tracking_ts': {'type': 'np.ndarray (2, )', 'description': 'The start and stop of tracking in seconds.'},
@@ -134,6 +135,7 @@ class Session:
                                         data[loaded['file_info']]['cell_spikes'][loaded['cell_names'][name_idx]] = loaded['cell_activities'][name_idx].ravel()
                         else:
                             if extract_variables != 'None':
+                                data[loaded['file_info']]['total_frame_num'] = loaded['file_info']['head_origin'].shape[0]
                                 if extract_variables == 'all' or key in extract_variables:
                                     data[loaded['file_info']][key] = value
                 else:
