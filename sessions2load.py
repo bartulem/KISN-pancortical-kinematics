@@ -121,25 +121,25 @@ class Session:
                             continue
                         elif key == 'cell_names':
                             if extract_clusters != 'None':
-                                if 'cell_spikes' not in data:
-                                    data[loaded['file_info']]['cell_spikes'] = {}
+                                if 'cluster_spikes' not in data:
+                                    data[loaded['file_info']]['cluster_spikes'] = {}
                                 if extract_clusters == 'all':
                                     for name_idx, name in enumerate(loaded['cell_names']):
-                                        data[loaded['file_info']]['cell_spikes'][name] = loaded['cell_activities'][name_idx].ravel()
+                                        data[loaded['file_info']]['cluster_spikes'][name] = loaded['cell_activities'][name_idx].ravel()
                                 elif type(extract_clusters) == list:
                                     for name in extract_clusters:
                                         name_idx = loaded['cell_names'].index(name)
-                                        data[loaded['file_info']]['cell_spikes'][name] = loaded['cell_activities'][name_idx].ravel()
+                                        data[loaded['file_info']]['cluster_spikes'][name] = loaded['cell_activities'][name_idx].ravel()
                                 else:
                                     for name_idx in range(extract_clusters):
-                                        data[loaded['file_info']]['cell_spikes'][loaded['cell_names'][name_idx]] = loaded['cell_activities'][name_idx].ravel()
+                                        data[loaded['file_info']]['cluster_spikes'][loaded['cell_names'][name_idx]] = loaded['cell_activities'][name_idx].ravel()
                         else:
                             if extract_variables != 'None':
                                 data[loaded['file_info']]['total_frame_num'] = loaded['file_info']['head_origin'].shape[0]
                                 if extract_variables == 'all' or key in extract_variables:
                                     data[loaded['file_info']][key] = value
                 else:
-                    print('File location invalid. Please try again.')
+                    print(f"Location invalid for file {session}. Please try again.")
                     sys.exit()
 
             return data

@@ -159,8 +159,8 @@ class Spikes:
 
         Returns
         ----------
-        spike_data : np.ndarray (frames_total, )
-            How .extracted_activity
+        activity_dictionary : dict
+            A dictionary with frame-converted cluster activity and shuffled data.
         ----------
         """
 
@@ -175,7 +175,7 @@ class Spikes:
         for file_id in extracted_data.keys():
             activity_dictionary[file_id] = {}
             track_ts = extracted_data[file_id]['tracking_ts']
-            extracted_activity = extracted_data[file_id]['cell_spikes']
+            extracted_activity = extracted_data[file_id]['cluster_spikes']
             empirical_camera_fr = extracted_data[file_id]['framerate']
             total_frame_num = extracted_data[file_id]['total_frame_num']
 
