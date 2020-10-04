@@ -100,10 +100,21 @@ class ClusterFinder:
                         # load specific pickle file segments
                         with open(session, 'rb') as session_file:
                             file_info = pickle.load(session_file)['file_info']
-                            cell_names = pickle.load(session_file)['cell_names']
+                            clusters = pickle.load(session_file)['cell_names']
+
+                        # get animal name and bank id
+                        file_animal = [name for name in ClusterFinder.probe_site_areas.keys() if name in file_info][0]
+                        file_bank = [bank for bank in ['distal', 'intermediate'] if bank in file_info][0]
 
                         # create dictionary entry with file name
-                        cluster_dictionary[file_info] = {}
+                        cluster_dictionary[file_info] = []
+
+                        for cluster in clusters:
+                            if filter_by_area is True and filter_by_cluster_type is True:
+                                cluster_dictionary[file_info].append(cluster)
+                            else:
+                                cluster_peak_ch = int(cluster[15:])
+                                ClusterFinder.probe_site_areas[file_animal][file_bank] = 0
 
                 else:
                     print(f"Location invalid for file {session}. Please try again.")
