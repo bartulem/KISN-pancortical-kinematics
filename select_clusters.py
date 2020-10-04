@@ -55,8 +55,9 @@ class ClusterFinder:
                                     'intermediate': {'V1': [(0, 231)],
                                                      'V2M': [(231, 292)]}}}
 
-    def __init__(self, session_list=0):
+    def __init__(self, session_list=0, cluster_category_dir=0):
         self.session_list = session_list
+        self.cluster_category_dir = cluster_category_dir
 
     def get_desired_clusters(self, **kwargs):
         """
@@ -74,6 +75,8 @@ class ClusterFinder:
             Sessions to be included: 'light', 'dark', 'weight', 'sound'; defaults to True.
         filer_by_bank : str/bool
             Bank to be included: 'distal' or 'intermediate'; defaults to True.
+        filter_by_session_num : list/bool
+            Sessions to be included: 's1', 's2', etc.; defaults to True.
         ----------
 
         Returns
@@ -88,6 +91,7 @@ class ClusterFinder:
         filter_by_cluster_type = kwargs['filter_by_cluster_type'] if 'filter_by_cluster_type' in kwargs.keys() and kwargs['filter_by_cluster_type'] == str else True
         filter_by_session_type = kwargs['filter_by_session_type'] if 'filter_by_session_type' in kwargs.keys() and kwargs['filter_by_session_type'] == list else True
         filer_by_bank = kwargs['filer_by_bank'] if 'filer_by_bank' in kwargs.keys() and kwargs['filer_by_bank'] == str else True
+        filter_by_session_num = kwargs['filter_by_session_num'] if 'filter_by_session_num' in kwargs.keys() and kwargs['filter_by_session_num'] == list else True
 
         cluster_dictionary = {}
         if self.session_list != 0:
@@ -95,16 +99,18 @@ class ClusterFinder:
                 if os.path.exists(session):
                     if (filter_by_animal is True or any(animal in session for animal in filter_by_animal)) \
                             and (filer_by_bank is True or filer_by_bank in session) \
-                            and (filter_by_session_type is True or any(s_type in session for s_type in filter_by_session_type)):
+                            and (filter_by_session_type is True or any(s_type in session for s_type in filter_by_session_type)) \
+                            and (filter_by_session_num is True or any(s_num in session for s_num in filter_by_session_num)):
 
                         # load specific pickle file segments
                         with open(session, 'rb') as session_file:
                             file_info = pickle.load(session_file)['file_info']
                             clusters = pickle.load(session_file)['cell_names']
 
-                        # get animal name and bank id
+                        # get animal name, bank id and date of session
                         file_animal = [name for name in ClusterFinder.probe_site_areas.keys() if name in file_info][0]
                         file_bank = [bank for bank in ['distal', 'intermediate'] if bank in file_info][0]
+                        file_date = file_info[file_info.find('20')-4:file_info.find('20')+2]
 
                         # create dictionary entry with file name
                         cluster_dictionary[file_info] = []
