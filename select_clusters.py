@@ -113,8 +113,17 @@ class ClusterFinder:
                             if filter_by_area is True and filter_by_cluster_type is True:
                                 cluster_dictionary[file_info].append(cluster)
                             else:
+                                # get cluster area
                                 cluster_peak_ch = int(cluster[15:])
-                                ClusterFinder.probe_site_areas[file_animal][file_bank] = 0
+                                for key, value in ClusterFinder.probe_site_areas[file_animal][file_bank].items():
+                                    for idx, site_range in enumerate(value):
+                                        if value[idx][0] <= cluster_peak_ch < value[idx][1]:
+                                            cluster_area = key
+
+                                if filter_by_area is True or any(area in cluster_area for area in filter_by_area):
+                                    cluster_dictionary[file_info].append(cluster)
+
+                        return cluster_dictionary
 
                 else:
                     print(f"Location invalid for file {session}. Please try again.")
