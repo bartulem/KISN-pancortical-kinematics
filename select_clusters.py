@@ -55,9 +55,9 @@ class ClusterFinder:
                                     'intermediate': {'V1': [(0, 231)],
                                                      'V2M': [(231, 292)]}}}
 
-    def __init__(self, session_list=0, cluster_category_dir=0):
+    def __init__(self, session_list=0, cluster_groups_dir=0):
         self.session_list = session_list
-        self.cluster_category_dir = cluster_category_dir
+        self.cluster_groups_dir = cluster_groups_dir
 
     def get_desired_clusters(self, **kwargs):
         """
