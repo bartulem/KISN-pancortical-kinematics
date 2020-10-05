@@ -11,6 +11,7 @@ Select appropriate clusters.
 import os
 import sys
 import pickle
+import json
 
 
 class ClusterFinder:
@@ -55,8 +56,8 @@ class ClusterFinder:
                                     'intermediate': {'V1': [(0, 231)],
                                                      'V2M': [(231, 292)]}}}
 
-    def __init__(self, session_list=0, cluster_groups_dir=0):
-        self.session_list = session_list
+    def __init__(self, session=0, cluster_groups_dir=0):
+        self.session = session
         self.cluster_groups_dir = cluster_groups_dir
 
     def get_desired_clusters(self, **kwargs):
@@ -93,32 +94,33 @@ class ClusterFinder:
         filer_by_bank = kwargs['filer_by_bank'] if 'filer_by_bank' in kwargs.keys() and kwargs['filer_by_bank'] == str else True
         filter_by_session_num = kwargs['filter_by_session_num'] if 'filter_by_session_num' in kwargs.keys() and kwargs['filter_by_session_num'] == list else True
 
-        cluster_dictionary = {}
-        if self.session_list != 0:
-            for session in self.session_list:
-                if os.path.exists(session):
-                    if (filter_by_animal is True or any(animal in session for animal in filter_by_animal)) \
-                            and (filer_by_bank is True or filer_by_bank in session) \
-                            and (filter_by_session_type is True or any(s_type in session for s_type in filter_by_session_type)) \
-                            and (filter_by_session_num is True or any(s_num in session for s_num in filter_by_session_num)):
+        cluster_list = []
+        if self.session != 0:
+            if os.path.exists(self.session):
+                if (filter_by_animal is True or any(animal in self.session for animal in filter_by_animal)) \
+                        and (filer_by_bank is True or filer_by_bank in self.session) \
+                        and (filter_by_session_type is True or any(s_type in self.session for s_type in filter_by_session_type)) \
+                        and (filter_by_session_num is True or any(s_num in self.session for s_num in filter_by_session_num)):
 
-                        # load specific pickle file segments
-                        with open(session, 'rb') as session_file:
-                            file_info = pickle.load(session_file)['file_info']
-                            clusters = pickle.load(session_file)['cell_names']
+                    # load specific pickle file segments
+                    with open(self.session, 'rb') as session_file:
+                        file_info = pickle.load(session_file)['file_info']
+                        clusters = pickle.load(session_file)['cell_names']
 
-                        # get animal name, bank id and date of session
-                        file_animal = [name for name in ClusterFinder.probe_site_areas.keys() if name in file_info][0]
-                        file_bank = [bank for bank in ['distal', 'intermediate'] if bank in file_info][0]
-                        file_date = file_info[file_info.find('20')-4:file_info.find('20')+2]
+                    # get animal name, bank id and date of session
+                    file_animal = [name for name in ClusterFinder.probe_site_areas.keys() if name in file_info][0]
+                    file_bank = [bank for bank in ['distal', 'intermediate'] if bank in file_info][0]
+                    file_date = file_info[file_info.find('20')-4:file_info.find('20')+2]
 
-                        # create dictionary entry with file name
-                        cluster_dictionary[file_info] = []
-
-                        for cluster in clusters:
-                            if filter_by_area is True and filter_by_cluster_type is True:
-                                cluster_dictionary[file_info].append(cluster)
-                            else:
+                    for cluster in clusters:
+                        if filter_by_area is True and filter_by_cluster_type is True:
+                            cluster_list.append(cluster)
+                        else:
+                            # get cluster category ('good' or 'mua')
+                            cluster_groups_json = f'{self.cluster_groups_dir}{os.sep}{file_animal}_{file_date}_{file_bank}.json'
+                            with open(cluster_groups_json) as json_file:
+                                cg_json = json.load(json_file)['imec0']
+                            if filter_by_cluster_type is True or cluster in cg_json[filter_by_cluster_type]:
                                 # get cluster area
                                 cluster_peak_ch = int(cluster[15:])
                                 for key, value in ClusterFinder.probe_site_areas[file_animal][file_bank].items():
@@ -127,13 +129,13 @@ class ClusterFinder:
                                             cluster_area = key
 
                                 if filter_by_area is True or any(area in cluster_area for area in filter_by_area):
-                                    cluster_dictionary[file_info].append(cluster)
+                                    cluster_list.append(cluster)
 
-                        return cluster_dictionary
+                    return cluster_list
 
-                else:
-                    print(f"Location invalid for file {session}. Please try again.")
-                    sys.exit()
+            else:
+                print(f"Location invalid for file {self.session}. Please try again.")
+                sys.exit()
         else:
-            print("No sessions provided.")
+            print("No session provided.")
             sys.exit()

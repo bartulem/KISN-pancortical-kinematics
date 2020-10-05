@@ -73,8 +73,8 @@ class Session:
                  'imu_ego2_head_2nd_der': {'type': 'np.ndarray (total frame number, 3)', 'description': 'Second derivative of IMU XY egocentric head angles: roll (X), pitch (Y) and azimuth (Z).'},
                  'imu_sound': {'type': 'np.ndarray (total frame number, )', 'description': 'Was the white noise sound ON (1) or OFF (0).'}}
 
-    def __init__(self, session_list=0, describe='file_info'):
-        self.session_list = session_list
+    def __init__(self, session=0, describe='file_info'):
+        self.session = session
         self.describe = describe
 
     def data_loader(self, **kwargs):
@@ -106,15 +106,12 @@ class Session:
         # load sessions
         if extract_clusters != 'None' or extract_variables != 'None':
             data = {}
-            for session in self.session_list:
-                if os.path.exists(session):
+            if self.session != 0:
+                if os.path.exists(self.session):
 
                     # load pickle file
-                    with open(session, 'rb') as session_file:
+                    with open(self.session, 'rb') as session_file:
                         loaded = pickle.load(session_file)
-
-                    # create data entry with file name
-                    data[loaded['file_info']] = {}
 
                     for key, value in loaded.items():
                         if key == 'cell_activities' or key == 'file_info':
@@ -122,27 +119,30 @@ class Session:
                         elif key == 'cell_names':
                             if extract_clusters != 'None':
                                 if 'cluster_spikes' not in data:
-                                    data[loaded['file_info']]['cluster_spikes'] = {}
+                                    data['cluster_spikes'] = {}
                                 if extract_clusters == 'all':
                                     for name_idx, name in enumerate(loaded['cell_names']):
-                                        data[loaded['file_info']]['cluster_spikes'][name] = loaded['cell_activities'][name_idx].ravel()
+                                        data['cluster_spikes'][name] = loaded['cell_activities'][name_idx].ravel()
                                 elif type(extract_clusters) == list:
                                     for name in extract_clusters:
                                         name_idx = loaded['cell_names'].index(name)
-                                        data[loaded['file_info']]['cluster_spikes'][name] = loaded['cell_activities'][name_idx].ravel()
+                                        data['cluster_spikes'][name] = loaded['cell_activities'][name_idx].ravel()
                                 else:
                                     for name_idx in range(extract_clusters):
-                                        data[loaded['file_info']]['cluster_spikes'][loaded['cell_names'][name_idx]] = loaded['cell_activities'][name_idx].ravel()
+                                        data['cluster_spikes'][loaded['cell_names'][name_idx]] = loaded['cell_activities'][name_idx].ravel()
                         else:
                             if extract_variables != 'None':
-                                data[loaded['file_info']]['total_frame_num'] = loaded['file_info']['head_origin'].shape[0]
+                                data['total_frame_num'] = loaded['file_info']['head_origin'].shape[0]
                                 if extract_variables == 'all' or key in extract_variables:
-                                    data[loaded['file_info']][key] = value
+                                    data[key] = value
                 else:
-                    print(f"Location invalid for file {session}. Please try again.")
+                    print(f"Location invalid for file {self.session}. Please try again.")
                     sys.exit()
+            else:
+                print("No session provided.")
+                sys.exit()
 
-            return data
+            return loaded['file_info'], data
 
     # returns type & description of desired variable
     def __str__(self):
