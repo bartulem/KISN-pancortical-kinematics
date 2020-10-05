@@ -87,12 +87,12 @@ class ClusterFinder:
         ----------
         """
 
-        filter_by_animal = kwargs['filter_by_animal'] if 'filter_by_animal' in kwargs.keys() and kwargs['filter_by_animal'] == list else True
-        filter_by_area = kwargs['filter_by_area'] if 'filter_by_area' in kwargs.keys() and kwargs['filter_by_area'] == list else True
-        filter_by_cluster_type = kwargs['filter_by_cluster_type'] if 'filter_by_cluster_type' in kwargs.keys() and kwargs['filter_by_cluster_type'] == str else True
-        filter_by_session_type = kwargs['filter_by_session_type'] if 'filter_by_session_type' in kwargs.keys() and kwargs['filter_by_session_type'] == list else True
-        filer_by_bank = kwargs['filer_by_bank'] if 'filer_by_bank' in kwargs.keys() and kwargs['filer_by_bank'] == str else True
-        filter_by_session_num = kwargs['filter_by_session_num'] if 'filter_by_session_num' in kwargs.keys() and kwargs['filter_by_session_num'] == list else True
+        filter_by_animal = kwargs['filter_by_animal'] if 'filter_by_animal' in kwargs.keys() and type(kwargs['filter_by_animal']) == list else True
+        filter_by_area = kwargs['filter_by_area'] if 'filter_by_area' in kwargs.keys() and type(kwargs['filter_by_area']) == list else True
+        filter_by_cluster_type = kwargs['filter_by_cluster_type'] if 'filter_by_cluster_type' in kwargs.keys() and type(kwargs['filter_by_cluster_type']) == str else True
+        filter_by_session_type = kwargs['filter_by_session_type'] if 'filter_by_session_type' in kwargs.keys() and type(kwargs['filter_by_session_type']) == list else True
+        filer_by_bank = kwargs['filer_by_bank'] if 'filer_by_bank' in kwargs.keys() and type(kwargs['filer_by_bank']) == str else True
+        filter_by_session_num = kwargs['filter_by_session_num'] if 'filter_by_session_num' in kwargs.keys() and type(kwargs['filter_by_session_num']) == list else True
 
         cluster_list = []
         if self.session != 0:
@@ -104,8 +104,10 @@ class ClusterFinder:
 
                     # load specific pickle file segments
                     with open(self.session, 'rb') as session_file:
-                        file_info = pickle.load(session_file)['file_info']
-                        clusters = pickle.load(session_file)['cell_names']
+                        loaded_session = pickle.load(session_file)
+
+                    file_info = loaded_session['file_info']
+                    clusters = loaded_session['cell_names']
 
                     # get animal name, bank id and date of session
                     file_animal = [name for name in ClusterFinder.probe_site_areas.keys() if name in file_info][0]
