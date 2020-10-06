@@ -16,45 +16,44 @@ import json
 
 class ClusterFinder:
 
-    probe_site_areas = {'bruno': {'distal': {'N/A': [(0, 16)],
-                                             'white_m': [(16, 81)],
-                                             'S1HL': [(81, 226)],
-                                             'S1Tr': [(226, 277)],
-                                             'N/A2': [(277, 314)],
-                                             'PPC': [(314, 384)]}},
+    probe_site_areas = {'bruno': {'distal': {'CaPu': [(0, 15)],
+                                             'WhMa': [(15, 80)],
+                                             'S1HL': [(80, 225)],
+                                             'S1Tr': [(225, 276)],
+                                             'M1': [(276, 313)],
+                                             'PPC': [(313, 384)]}},
                         'roy': {'distal': {'M1': [(0, 384)]},
                                 'intermediate': {'M1': [(0, 32), (102, 243)],
                                                  'S1HL': [(32, 102)]}},
                         'jacopo': {'distal': {'M2': [(0, 124)],
                                               'M1': [(124, 384)]},
-                                   'intermediate': {'M1': [(0, 5)],
+                                   'intermediate': {'M1': [(0, 5), (233, 256)],
                                                     'S1HL': [(5, 192)],
                                                     'S1Tr': [(192, 233)],
-                                                    'N/A2': [(233, 256)],
                                                     'PPC': [(256, 300)]}},
                         'crazyjoe': {'distal': {'M2': [(0, 73)],
                                                 'M1': [(73, 384)]},
                                      'intermediate': {'M1': [(0, 55)],
                                                       'S1HL': [(55, 296)],
-                                                      'S1Tr': [(296, 339)]}},
-                        'frank': {'distal': {'A1': [(0, 63)],
-                                             'A2D': [(63, 141)],
-                                             'V2L': [(141, 209)],
-                                             'V1': [(209, 384)]},
-                                  'intermediate': {'V1': [(0, 75)],
-                                                   'V2M': [(75, 205)]}},
-                        'johnjohn': {'distal': {'A1': [(0, 64)],
-                                                'A2D': [(64, 120)],
-                                                'V2L': [(120, 181)],
-                                                'V1': [(181, 384)]},
-                                     'intermediate': {'V1': [(0, 87)],
-                                                      'V2M': [(87, 208)]}},
-                        'kavorka': {'distal': {'A1': [(0, 76)],
-                                               'A2D': [(76, 180)],
-                                               'V2L': [(180, 282)],
-                                               'V1': [(282, 384)]},
-                                    'intermediate': {'V1': [(0, 231)],
-                                                     'V2M': [(231, 292)]}}}
+                                                      'S1Tr': [(296, 338)]}},
+                        'frank': {'distal': {'A1': [(0, 61)],
+                                             'A2D': [(61, 138)],
+                                             'V2L': [(138, 205)],
+                                             'V1': [(205, 384)]},
+                                  'intermediate': {'V1': [(0, 67)],
+                                                   'V2M': [(67, 195)]}},
+                        'johnjohn': {'distal': {'A1': [(0, 44)],
+                                                'A2D': [(44, 100)],
+                                                'V2L': [(100, 160)],
+                                                'V1': [(160, 384)]},
+                                     'intermediate': {'V1': [(0, 67)],
+                                                      'V2M': [(67, 188)]}},
+                        'kavorka': {'distal': {'A1': [(0, 75)],
+                                               'A2D': [(75, 179)],
+                                               'V2L': [(179, 281)],
+                                               'V1': [(281, 384)]},
+                                    'intermediate': {'V1': [(0, 230)],
+                                                     'V2M': [(230, 291)]}}}
 
     def __init__(self, session=0, cluster_groups_dir=0):
         self.session = session
@@ -119,6 +118,9 @@ class ClusterFinder:
                             cluster_list.append(cluster)
                         else:
                             # get cluster category ('good' or 'mua')
+                            if not os.path.exists(self.cluster_groups_dir):
+                                print(f"Invalid location for directory {self.cluster_groups_dir}. Please try again.")
+                                sys.exit()
                             cluster_groups_json = f'{self.cluster_groups_dir}{os.sep}{file_animal}_{file_date}_{file_bank}.json'
                             with open(cluster_groups_json) as json_file:
                                 cg_json = json.load(json_file)['imec0']
@@ -126,18 +128,22 @@ class ClusterFinder:
                                 # get cluster area
                                 cluster_peak_ch = int(cluster[15:])
                                 for key, value in ClusterFinder.probe_site_areas[file_animal][file_bank].items():
-                                    for idx, site_range in enumerate(value):
-                                        if value[idx][0] <= cluster_peak_ch < value[idx][1]:
+                                    for site_range in value:
+                                        if site_range[0] <= cluster_peak_ch < site_range[1]:
                                             cluster_area = key
+                                            break
+                                    else:
+                                        continue
+                                    break
 
                                 if filter_by_area is True or any(area in cluster_area for area in filter_by_area):
                                     cluster_list.append(cluster)
-
-                    return cluster_list
-
             else:
-                print(f"Location invalid for file {self.session}. Please try again.")
+                print(f"Invalid location for file {self.session}. Please try again.")
                 sys.exit()
         else:
             print("No session provided.")
             sys.exit()
+
+        cluster_list.sort()
+        return cluster_list

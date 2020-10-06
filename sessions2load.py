@@ -136,7 +136,7 @@ class Session:
                                 if extract_variables == 'all' or key in extract_variables:
                                     data[key] = value
                 else:
-                    print(f"Location invalid for file {self.session}. Please try again.")
+                    print(f"Invalid location for file {self.session}. Please try again.")
                     sys.exit()
             else:
                 print("No session provided.")
