@@ -73,6 +73,7 @@ def purge_spikes_beyond_tracking(spike_train, tracking_ts, full_purge=True):
         # remove spikes that succeed tracking
         purged_spike_train = spike_train[spike_train < tracking_ts[1] - tracking_ts[0]]
 
+    print(purged_spike_train.shape)
     return purged_spike_train
 
 
@@ -123,7 +124,7 @@ def shuffle_spike_train(spike_train, random_shifts):
 
     Returns
     ----------
-    shuffled_spike_train : (number_of_shuffles, number_of_spikes)
+    shuffled_spike_train : np.ndarray (number_of_shuffles, number_of_spikes)
         The shuffled spike trains without spikes that precede or succeed tracking, relative to tracking start.
     ----------
     """
@@ -138,8 +139,97 @@ def shuffle_spike_train(spike_train, random_shifts):
     return shuffled_spike_train_sec
 
 
-class Spikes:
+@njit(parallel=False)
+def find_event_starts(event_array, return_all=True,
+                      camera_framerate=120.,
+                      expected_event_duration=5.,
+                      min_inter_event_interval=10.):
+    """
+    Parameters
+    ----------
+    event_array : np.ndarray (frames_total, )
+        The array of events (should be binary, i.e. 0/1).
+    return_all : bool
+        Return all event starts, irrespective of duration; defaults to True.
+    camera_framerate : np.float64
+        The sampling frequency of the tracking system; defaults to 120.
+    expected_event_duration : int/float
+        The expected duration of the designated event; defaults to 5 (seconds).
+    min_inter_event_interval : int/float
+        The minimum interval between any two adjacent events; defaults to 10 (seconds).
+    ----------
 
+    Returns
+    ----------
+    event_start_frames: np.ndarray
+        Every frame ON (1) start in the input array.
+    ----------
+    """
+
+    event_change_points = np.where(np.roll(event_array, 1) != event_array)[0]
+    event_start_frames = event_change_points[::2]
+
+    if not return_all:
+        # this returns only events that satisfy: expected_event_duration - .1 < duration < expected_event_duration + .1
+        event_end_frames = event_change_points[1::2]
+        event_durations = (event_end_frames - event_start_frames) / camera_framerate
+        inter_event_intervals = np.concatenate((np.array([min_inter_event_interval + .1]),
+                                                (event_start_frames[1:] - event_start_frames[:-1]) / camera_framerate))
+        event_start_frames = event_start_frames[(event_durations > (expected_event_duration - .1))
+                                                & (event_durations < (expected_event_duration + .1))
+                                                & (inter_event_intervals > min_inter_event_interval)]
+
+    return event_start_frames
+
+
+@njit(parallel=False)
+def calculate_peth(activity, event_start_frames,
+                   bin_size_ms=50, window_size=10,
+                   camera_framerate=120.):
+    """
+    Parameters
+    ----------
+    activity : np.ndarray
+        Arrays with spikes allocated to tracking frames.
+    event_start_frames : np.ndarray
+        Every frame ON (1) start in the session.
+    bin_size_ms : int
+        The bin size of the PETH; defaults to 50 (ms).
+    window_size : int
+        The unilateral window size; defaults to 10 (seconds).
+    camera_framerate : np.float64
+        The sampling frequency of the tracking system; defaults to 120.
+    ----------
+
+    Returns
+    ----------
+    peth_array : np.ndarray (epoch_num, total_window)
+        Peri-event time histogram.
+    ----------
+    """
+
+    # convert bin size to seconds
+    bin_size = bin_size_ms / 1e3
+
+    # get bin step (number of frames in each bin)
+    bin_step = int(round(camera_framerate * bin_size))
+
+    # get total window
+    window_one_side = int(round((window_size / bin_size)))
+    total_window = 2 * window_one_side
+
+    # calculate PETH
+    peth_array = np.zeros((event_start_frames.shape[0], total_window))
+    for epoch in range(event_start_frames.shape[0]):
+        window_start_bin = event_start_frames[epoch] - (bin_step * window_one_side)
+        for one_bin in range(total_window):
+            peth_array[epoch, one_bin] = np.sum(activity[window_start_bin:window_start_bin + bin_size]) / bin_size
+            window_start_bin += bin_size
+
+    return peth_array
+
+
+class Spikes:
     # get shuffling shifts
     shuffle_seed, shuffle_shifts = get_shuffling_shifts()
     print(f"The pseudorandom number generator was seeded at {shuffle_seed}.")
@@ -200,3 +290,62 @@ class Spikes:
                                                                                                           camera_framerate=empirical_camera_fr)
 
         return file_id, activity_dictionary
+
+    def get_peths(self, **kwargs):
+
+        """
+        Parameters
+        ----------
+        **kwargs: dictionary
+        get_clusters : str/int/list
+            Cluster IDs to extract (if int, takes first n clusters; if 'all', takes all); defaults to 'all'.
+        bin_size_ms : int
+            The bin size of the PETH; defaults to 50 (ms).
+        window_size : int
+            The unilateral window size; defaults to 10 (seconds).
+        return_all : bool
+            Return all event starts, irrespective of duration; defaults to True.
+        expected_event_duration : int/float
+            The expected duration of the designated event; defaults to 5 (seconds).
+        min_inter_event_interval : int/float
+            The minimum interval between any two adjacent events; defaults to 10 (seconds).
+        ----------
+
+        Returns
+        ----------
+        peth_array : np.ndarray (epoch_num, total_window)
+            Peri-event time histogram.
+        ----------
+        """
+
+        get_clusters = kwargs['get_clusters'] if 'get_clusters' in kwargs.keys() \
+                                                 and (kwargs['get_clusters'] == 'all' or type(kwargs['get_clusters']) == int or type(kwargs['get_clusters']) == list) else 'all'
+
+        bin_size_ms = kwargs['bin_size_ms'] if 'bin_size_ms' in kwargs.keys() and type(kwargs['bin_size_ms']) == int else 50
+        window_size = kwargs['window_size'] if 'window_size' in kwargs.keys() and type(kwargs['window_size']) == int else 10
+        return_all = kwargs['return_all'] if 'return_all' in kwargs.keys() and type(kwargs['return_all']) == bool else True
+        expected_event_duration = kwargs['expected_event_duration'] if 'expected_event_duration' in kwargs.keys() \
+                                                                       and (type(kwargs['expected_event_duration']) == int or type(kwargs['expected_event_duration']) == float) else 5
+        min_inter_event_interval = kwargs['min_inter_event_interval'] if 'min_inter_event_interval' in kwargs.keys() \
+                                                                       and (type(kwargs['min_inter_event_interval']) == int or type(kwargs['min_inter_event_interval']) == float) else 10
+
+        ses_name, session_vars = Session(session=self.input_file).data_loader(extract_variables=['imu_sound', 'framerate'])
+
+        file_id, activity_dictionary = self.convert_activity_to_frames_with_shuffles(get_clusters=get_clusters)
+
+        event_start_frames = find_event_starts(session_vars['imu_sound'],
+                                               return_all=True,
+                                               camera_framerate=session_vars['framerate'],
+                                               expected_event_duration=5.,
+                                               min_inter_event_interval=10.)
+
+        peth_dictionary = {}
+        for cell_id in activity_dictionary.keys():
+            peth_dictionary[cell_id] = {}
+            peth_dictionary[cell_id]['peth'] = calculate_peth(activity_dictionary[cell_id]['activity'],
+                                                              event_start_frames,
+                                                              bin_size_ms=bin_size_ms,
+                                                              window_size=window_size,
+                                                              camera_framerate=session_vars['framerate'])
+
+        return peth_dictionary
