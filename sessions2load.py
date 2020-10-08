@@ -132,7 +132,7 @@ class Session:
                                         data['cluster_spikes'][loaded['cell_names'][name_idx]] = loaded['cell_activities'][name_idx].ravel()
                         else:
                             if extract_variables != 'None':
-                                data['total_frame_num'] = loaded['file_info']['head_origin'].shape[0]
+                                data['total_frame_num'] = loaded['head_origin'].shape[0]
                                 if extract_variables == 'all' or key in extract_variables:
                                     data[key] = value
                 else:
