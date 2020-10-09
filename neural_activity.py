@@ -37,7 +37,7 @@ def gaussian_smoothing(array, sigma=1, axis=1):
 
 
 @njit(parallel=False)
-def get_shuffling_shifts(number_of_shuffles=1000, shuffle_range=(20, 60)):
+def get_shuffling_shifts(number_of_shuffles=1, shuffle_range=(20, 60)):
     """
     Parameters
     ----------
@@ -251,26 +251,61 @@ def calculate_peth(activity, event_start_frames,
     return peth_array
 
 
+@njit(parallel=False)
+def raster_preparation(purged_spike_train, event_start_frames,
+                       camera_framerate=120., window_size=10):
+    """
+    Parameters
+    ----------
+    purged_spike_train : np.ndarray
+        The spike train without spikes that precede or succeed tracking, relative to tracking start.
+    event_start_frames : np.ndarray
+        Every frame ON (1) start in the session.
+    camera_framerate : np.float64
+        The sampling frequency of the tracking system; defaults to 120.
+    window_size : int
+        The unilateral window size; defaults to 10 (seconds).
+    ----------
+
+    Returns
+    ----------
+    raster_list : list
+        List of raster events (np.ndarrays) for that spike train.
+    ----------
+    """
+
+    raster_list = []
+
+    for event in event_start_frames:
+        window_start_seconds = (event / camera_framerate) - window_size
+        window_centered_spikes = purged_spike_train[(purged_spike_train >= window_start_seconds)
+                                                    & (purged_spike_train < window_start_seconds+(window_size*2))] - window_start_seconds
+        raster_list.append(window_centered_spikes)
+
+    return raster_list
+
+
 class Spikes:
     # get shuffling shifts
     shuffle_seed, shuffle_shifts = get_shuffling_shifts()
     print(f"The pseudorandom number generator was seeded at {shuffle_seed}.")
 
-    def __init__(self, input_file=0):
+    def __init__(self, input_file=0, purged_spikes_dictionary=0):
         self.input_file = input_file
+        self.purged_spikes_dictionary = purged_spikes_dictionary
 
     def convert_activity_to_frames_with_shuffles(self, **kwargs):
         """
         Parameters
         ----------
-        **kwargs: dictionary
-        get_clusters : str/int/list
+        **kwargs (dictionary)
+        get_clusters (str / int / list)
             Cluster IDs to extract (if int, takes first n clusters; if 'all', takes all); defaults to 'all'.
         ----------
 
         Returns
         ----------
-        activity_dictionary : dict
+        activity_dictionary (dict)
             A dictionary with frame-converted cluster activity and shuffled data.
         ----------
         """
@@ -283,6 +318,7 @@ class Spikes:
 
         # convert spike arrays to frame arrays
         activity_dictionary = {}
+        self.purged_spikes_dictionary = {}
         track_ts = extracted_data['tracking_ts']
         extracted_activity = extracted_data['cluster_spikes']
         empirical_camera_fr = extracted_data['framerate']
@@ -293,6 +329,7 @@ class Spikes:
 
             # eliminate spikes that happen prior to and post tracking
             purged_spikes_sec = purge_spikes_beyond_tracking(spike_train=spikes, tracking_ts=track_ts)
+            self.purged_spikes_dictionary[cell_id] = purged_spikes_sec
 
             # covert spikes to frame arrays
             activity_dictionary[cell_id]['activity'] = convert_spikes_to_frame_events(purged_spike_train=purged_spikes_sec,
@@ -316,30 +353,32 @@ class Spikes:
         """
         Parameters
         ----------
-        **kwargs: dictionary
-        get_clusters : str/int/list
+        **kwargs (dictionary)
+        get_clusters (str / int / list)
             Cluster IDs to extract (if int, takes first n clusters; if 'all', takes all); defaults to 'all'.
-        bin_size_ms : int
+        bin_size_ms (int)
             The bin size of the PETH; defaults to 50 (ms).
-        window_size : int
+        window_size (int)
             The unilateral window size; defaults to 10 (seconds).
-        return_all : bool
+        return_all (bool)
             Return all event starts, irrespective of duration; defaults to True.
-        expected_event_duration : int/float
+        expected_event_duration (int / float)
             The expected duration of the designated event; defaults to 5 (seconds).
-        min_inter_event_interval : int/float
+        min_inter_event_interval (int / float)
             The minimum interval between any two adjacent events; defaults to 10 (seconds).
-        smooth : bool
+        smooth (bool)
             Smooth PETHs; defaults to False.
-        smooth_sd : int
+        smooth_sd (int)
             The SD of the smoothing window; defaults to 1 (bin).
-        smooth_axis : int
+        smooth_axis (int)
             The smoothing axis in a 2D array; defaults to 1 (smooths rows).
+        raster (bool)
+            Prepare arrays from making raster plots; defaults to False.
         ----------
 
         Returns
         ----------
-        peth_dictionary : dict
+        peth_dictionary (dict)
             Peri-event time histogram for all clusters (np.ndarray (epoch_num, total_window)).
         ----------
         """
@@ -357,17 +396,31 @@ class Spikes:
         smooth = kwargs['smooth'] if 'smooth' in kwargs.keys() and type(kwargs['smooth']) == bool else False
         smooth_sd = kwargs['smooth_sd'] if 'smooth_sd' in kwargs.keys() and type(kwargs['smooth_sd']) == int else 1
         smooth_axis = kwargs['smooth_axis'] if 'smooth_axis' in kwargs.keys() and type(kwargs['smooth_axis']) == int else 1
+        raster = kwargs['raster'] if 'raster' in kwargs.keys() and type(kwargs['raster']) == bool else False
 
+        # extract relevant variables / clusters from session data
         ses_name, session_vars = Session(session=self.input_file).data_loader(extract_variables=['imu_sound', 'framerate'])
 
+        # get activity converted to frames
         file_id, activity_dictionary = self.convert_activity_to_frames_with_shuffles(get_clusters=get_clusters)
 
+        # get event start frames
         event_start_frames = find_event_starts(session_vars['imu_sound'],
                                                return_all=return_all,
                                                camera_framerate=session_vars['framerate'],
                                                expected_event_duration=expected_event_duration,
                                                min_inter_event_interval=min_inter_event_interval)
 
+        if raster:
+            raster_dictionary = {}
+            for cell_id, purged_spikes in self.purged_spikes_dictionary.items():
+                if cell_id in get_clusters:
+                    raster_dictionary[cell_id] = raster_preparation(purged_spike_train=purged_spikes,
+                                                                    event_start_frames=event_start_frames,
+                                                                    camera_framerate=session_vars['framerate'],
+                                                                    window_size=window_size)
+
+        # get PETHs for each cluster and smooth if necessary
         peth_dictionary = {}
         for cell_id in activity_dictionary.keys():
             peth_dictionary[cell_id] = {}
@@ -381,4 +434,7 @@ class Spikes:
             else:
                 peth_dictionary[cell_id]['peth'] = peth_array
 
-        return peth_dictionary
+        if raster:
+            return peth_dictionary, raster_dictionary
+        else:
+            return peth_dictionary

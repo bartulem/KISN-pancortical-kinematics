@@ -63,25 +63,25 @@ class ClusterFinder:
         """
         Parameters
         ----------
-        **kwargs: dictionary
-        filter_by_animal : list/bool
+        **kwargs (dictionary)
+        filter_by_animal (list / bool)
             Animals to be included; defaults to True.
-        filter_by_area : list/bool
+        filter_by_area (list / bool)
             Areas to be included, you can pick specific areas or
             general (A - auditory, M - motor, P - parietal, S - somatosensory, V - visual); defaults to True.
-        filter_by_cluster_type : str/bool
+        filter_by_cluster_type (str / bool)
             Cluster type to be included: 'good' or 'mua'; defaults to True.
-        filter_by_session_type : list/bool
+        filter_by_session_type (list / bool)
             Sessions to be included: 'light', 'dark', 'weight', 'sound'; defaults to True.
-        filter_by_bank : str/bool
+        filter_by_bank (str / bool)
             Bank to be included: 'distal' or 'intermediate'; defaults to True.
-        filter_by_session_num : list/bool
+        filter_by_session_num (list / bool)
             Sessions to be included: 's1', 's2', etc.; defaults to True.
         ----------
 
         Returns
         ----------
-        cluster_dictionary : dict
+        cluster_dictionary (dict)
             A dictionary with file names as keys and list of filtered clusters as values.
         ----------
         """

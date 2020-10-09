@@ -81,10 +81,10 @@ class Session:
         """
         Parameters
         ----------
-        **kwargs: dict
-        extract_clusters : str/int/list
+        **kwargs (dictionary)
+        extract_clusters (str / int / list)
             Cluster IDs to extract (if int, takes first n clusters; if 'all', takes all); defaults to 'None'.
-        extract_variables : str/list
+        extract_variables (str / list)
             Variables to extract (if 'all', take all); defaults to 'None'.
         ----------
 
@@ -147,7 +147,7 @@ class Session:
         """
         Returns
         ----------
-        type : str
+        type (str)
             Variable type & description.
         ----------
         """
