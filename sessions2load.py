@@ -78,11 +78,10 @@ class Session:
         self.describe = describe
 
     def data_loader(self, **kwargs):
-
         """
         Parameters
         ----------
-        **kwargs: dictionary
+        **kwargs: dict
         extract_clusters : str/int/list
             Cluster IDs to extract (if int, takes first n clusters; if 'all', takes all); defaults to 'None'.
         extract_variables : str/list
@@ -91,9 +90,8 @@ class Session:
 
         Returns
         ----------
-        data : dictionary
-            The data dictionary tree; outer dictionary - file names are keys, inner dictionary is the value;
-            inner dictionary - describe names are keys, describe arrays are values.
+        data : dict
+            A dictionary with variable names as keys, and variable arrays as values.
         ----------
         """
 
@@ -146,7 +144,6 @@ class Session:
 
     # returns type & description of desired variable
     def __str__(self):
-
         """
         Returns
         ----------

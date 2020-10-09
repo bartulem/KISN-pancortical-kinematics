@@ -73,7 +73,6 @@ def purge_spikes_beyond_tracking(spike_train, tracking_ts, full_purge=True):
         # remove spikes that succeed tracking
         purged_spike_train = spike_train[spike_train < tracking_ts[1] - tracking_ts[0]]
 
-    print(purged_spike_train.shape)
     return purged_spike_train
 
 
@@ -221,10 +220,10 @@ def calculate_peth(activity, event_start_frames,
     # calculate PETH
     peth_array = np.zeros((event_start_frames.shape[0], total_window))
     for epoch in range(event_start_frames.shape[0]):
-        window_start_bin = event_start_frames[epoch] - (bin_step * window_one_side)
+        window_start_bin = int(round(event_start_frames[epoch] - (bin_step * window_one_side)))
         for one_bin in range(total_window):
-            peth_array[epoch, one_bin] = np.sum(activity[window_start_bin:window_start_bin + bin_size]) / bin_size
-            window_start_bin += bin_size
+            peth_array[epoch, one_bin] = np.sum(activity[window_start_bin:window_start_bin + bin_step]) / bin_size
+            window_start_bin += bin_step
 
     return peth_array
 
@@ -238,7 +237,6 @@ class Spikes:
         self.input_file = input_file
 
     def convert_activity_to_frames_with_shuffles(self, **kwargs):
-
         """
         Parameters
         ----------
@@ -292,7 +290,6 @@ class Spikes:
         return file_id, activity_dictionary
 
     def get_peths(self, **kwargs):
-
         """
         Parameters
         ----------
@@ -313,8 +310,8 @@ class Spikes:
 
         Returns
         ----------
-        peth_array : np.ndarray (epoch_num, total_window)
-            Peri-event time histogram.
+        peth_dictionary : dict
+            Peri-event time histogram for all clusters (np.ndarray (epoch_num, total_window)).
         ----------
         """
 
@@ -334,10 +331,10 @@ class Spikes:
         file_id, activity_dictionary = self.convert_activity_to_frames_with_shuffles(get_clusters=get_clusters)
 
         event_start_frames = find_event_starts(session_vars['imu_sound'],
-                                               return_all=True,
+                                               return_all=return_all,
                                                camera_framerate=session_vars['framerate'],
-                                               expected_event_duration=5.,
-                                               min_inter_event_interval=10.)
+                                               expected_event_duration=expected_event_duration,
+                                               min_inter_event_interval=min_inter_event_interval)
 
         peth_dictionary = {}
         for cell_id in activity_dictionary.keys():
