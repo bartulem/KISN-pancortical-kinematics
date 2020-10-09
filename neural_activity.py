@@ -11,6 +11,29 @@ Load spike data, bin and smooth.
 import numpy as np
 from sessions2load import Session
 from numba import njit
+from scipy.ndimage.filters import gaussian_filter1d
+
+
+def gaussian_smoothing(array, sigma=1, axis=1):
+    """
+    Parameters
+    ----------
+    array : np.ndarray
+        The input array to be smoothed.
+    sigma : int
+        The SD of the smoothing window; defaults to 1.
+    axis : int
+        The filter smooths in 1D, so you choose the axis; defaults to 1.
+    ----------
+
+    Returns
+    ----------
+    smoothed_array : np.ndarray
+        The 1D smoothed input array.
+    ----------
+    """
+
+    return gaussian_filter1d(input=array, sigma=sigma, axis=axis)
 
 
 @njit(parallel=False)
@@ -306,6 +329,12 @@ class Spikes:
             The expected duration of the designated event; defaults to 5 (seconds).
         min_inter_event_interval : int/float
             The minimum interval between any two adjacent events; defaults to 10 (seconds).
+        smooth : bool
+            Smooth PETHs; defaults to False.
+        smooth_sd : int
+            The SD of the smoothing window; defaults to 1 (bin).
+        smooth_axis : int
+            The smoothing axis in a 2D array; defaults to 1 (smooths rows).
         ----------
 
         Returns
@@ -324,7 +353,10 @@ class Spikes:
         expected_event_duration = kwargs['expected_event_duration'] if 'expected_event_duration' in kwargs.keys() \
                                                                        and (type(kwargs['expected_event_duration']) == int or type(kwargs['expected_event_duration']) == float) else 5
         min_inter_event_interval = kwargs['min_inter_event_interval'] if 'min_inter_event_interval' in kwargs.keys() \
-                                                                       and (type(kwargs['min_inter_event_interval']) == int or type(kwargs['min_inter_event_interval']) == float) else 10
+                                                                         and (type(kwargs['min_inter_event_interval']) == int or type(kwargs['min_inter_event_interval']) == float) else 10
+        smooth = kwargs['smooth'] if 'smooth' in kwargs.keys() and type(kwargs['smooth']) == bool else False
+        smooth_sd = kwargs['smooth_sd'] if 'smooth_sd' in kwargs.keys() and type(kwargs['smooth_sd']) == int else 1
+        smooth_axis = kwargs['smooth_axis'] if 'smooth_axis' in kwargs.keys() and type(kwargs['smooth_axis']) == int else 1
 
         ses_name, session_vars = Session(session=self.input_file).data_loader(extract_variables=['imu_sound', 'framerate'])
 
@@ -339,10 +371,14 @@ class Spikes:
         peth_dictionary = {}
         for cell_id in activity_dictionary.keys():
             peth_dictionary[cell_id] = {}
-            peth_dictionary[cell_id]['peth'] = calculate_peth(activity_dictionary[cell_id]['activity'],
-                                                              event_start_frames,
-                                                              bin_size_ms=bin_size_ms,
-                                                              window_size=window_size,
-                                                              camera_framerate=session_vars['framerate'])
+            peth_array = calculate_peth(activity_dictionary[cell_id]['activity'],
+                                        event_start_frames,
+                                        bin_size_ms=bin_size_ms,
+                                        window_size=window_size,
+                                        camera_framerate=session_vars['framerate'])
+            if smooth:
+                peth_dictionary[cell_id]['peth'] = gaussian_smoothing(array=peth_array, sigma=smooth_sd, axis=smooth_axis)
+            else:
+                peth_dictionary[cell_id]['peth'] = peth_array
 
         return peth_dictionary

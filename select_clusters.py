@@ -73,7 +73,7 @@ class ClusterFinder:
             Cluster type to be included: 'good' or 'mua'; defaults to True.
         filter_by_session_type : list/bool
             Sessions to be included: 'light', 'dark', 'weight', 'sound'; defaults to True.
-        filer_by_bank : str/bool
+        filter_by_bank : str/bool
             Bank to be included: 'distal' or 'intermediate'; defaults to True.
         filter_by_session_num : list/bool
             Sessions to be included: 's1', 's2', etc.; defaults to True.
@@ -90,14 +90,14 @@ class ClusterFinder:
         filter_by_area = kwargs['filter_by_area'] if 'filter_by_area' in kwargs.keys() and type(kwargs['filter_by_area']) == list else True
         filter_by_cluster_type = kwargs['filter_by_cluster_type'] if 'filter_by_cluster_type' in kwargs.keys() and type(kwargs['filter_by_cluster_type']) == str else True
         filter_by_session_type = kwargs['filter_by_session_type'] if 'filter_by_session_type' in kwargs.keys() and type(kwargs['filter_by_session_type']) == list else True
-        filer_by_bank = kwargs['filer_by_bank'] if 'filer_by_bank' in kwargs.keys() and type(kwargs['filer_by_bank']) == str else True
+        filter_by_bank = kwargs['filter_by_bank'] if 'filter_by_bank' in kwargs.keys() and type(kwargs['filter_by_bank']) == str else True
         filter_by_session_num = kwargs['filter_by_session_num'] if 'filter_by_session_num' in kwargs.keys() and type(kwargs['filter_by_session_num']) == list else True
 
         cluster_list = []
         if self.session != 0:
             if os.path.exists(self.session):
                 if (filter_by_animal is True or any(animal in self.session for animal in filter_by_animal)) \
-                        and (filer_by_bank is True or filer_by_bank in self.session) \
+                        and (filter_by_bank is True or filter_by_bank in self.session) \
                         and (filter_by_session_type is True or any(s_type in self.session for s_type in filter_by_session_type)) \
                         and (filter_by_session_num is True or any(s_num in self.session for s_num in filter_by_session_num)):
 
