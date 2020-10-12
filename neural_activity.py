@@ -21,7 +21,7 @@ def gaussian_smoothing(array, sigma=1, axis=1):
     array : np.ndarray
         The input array to be smoothed.
     sigma : int
-        The SD of the smoothing window; defaults to 1.
+        The SD of the smoothing window; defaults to 1 (bin).
     axis : int
         The filter smooths in 1D, so you choose the axis; defaults to 1.
     ----------
@@ -37,7 +37,7 @@ def gaussian_smoothing(array, sigma=1, axis=1):
 
 
 @njit(parallel=False)
-def get_shuffling_shifts(number_of_shuffles=1, shuffle_range=(20, 60)):
+def get_shuffling_shifts(number_of_shuffles=1000, shuffle_range=(20, 60)):
     """
     Parameters
     ----------
@@ -205,14 +205,15 @@ def find_event_starts(event_array, return_all=True,
 
 
 @njit(parallel=False)
-def calculate_peth(activity, event_start_frames,
+def calculate_peth(input_array, event_start_frames,
                    bin_size_ms=50, window_size=10,
-                   camera_framerate=120.):
+                   camera_framerate=120.,
+                   behavior_input=False):
     """
     Parameters
     ----------
-    activity : np.ndarray
-        Arrays with spikes allocated to tracking frames.
+    input_array : np.ndarray
+        Arrays with spikes/behavior allocated to tracking frames.
     event_start_frames : np.ndarray
         Every frame ON (1) start in the session.
     bin_size_ms : int
@@ -221,6 +222,8 @@ def calculate_peth(activity, event_start_frames,
         The unilateral window size; defaults to 10 (seconds).
     camera_framerate : np.float64
         The sampling frequency of the tracking system; defaults to 120.
+    behavior_input : bool
+        Whether or not the input array is behavioral; defaults to False.
     ----------
 
     Returns
@@ -245,7 +248,10 @@ def calculate_peth(activity, event_start_frames,
     for epoch in range(event_start_frames.shape[0]):
         window_start_bin = int(round(event_start_frames[epoch] - (bin_step * window_one_side)))
         for one_bin in range(total_window):
-            peth_array[epoch, one_bin] = np.sum(activity[window_start_bin:window_start_bin + bin_step]) / bin_size
+            if behavior_input:
+                peth_array[epoch, one_bin] = np.nanmean(input_array[window_start_bin:window_start_bin + bin_step])
+            else:
+                peth_array[epoch, one_bin] = np.sum(input_array[window_start_bin:window_start_bin + bin_step]) / bin_size
             window_start_bin += bin_step
 
     return peth_array
@@ -371,9 +377,11 @@ class Spikes:
         smooth_sd (int)
             The SD of the smoothing window; defaults to 1 (bin).
         smooth_axis (int)
-            The smoothing axis in a 2D array; defaults to 1 (smooths rows).
+            The smoothing axis in a 2D array; defaults to 1 (smooths within rows).
         raster (bool)
             Prepare arrays from making raster plots; defaults to False.
+        beh_raster (str / bool)
+            Prepare behavior arrays from making raster plots; defaults to False.
         ----------
 
         Returns
@@ -385,7 +393,6 @@ class Spikes:
 
         get_clusters = kwargs['get_clusters'] if 'get_clusters' in kwargs.keys() \
                                                  and (kwargs['get_clusters'] == 'all' or type(kwargs['get_clusters']) == int or type(kwargs['get_clusters']) == list) else 'all'
-
         bin_size_ms = kwargs['bin_size_ms'] if 'bin_size_ms' in kwargs.keys() and type(kwargs['bin_size_ms']) == int else 50
         window_size = kwargs['window_size'] if 'window_size' in kwargs.keys() and type(kwargs['window_size']) == int else 10
         return_all = kwargs['return_all'] if 'return_all' in kwargs.keys() and type(kwargs['return_all']) == bool else True
@@ -397,9 +404,13 @@ class Spikes:
         smooth_sd = kwargs['smooth_sd'] if 'smooth_sd' in kwargs.keys() and type(kwargs['smooth_sd']) == int else 1
         smooth_axis = kwargs['smooth_axis'] if 'smooth_axis' in kwargs.keys() and type(kwargs['smooth_axis']) == int else 1
         raster = kwargs['raster'] if 'raster' in kwargs.keys() and type(kwargs['raster']) == bool else False
+        beh_raster = kwargs['beh_raster'] if 'beh_raster' in kwargs.keys() and ( type(kwargs['beh_raster']) == str or type(kwargs['beh_raster']) == bool) else False
 
         # extract relevant variables / clusters from session data
-        ses_name, session_vars = Session(session=self.input_file).data_loader(extract_variables=['imu_sound', 'framerate'])
+        get_variables = ['imu_sound', 'framerate']
+        if type(beh_raster) == str:
+            get_variables.append(beh_raster)
+        ses_name, session_vars = Session(session=self.input_file).data_loader(extract_variables=get_variables)
 
         # get activity converted to frames
         file_id, activity_dictionary = self.convert_activity_to_frames_with_shuffles(get_clusters=get_clusters)
@@ -411,6 +422,7 @@ class Spikes:
                                                expected_event_duration=expected_event_duration,
                                                min_inter_event_interval=min_inter_event_interval)
 
+        # get raster plot
         if raster:
             raster_dictionary = {}
             for cell_id, purged_spikes in self.purged_spikes_dictionary.items():
@@ -424,8 +436,8 @@ class Spikes:
         peth_dictionary = {}
         for cell_id in activity_dictionary.keys():
             peth_dictionary[cell_id] = {}
-            peth_array = calculate_peth(activity_dictionary[cell_id]['activity'],
-                                        event_start_frames,
+            peth_array = calculate_peth(input_array=activity_dictionary[cell_id]['activity'],
+                                        event_start_frames=event_start_frames,
                                         bin_size_ms=bin_size_ms,
                                         window_size=window_size,
                                         camera_framerate=session_vars['framerate'])
@@ -434,7 +446,20 @@ class Spikes:
             else:
                 peth_dictionary[cell_id]['peth'] = peth_array
 
-        if raster:
+        # get behavior for raster (currently only works for speed)
+        if type(beh_raster) == str:
+            peth_beh = calculate_peth(input_array=session_vars[beh_raster][:, 1],
+                                      event_start_frames=event_start_frames,
+                                      bin_size_ms=bin_size_ms,
+                                      window_size=window_size,
+                                      camera_framerate=session_vars['framerate'],
+                                      behavior_input=True)
+            if smooth:
+                peth_beh = gaussian_smoothing(array=peth_beh, sigma=smooth_sd, axis=smooth_axis)
+
+        if raster and beh_raster is not False:
+            return peth_dictionary, raster_dictionary, peth_beh
+        elif raster and beh_raster is False:
             return peth_dictionary, raster_dictionary
         else:
             return peth_dictionary
