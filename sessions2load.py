@@ -90,7 +90,9 @@ class Session:
 
         Returns
         ----------
-        data : dict
+        file_info (str)
+            The shortened version of the file name.
+        data (dict)
             A dictionary with variable names as keys, and variable arrays as values.
         ----------
         """

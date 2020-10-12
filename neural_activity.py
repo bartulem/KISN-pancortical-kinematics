@@ -311,6 +311,8 @@ class Spikes:
 
         Returns
         ----------
+        file_info (str)
+            The shortened version of the file name.
         activity_dictionary (dict)
             A dictionary with frame-converted cluster activity and shuffled data.
         ----------
