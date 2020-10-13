@@ -35,6 +35,8 @@ class PlotExamples:
         **kwargs (dictionary)
         save_fig (bool)
             Save the figure or not; defaults to False.
+        fig_format (str)
+            The format of the figure; defaults to 'png'.
         save_dir (bool)
             Directory to save figure in; defaults to '/home/bartulm/Downloads'.
         peth_color (str)
@@ -53,6 +55,7 @@ class PlotExamples:
         """
 
         save_fig = kwargs['save_fig'] if 'save_fig' in kwargs.keys() and type(kwargs['save_fig']) == bool else False
+        fig_format = kwargs['fig_format'] if 'fig_format' in kwargs.keys() and type(kwargs['fig_format']) == str else 'png'
         save_dir = kwargs['save_dir'] if 'save_dir' in kwargs.keys() and type(kwargs['save_dir']) == str else '/home/bartulm/Downloads'
         peth_color = kwargs['peth_color'] if 'peth_color' in kwargs.keys() and type(kwargs['peth_color']) == str else '#000000'
         raster_color = kwargs['raster_color'] if 'raster_color' in kwargs.keys() and type(kwargs['raster_color']) == str else '#808080'
@@ -93,7 +96,7 @@ class PlotExamples:
         ax3.set_ylabel('Speed (cm/s)', color=beh_color)
         if save_fig:
             if os.path.exists(save_dir):
-                fig.savefig(f'{save_dir}{os.sep}{self.cluster_name}_wh_noise_peth.png')
+                fig.savefig(f'{save_dir}{os.sep}{self.cluster_name}_wh_noise_peth.{fig_format}')
             else:
                 print("Specified save directory doesn't exist. Try again.")
                 sys.exit()
