@@ -89,8 +89,8 @@ class ClusterFinder:
 
         Returns
         ----------
-        cluster_dictionary (dict)
-            A dictionary with file names as keys and list of filtered clusters as values.
+        cluster_list (list)
+            A list with the name-sorted filtered clusters.
         ----------
         """
 
