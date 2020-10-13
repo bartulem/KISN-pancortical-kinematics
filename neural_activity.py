@@ -302,6 +302,13 @@ class Spikes:
 
     def convert_activity_to_frames_with_shuffles(self, **kwargs):
         """
+        Description
+        ----------
+        This method converts cluster spiking activity into trains that match the tracking
+        resolution, as spikes are allocated to appropriate frames. It returns such spike
+        trains both for ture and shuffled data.
+        ----------
+
         Parameters
         ----------
         **kwargs (dictionary)
@@ -359,6 +366,22 @@ class Spikes:
 
     def get_peths(self, **kwargs):
         """
+        Description
+        ----------
+        This method converts cluster spiking activity into peri-event time histograms (PETHs),
+        where you have the option to define bin and window size. NB: As of yet, it is NOT set
+        to do the same for shuffled spike data (but it's a simple fix).
+
+        Details: Each spike train is zeroed to tracking start and purged of spikes that exceed
+        those boundaries. The spike train is then binned to match the tracking resolution, and
+        spike counts are allocated to the appropriate frames. These spike counts are further
+        binned (50 ms) to encompass a window (10 s) before and after every event onset (the
+        start of the white noise stimulation). Rates are calculated and smoothed with a 3 bin
+        Gaussian kernel. Raster arrays are prepared by zeroing spike times to each start of the
+        trial window. Behavioral peths bin and compute the status of any given behavioral feature
+        around relevant events (NB: works only for speed as of yet).
+        ----------
+
         Parameters
         ----------
         **kwargs (dictionary)
@@ -390,6 +413,10 @@ class Spikes:
         ----------
         peth_dictionary (dict)
             Peri-event time histogram for all clusters (np.ndarray (epoch_num, total_window)).
+        raster_dictionary (dict)
+            Raster arrays for all clusters zeroed to window start.
+        peth_beh (np.ndarray)
+            Peri-event time histogram for the designated behavioral feature (np.ndarray (epoch_num, total_window)).
         ----------
         """
 

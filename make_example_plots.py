@@ -23,6 +23,13 @@ class PlotExamples:
 
     def plot_peth(self, **kwargs):
         """
+        Description
+        ----------
+        This method creates a PETH plot for a given cluster based on the onsets of the white
+        noise stimulation. It plots the specific raster for that cluster, a behavioral PETH
+        for a chosen feature and the trial-averaged PETH for that cluster.
+        ----------
+
         Parameters
         ----------
         **kwargs (dictionary)

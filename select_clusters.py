@@ -61,6 +61,14 @@ class ClusterFinder:
 
     def get_desired_clusters(self, **kwargs):
         """
+        Description
+        ----------
+        This method enables one to filter in/out desired clusters based on a variety of
+        properties: (1) animal name, (2) brain area if interest, (3) cluster type,
+        (4) recording session type, (5) recording bank on the probe, and (6) session
+        number.
+        ----------
+
         Parameters
         ----------
         **kwargs (dictionary)

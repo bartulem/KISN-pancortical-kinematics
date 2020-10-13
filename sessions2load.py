@@ -79,6 +79,12 @@ class Session:
 
     def data_loader(self, **kwargs):
         """
+        Description
+        ----------
+        This method enables efficient loading of data, as it allows users to select variables
+        and clusters of interest (such that not all data needs to be loaded).
+        ----------
+
         Parameters
         ----------
         **kwargs (dictionary)
