@@ -38,7 +38,7 @@ class PlotExamples:
         fig_format (str)
             The format of the figure; defaults to 'png'.
         save_dir (bool)
-            Directory to save figure in; defaults to '/home/bartulm/Downloads'.
+            Directory to save the figure in; defaults to '/home/bartulm/Downloads'.
         peth_color (str)
             Color of the PETH; defaults to '#000000'.
         raster_color (str)
