@@ -293,7 +293,7 @@ def raster_preparation(purged_spike_train, event_start_frames,
 
 class Spikes:
     # get shuffling shifts
-    shuffle_seed, shuffle_shifts = get_shuffling_shifts()
+    shuffle_seed, shuffle_shifts = get_shuffling_shifts(number_of_shuffles=1)
     print(f"The pseudorandom number generator was seeded at {shuffle_seed}.")
 
     def __init__(self, input_file=0, purged_spikes_dictionary=0):

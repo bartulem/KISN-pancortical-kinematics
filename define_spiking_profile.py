@@ -126,7 +126,7 @@ class SpikingProfile:
         to_plot (bool)
             Yey or ney on the KMeans scatter; defaults to False.
         profile_colors (dict)
-            What colors to use for each profile in the scatter plot; defaults to {'FS': '#000000', 'RS': '#7F7F7F', 'BS': '#B0B0B0'}.
+            What colors to use for each profile in the scatter plot; defaults to {'RS': '#7F7F7F', 'FS': '#000000', 'BS': '#B0B0B0'}.
         save_fig (bool)
             Save the figure or not; defaults to False.
         fig_format (str)
@@ -149,7 +149,7 @@ class SpikingProfile:
         relevant_variables = kwargs['relevant_variables'] if 'relevant_variables' in kwargs.keys() and type(kwargs['relevant_variables']) == list else ['waveform_duration', 'fwhm', 'pt_ratio']
         num_of_clusters = kwargs['num_of_clusters'] if 'num_of_clusters' in kwargs.keys() and type(kwargs['num_of_clusters']) == int else 3
         to_plot = kwargs['to_plot'] if 'to_plot' in kwargs.keys() and type(kwargs['to_plot']) == bool else False
-        profile_colors = kwargs['profile_colors'] if 'profile_colors' in kwargs.keys() and type(kwargs['profile_colors']) == dict else {'FS': '#000000', 'RS': '#7F7F7F', 'BS': '#B0B0B0'}
+        profile_colors = kwargs['profile_colors'] if 'profile_colors' in kwargs.keys() and type(kwargs['profile_colors']) == dict else {'RS': '#7F7F7F', 'FS': '#000000', 'BS': '#B0B0B0'}
         save_fig = kwargs['save_fig'] if 'save_fig' in kwargs.keys() and type(kwargs['save_fig']) == bool else False
         fig_format = kwargs['fig_format'] if 'fig_format' in kwargs.keys() and type(kwargs['fig_format']) == str else 'png'
         save_fig_dir = kwargs['save_fig_dir'] if 'save_fig_dir' in kwargs.keys() and type(kwargs['save_fig_dir']) == str else '/home/bartulm/Downloads'
@@ -181,7 +181,8 @@ class SpikingProfile:
         char_arr[:] = 'AA'
         char_arr[Kmean.labels_ == value_counts_dict[0][0]] = 'RS'
         char_arr[Kmean.labels_ == value_counts_dict[1][0]] = 'FS'
-        char_arr[Kmean.labels_ == value_counts_dict[2][0]] = 'BS'
+        if len(profile_colors.keys()) == 3:
+            char_arr[Kmean.labels_ == value_counts_dict[2][0]] = 'BS'
 
         # place these values into a new column of the dataframe
         measures_info_df.loc[rows_without_nan, 'spiking_profile'] = char_arr
@@ -199,10 +200,11 @@ class SpikingProfile:
             ax1.set_xlabel('spike duration')
             ax1.set_ylabel('FWHM')
             ax1.set_zlabel('peak-to-through ratio')
-            circle_1 = Line2D([0], [0], linestyle='none', marker='o', alpha=1., markersize=8, markeredgecolor='none', markerfacecolor=profile_colors['FS'])
-            circle_2 = Line2D([0], [0], linestyle='none', marker='o', alpha=1., markersize=8, markeredgecolor='none', markerfacecolor=profile_colors['RS'])
-            circle_3 = Line2D([0], [0], linestyle='none', marker='o', alpha=1., markersize=8, markeredgecolor='none', markerfacecolor=profile_colors['BS'])
-            ax1.legend((circle_1, circle_2, circle_3), profile_colors.keys())
+            if len(profile_colors.keys()) == 3:
+                circle_1 = Line2D([0], [0], linestyle='none', marker='o', alpha=1., markersize=8, markeredgecolor='none', markerfacecolor=profile_colors['FS'])
+                circle_2 = Line2D([0], [0], linestyle='none', marker='o', alpha=1., markersize=8, markeredgecolor='none', markerfacecolor=profile_colors['RS'])
+                circle_3 = Line2D([0], [0], linestyle='none', marker='o', alpha=1., markersize=8, markeredgecolor='none', markerfacecolor=profile_colors['BS'])
+                ax1.legend((circle_1, circle_2, circle_3), ['FS', 'RS', 'BS'])
             if save_fig:
                 fig.savefig(f'{save_fig_dir}{os.sep}spiking_profiles_kmeans.{fig_format}')
             plt.show()
@@ -216,7 +218,7 @@ class SpikingProfile:
                 xz_arr = np.array([measures_info_df.loc[row, 'waveform_duration'] / normalizing_peaks[0], measures_info_df.loc[row, 'pt_ratio'] / normalizing_peaks[2]])
 
                 # re-order profiles based on KMeans ID
-                profiles = ['RS', 'FS', 'BS']
+                profiles = list(profile_colors.keys())
                 xz_distances_dict = {profiles[item[0]]: 0 for item in value_counts_dict}
 
                 # calculate distances to all three centroids
