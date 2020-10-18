@@ -108,9 +108,12 @@ class SpikingProfile:
         """
         Description
         ----------
-        This method goes through all the "cluster quality measures" files and, for each
-        cluster, picks out the "waveform duration", "FWHM" and "peak-to-through ratio",
-        which help to define the spiking profile.
+        This method computes the spiking profile for every input cluster. Based on the
+        distribution of putative single-unit clusters on 3 relevant variables ('waveform_duration',
+        'fwhm', and 'pt_ratio'), we assume there are three types of spiking profiles: 'RS' (regular
+        spiking), 'FS' (fast spiking) and 'BS' (broad spiking), whose centroids are further uncovered
+        by KMeans clustering. Based on the distances to those centroids, we classify every cluster
+        in one of those three categories.
         ----------
 
         Parameters
