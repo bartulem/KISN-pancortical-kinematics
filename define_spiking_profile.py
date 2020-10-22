@@ -53,7 +53,7 @@ class SpikingProfile:
         categorize_mua = kwargs['categorize_mua'] if 'categorize_mua' in kwargs.keys() and type(kwargs['categorize_mua']) == bool else False
 
         measures_info_df = pd.DataFrame(columns=['session_id', 'cluster_id', 'cluster_type',
-                                                 'waveform_duration', 'fwhm', 'pt_ratio'])
+                                                 'waveform_duration', 'fwhm', 'pt_ratio', 'end_slope'])
 
         if os.path.exists(self.cluster_groups_dir):
             cluster_id_count = 0
@@ -92,9 +92,10 @@ class SpikingProfile:
                     cl_name_short = str(int(cluster[cluster.index('cl')+2:cluster.index('cl')+6]))
 
                     # get cluster quality variables
-                    measures_info_df.loc[cluster_id_count, 'waveform_duration'] = cqm_json[cl_name_short]['waveform_metrics'][1]
-                    measures_info_df.loc[cluster_id_count, 'fwhm'] = cqm_json[cl_name_short]['waveform_metrics'][2]
-                    measures_info_df.loc[cluster_id_count, 'pt_ratio'] = cqm_json[cl_name_short]['waveform_metrics'][3]
+                    measures_info_df.loc[cluster_id_count, 'waveform_duration'] = cqm_json[cl_name_short]['waveform_metrics']['waveform_duration']
+                    measures_info_df.loc[cluster_id_count, 'fwhm'] = cqm_json[cl_name_short]['waveform_metrics']['fwhm']
+                    measures_info_df.loc[cluster_id_count, 'pt_ratio'] = cqm_json[cl_name_short]['waveform_metrics']['pt_ratio']
+                    measures_info_df.loc[cluster_id_count, 'end_slope'] = cqm_json[cl_name_short]['waveform_metrics']['end_slope']
 
                     cluster_id_count += 1
 
