@@ -62,7 +62,7 @@ class PlotExamples:
         beh_color = kwargs['beh_color'] if 'beh_color' in kwargs.keys() and type(kwargs['beh_color']) == str else '#008000'
 
         # get peth, raster and behavior data
-        peth, raster, peth_beh = Spikes(input_file=self.session).get_peths(get_clusters=[self.cluster_name], smooth=True, smooth_sd=3, raster=True, beh_raster='speeds')
+        session_name, peth, raster, peth_beh = Spikes(input_file=self.session).get_peths(get_clusters=[self.cluster_name], smooth=True, smooth_sd=3, raster=True, beh_raster='speeds')
 
         # get means/SEMs for spikes/behavior
         peth_mean = peth[self.cluster_name]['peth'].mean(axis=0)

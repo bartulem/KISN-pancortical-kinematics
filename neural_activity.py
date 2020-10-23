@@ -480,7 +480,7 @@ class Spikes:
             else:
                 peth_dictionary[cell_id]['peth'] = peth_array
 
-        # get behavior for raster (currently only works for speed)
+        # get behavior for raster (nb: currently only works for speed)
         if type(beh_raster) == str:
             peth_beh = calculate_peth(input_array=session_vars[beh_raster][:, 3],
                                       event_start_frames=event_start_frames,
@@ -492,8 +492,8 @@ class Spikes:
                 peth_beh = gaussian_smoothing(array=peth_beh, sigma=smooth_sd, axis=smooth_axis)
 
         if raster and beh_raster is not False:
-            return peth_dictionary, raster_dictionary, peth_beh
+            return ses_name, peth_dictionary, raster_dictionary, peth_beh
         elif raster and beh_raster is False:
-            return peth_dictionary, raster_dictionary
+            return ses_name, peth_dictionary, raster_dictionary
         else:
-            return peth_dictionary
+            return ses_name, peth_dictionary
