@@ -477,7 +477,7 @@ class Spikes:
 
         # get behavior for raster (currently only works for speed)
         if type(beh_raster) == str:
-            peth_beh = calculate_peth(input_array=session_vars[beh_raster][:, 1],
+            peth_beh = calculate_peth(input_array=session_vars[beh_raster][:, 3],
                                       event_start_frames=event_start_frames,
                                       bin_size_ms=bin_size_ms,
                                       window_size=window_size,
