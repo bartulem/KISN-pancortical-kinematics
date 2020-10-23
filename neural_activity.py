@@ -293,7 +293,7 @@ def raster_preparation(purged_spike_train, event_start_frames,
 
 class Spikes:
     # get shuffling shifts
-    shuffle_seed, shuffle_shifts = get_shuffling_shifts(number_of_shuffles=1)
+    shuffle_seed, shuffle_shifts = get_shuffling_shifts()
     print(f"The pseudorandom number generator was seeded at {shuffle_seed}.")
 
     def __init__(self, input_file=0, purged_spikes_dictionary=0):
@@ -314,6 +314,8 @@ class Spikes:
         **kwargs (dictionary)
         get_clusters (str / int / list)
             Cluster IDs to extract (if int, takes first n clusters; if 'all', takes all); defaults to 'all'.
+        to_shuffle (bool)
+            Yey or ney on shuffling.
         ----------
 
         Returns
@@ -327,6 +329,7 @@ class Spikes:
 
         get_clusters = kwargs['get_clusters'] if 'get_clusters' in kwargs.keys() \
                                                  and (kwargs['get_clusters'] == 'all' or type(kwargs['get_clusters']) == int or type(kwargs['get_clusters']) == list) else 'all'
+        to_shuffle = kwargs['to_shuffle'] if 'to_shuffle' in kwargs.keys() and type(kwargs['to_shuffle']) == bool else False
 
         # get spike data in seconds and tracking start and end time
         file_id, extracted_data = Session(session=self.input_file).data_loader(extract_clusters=get_clusters, extract_variables=['tracking_ts', 'framerate', 'total_frame_num'])
@@ -350,17 +353,19 @@ class Spikes:
             activity_dictionary[cell_id]['activity'] = convert_spikes_to_frame_events(purged_spike_train=purged_spikes_sec,
                                                                                       frames_total=total_frame_num,
                                                                                       camera_framerate=empirical_camera_fr)
-            activity_dictionary[cell_id]['shuffled'] = np.zeros((Spikes.shuffle_shifts.shape[0], total_frame_num))
 
-            # shuffle the purged spike train N times
-            shuffled_spikes_sec = shuffle_spike_train(purged_spikes_sec, Spikes.shuffle_shifts)
+            if to_shuffle:
+                activity_dictionary[cell_id]['shuffled'] = np.zeros((Spikes.shuffle_shifts.shape[0], total_frame_num))
 
-            # convert shuffles to frame arrays
-            for shuffle_idx in range(shuffled_spikes_sec.shape[0]):
-                purged_shuffle = purge_spikes_beyond_tracking(spike_train=shuffled_spikes_sec[shuffle_idx, :], tracking_ts=track_ts, full_purge=False)
-                activity_dictionary[cell_id]['shuffled'][shuffle_idx, :] = convert_spikes_to_frame_events(purged_spike_train=purged_shuffle,
-                                                                                                          frames_total=total_frame_num,
-                                                                                                          camera_framerate=empirical_camera_fr)
+                # shuffle the purged spike train N times
+                shuffled_spikes_sec = shuffle_spike_train(purged_spikes_sec, Spikes.shuffle_shifts)
+
+                # convert shuffles to frame arrays
+                for shuffle_idx in range(shuffled_spikes_sec.shape[0]):
+                    purged_shuffle = purge_spikes_beyond_tracking(spike_train=shuffled_spikes_sec[shuffle_idx, :], tracking_ts=track_ts, full_purge=False)
+                    activity_dictionary[cell_id]['shuffled'][shuffle_idx, :] = convert_spikes_to_frame_events(purged_spike_train=purged_shuffle,
+                                                                                                              frames_total=total_frame_num,
+                                                                                                              camera_framerate=empirical_camera_fr)
 
         return file_id, activity_dictionary
 
