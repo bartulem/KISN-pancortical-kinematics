@@ -394,7 +394,7 @@ class Spikes:
             Cluster IDs to extract (if int, takes first n clusters; if 'all', takes all); defaults to 'all'.
         bin_size_ms (int)
             The bin size of the PETH; defaults to 50 (ms).
-        window_size (int)
+        window_size (int / float)
             The unilateral window size; defaults to 10 (seconds).
         return_all (bool)
             Return all event starts, irrespective of duration; defaults to True.
@@ -428,7 +428,7 @@ class Spikes:
         get_clusters = kwargs['get_clusters'] if 'get_clusters' in kwargs.keys() \
                                                  and (kwargs['get_clusters'] == 'all' or type(kwargs['get_clusters']) == int or type(kwargs['get_clusters']) == list) else 'all'
         bin_size_ms = kwargs['bin_size_ms'] if 'bin_size_ms' in kwargs.keys() and type(kwargs['bin_size_ms']) == int else 50
-        window_size = kwargs['window_size'] if 'window_size' in kwargs.keys() and type(kwargs['window_size']) == int else 10
+        window_size = kwargs['window_size'] if 'window_size' in kwargs.keys() and (type(kwargs['window_size']) == int or type(kwargs['window_size']) == float) else 10
         return_all = kwargs['return_all'] if 'return_all' in kwargs.keys() and type(kwargs['return_all']) == bool else True
         expected_event_duration = kwargs['expected_event_duration'] if 'expected_event_duration' in kwargs.keys() \
                                                                        and (type(kwargs['expected_event_duration']) == int or type(kwargs['expected_event_duration']) == float) else 5

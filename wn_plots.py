@@ -39,7 +39,7 @@ class WhiteNoise:
         save_dir (bool)
             Directory to save the figure in; defaults to '/home/bartulm/Downloads'.
         spec_cmap (str)
-            Color of the PETH; defaults to 'afmhot'.
+            Color of the PETH; defaults to 'cividis'.
         raw_data_color (str)
             Color of the other plots; defaults to '#000000'.
         axins_color (str)
@@ -56,7 +56,7 @@ class WhiteNoise:
         save_fig = kwargs['save_fig'] if 'save_fig' in kwargs.keys() and type(kwargs['save_fig']) == bool else False
         fig_format = kwargs['fig_format'] if 'fig_format' in kwargs.keys() and type(kwargs['fig_format']) == str else 'png'
         save_dir = kwargs['save_dir'] if 'save_dir' in kwargs.keys() and type(kwargs['save_dir']) == str else '/home/bartulm/Downloads'
-        spec_cmap = kwargs['spec_cmap'] if 'spec_cmap' in kwargs.keys() and type(kwargs['spec_cmap']) == str else 'afmhot'
+        spec_cmap = kwargs['spec_cmap'] if 'spec_cmap' in kwargs.keys() and type(kwargs['spec_cmap']) == str else 'cividis'
         raw_data_color = kwargs['raw_data_color'] if 'raw_data_color' in kwargs.keys() and type(kwargs['raw_data_color']) == str else '#000000'
         axins_color = kwargs['axins_color'] if 'axins_color' in kwargs.keys() and type(kwargs['axins_color']) == str else '#FFFFFF'
 
