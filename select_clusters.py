@@ -12,6 +12,7 @@ import os
 import sys
 import pickle
 import json
+import pandas as pd
 
 
 class ClusterFinder:
@@ -55,9 +56,10 @@ class ClusterFinder:
                                     'intermediate': {'V1': [(0, 230)],
                                                      'V2M': [(230, 291)]}}}
 
-    def __init__(self, session=0, cluster_groups_dir=0):
+    def __init__(self, session=0, cluster_groups_dir=0, sp_profiles_csv=0):
         self.session = session
         self.cluster_groups_dir = cluster_groups_dir
+        self.sp_profiles_csv = sp_profiles_csv
 
     def get_desired_clusters(self, **kwargs):
         """
@@ -65,8 +67,8 @@ class ClusterFinder:
         ----------
         This method enables one to filter in/out desired clusters based on a variety of
         properties: (1) animal name, (2) brain area if interest, (3) cluster type,
-        (4) recording session type, (5) recording bank on the probe, and (6) session
-        number.
+        (4) recording session type, (5) recording bank on the probe (6) session
+        number, and (7) spiking profile.
         ----------
 
         Parameters
@@ -85,6 +87,8 @@ class ClusterFinder:
             Bank to be included: 'distal' or 'intermediate'; defaults to True.
         filter_by_session_num (list / bool)
             Sessions to be included: 's1', 's2', etc.; defaults to True.
+        filter_by_spiking_profile (str / bool)
+            Profile to be included: 'RS' or 'FS'; defaults to True.
         ----------
 
         Returns
@@ -100,6 +104,7 @@ class ClusterFinder:
         filter_by_session_type = kwargs['filter_by_session_type'] if 'filter_by_session_type' in kwargs.keys() and type(kwargs['filter_by_session_type']) == list else True
         filter_by_bank = kwargs['filter_by_bank'] if 'filter_by_bank' in kwargs.keys() and type(kwargs['filter_by_bank']) == str else True
         filter_by_session_num = kwargs['filter_by_session_num'] if 'filter_by_session_num' in kwargs.keys() and type(kwargs['filter_by_session_num']) == list else True
+        filter_by_spiking_profile = kwargs['filter_by_spiking_profile'] if 'filter_by_spiking_profile' in kwargs.keys() and type(kwargs['filter_by_spiking_profile']) == str else True
 
         cluster_list = []
         if self.session != 0:
@@ -122,7 +127,7 @@ class ClusterFinder:
                     file_date = file_info[file_info.find('20')-4:file_info.find('20')+2]
 
                     for cluster in clusters:
-                        if filter_by_area is True and filter_by_cluster_type is True:
+                        if filter_by_area is True and filter_by_cluster_type is True and filter_by_spiking_profile is True:
                             cluster_list.append(cluster)
                         else:
                             # get cluster category ('good' or 'mua')
@@ -145,7 +150,17 @@ class ClusterFinder:
                                     break
 
                                 if filter_by_area is True or any(area in cluster_area for area in filter_by_area):
-                                    cluster_list.append(cluster)
+                                    # load profile data
+                                    profile_data = pd.read_csv(self.sp_profiles_csv)
+
+                                    # find cluster profile
+                                    for idx, row in profile_data.iterrows():
+                                        if row[0] == f'{file_animal}_{file_date}_{file_bank}' and row[1] == cluster:
+                                            cl_profile = row[-1]
+                                            break
+
+                                    if filter_by_spiking_profile is True or filter_by_spiking_profile == cl_profile:
+                                        cluster_list.append(cluster)
             else:
                 print(f"Invalid location for file {self.session}. Please try again.")
                 sys.exit()
