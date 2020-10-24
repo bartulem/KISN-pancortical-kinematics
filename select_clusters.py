@@ -130,13 +130,14 @@ class ClusterFinder:
                         if filter_by_area is True and filter_by_cluster_type is True and filter_by_spiking_profile is True:
                             cluster_list.append(cluster)
                         else:
-                            # get cluster category ('good' or 'mua')
-                            if not os.path.exists(self.cluster_groups_dir):
-                                print(f"Invalid location for directory {self.cluster_groups_dir}. Please try again.")
-                                sys.exit()
-                            cluster_groups_json = f'{self.cluster_groups_dir}{os.sep}{file_animal}_{file_date}_{file_bank}.json'
-                            with open(cluster_groups_json) as json_file:
-                                cg_json = json.load(json_file)['imec0']
+                            if type(filter_by_cluster_type) == str:
+                                # get cluster category ('good' or 'mua')
+                                if not os.path.exists(self.cluster_groups_dir):
+                                    print(f"Invalid location for directory {self.cluster_groups_dir}. Please try again.")
+                                    sys.exit()
+                                cluster_groups_json = f'{self.cluster_groups_dir}{os.sep}{file_animal}_{file_date}_{file_bank}.json'
+                                with open(cluster_groups_json) as json_file:
+                                    cg_json = json.load(json_file)['imec0']
                             if filter_by_cluster_type is True or cluster in cg_json[filter_by_cluster_type]:
                                 # get cluster area
                                 cluster_peak_ch = int(cluster[15:])
@@ -150,14 +151,19 @@ class ClusterFinder:
                                     break
 
                                 if filter_by_area is True or any(area in cluster_area for area in filter_by_area):
-                                    # load profile data
-                                    profile_data = pd.read_csv(self.sp_profiles_csv)
+                                    if type(filter_by_spiking_profile) == str:
+                                        # load profile data
+                                        if not os.path.exists(self.sp_profiles_csv):
+                                            print(f"Invalid location for file {self.sp_profiles_csv}. Please try again.")
+                                            sys.exit()
+                                        else:
+                                            profile_data = pd.read_csv(self.sp_profiles_csv)
 
-                                    # find cluster profile
-                                    for idx, row in profile_data.iterrows():
-                                        if row[0] == f'{file_animal}_{file_date}_{file_bank}' and row[1] == cluster:
-                                            cl_profile = row[-1]
-                                            break
+                                            # find cluster profile
+                                            for idx, row in profile_data.iterrows():
+                                                if row[0] == f'{file_animal}_{file_date}_{file_bank}' and row[1] == cluster:
+                                                    cl_profile = row[-1]
+                                                    break
 
                                     if filter_by_spiking_profile is True or filter_by_spiking_profile == cl_profile:
                                         cluster_list.append(cluster)
