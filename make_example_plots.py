@@ -17,7 +17,7 @@ from scipy.stats import sem
 
 
 class PlotExamples:
-    def __init__(self, session=0, cluster_name=0, kilosort_output_dir=0,
+    def __init__(self, session=0, cluster_name='', kilosort_output_dir='',
                  save_fig=False, fig_format='png', save_dir='/home/bartulm/Downloads'):
         self.session = session
         self.cluster_name = cluster_name
@@ -61,7 +61,7 @@ class PlotExamples:
         session_name, peth, raster, peth_beh = Spikes(input_file=self.session).get_peths(get_clusters=[self.cluster_name], smooth=True, smooth_sd=3, raster=True, beh_raster='speeds')
 
         # get means/SEMs for spikes/behavior
-        peth_mean = peth[self.cluster_name]['peth'].mean(axis=0)
+        peth_mean = np.nanmean(peth[self.cluster_name]['peth'], axis=0)
         peth_sem = sem(a=peth[self.cluster_name]['peth'], axis=0, nan_policy='omit')
         beh_mean = np.nanmean(peth_beh, axis=0)
         beh_sem = sem(a=peth_beh, axis=0, nan_policy='omit')
@@ -177,7 +177,7 @@ class PlotExamples:
 
                     # plot (nb: currently only works for 2 channels around peak!)
                     acceptable_subplots = [(0, 0), (1, 1), (2, 0), (3, 1), (4, 0)]
-                    fig, ax = plt.subplots(5, 2, figsize= (5, 6), dpi=300)
+                    fig, ax = plt.subplots(5, 2, figsize=(5, 6), dpi=300)
                     for i in range(5):
                         for j in range(2):
                             ax[i, j].axis('off')

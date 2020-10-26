@@ -19,7 +19,7 @@ from mpl_toolkits.axes_grid1.inset_locator import inset_axes
 
 class WhiteNoise:
 
-    def __init__(self, white_noise_file=0):
+    def __init__(self, white_noise_file=''):
         self.white_noise_file = white_noise_file
 
     def data_plotter(self, **kwargs):

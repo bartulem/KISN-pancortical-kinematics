@@ -19,7 +19,7 @@ from scipy.stats import wilcoxon
 
 
 class PlotGroupResults:
-    def __init__(self, session_list=[], cluster_groups_dir=0, sp_profiles_csv=0):
+    def __init__(self, session_list=[], cluster_groups_dir='', sp_profiles_csv=''):
         self.session_list = session_list
         self.cluster_groups_dir = cluster_groups_dir
         self.sp_profiles_csv = sp_profiles_csv
@@ -49,8 +49,10 @@ class PlotGroupResults:
             Smooth PETHs; defaults to False.
         smooth_sd (int)
             The SD of the smoothing window; defaults to 1 (bin).
+        critical_p_value (float)
+            The p_value below something is considered statistically significant; defaults to 0.01
         profile_colors (dict)
-            What colors to use for each profile in the scatter plot; defaults to {'RS': '#B0B0B0', 'FS': '#000000'}.
+            What colors to use for each spiking profile; defaults to {'RS': '#B0B0B0', 'FS': '#000000'}.
         save_fig (bool)
             Save the figure or not; defaults to False.
         fig_format (str)
@@ -73,6 +75,7 @@ class PlotGroupResults:
         mod_idx_time = kwargs['mod_idx_time'] if 'mod_idx_time' in kwargs.keys() and (type(kwargs['mod_idx_time']) == int or type(kwargs['mod_idx_time']) == float) else 500
         smooth = kwargs['smooth'] if 'smooth' in kwargs.keys() and type(kwargs['smooth']) == bool else False
         smooth_sd = kwargs['smooth_sd'] if 'smooth_sd' in kwargs.keys() and type(kwargs['smooth_sd']) == int else 1
+        critical_p_value = kwargs['critical_p_value'] if 'critical_p_value' in kwargs.keys() and type(kwargs['critical_p_value']) == float else .01
         profile_colors = kwargs['profile_colors'] if 'profile_colors' in kwargs.keys() and type(kwargs['profile_colors']) == dict else {'RS': '#B0B0B0', 'FS': '#000000'}
         save_fig = kwargs['save_fig'] if 'save_fig' in kwargs.keys() and type(kwargs['save_fig']) == bool else False
         fig_format = kwargs['fig_format'] if 'fig_format' in kwargs.keys() and type(kwargs['fig_format']) == str else 'png'
@@ -112,7 +115,7 @@ class PlotGroupResults:
             for cluster in sound_stim_data[session].keys():
                 # # get mean PETH for plotting
                 all_trials = sound_stim_data[session][cluster]['peth']
-                averaged_trials = all_trials.mean(axis=0)
+                averaged_trials = np.nanmean(all_trials, axis=0)
 
                 # normalize each average by its peak
                 plot_array[cell_id, :] = averaged_trials / np.max(averaged_trials)
@@ -142,7 +145,101 @@ class PlotGroupResults:
 
                 cell_id += 1
 
-        # order cells by sound modulation index
+        # get total number of clusters in the dataset
+        total_cluster_number = len(statistics_dict.keys())
+
+        # get cluster profiles
+        if not os.path.exists(self.sp_profiles_csv):
+            print(f"Invalid location for file {self.sp_profiles_csv}. Please try again.")
+            sys.exit()
+        else:
+            profile_data = pd.read_csv(self.sp_profiles_csv)
+
+        # separate significantly suppressed and sound excited clusters
+        modulated_clusters = {'suppressed': {}, 'excited': {}}
+        count_dict = {'sign_excited_rs': 0,
+                      'sign_excited_fs': 0,
+                      'sign_suppressed_rs': 0,
+                      'sign_suppressed_fs': 0,
+                      'ns_rs': 0,
+                      'ns_fs': 0}
+
+        for cluster in statistics_dict.keys():
+            session_id = statistics_dict[cluster]['session']
+            file_animal = [animal for animal in ClusterFinder.probe_site_areas.keys() if animal in session_id][0]
+            file_bank = [bank for bank in ['distal', 'intermediate'] if bank in session_id][0]
+            file_date = session_id[session_id.find('20')-4:session_id.find('20')+2]
+            for idx, row in profile_data.iterrows():
+                if row[0] == f'{file_animal}_{file_date}_{file_bank}' and row[1] == statistics_dict[cluster]['cell_id']:
+                    cl_profile = row[-1]
+                    break
+            if statistics_dict[cluster]['sound_modulation_index'] < 0 and statistics_dict[cluster]['p_value'] < critical_p_value:
+                modulated_clusters['suppressed'][cluster] = statistics_dict[cluster]
+                if cl_profile == 'RS':
+                    count_dict['sign_suppressed_rs'] += 1
+                else:
+                    count_dict['sign_suppressed_fs'] += 1
+            elif statistics_dict[cluster]['sound_modulation_index'] > 0 and statistics_dict[cluster]['p_value'] < critical_p_value:
+                modulated_clusters['excited'][cluster] = statistics_dict[cluster]
+                if cl_profile == 'RS':
+                    count_dict['sign_excited_rs'] += 1
+                else:
+                    count_dict['sign_excited_fs'] += 1
+            elif statistics_dict[cluster]['p_value'] >= critical_p_value:
+                if cl_profile == 'RS':
+                    count_dict['ns_rs'] += 1
+                else:
+                    count_dict['ns_fs'] += 1
+
+        # order clusters in each category separately
+        cluster_order_suppressed = [item[0] for item in sorted(modulated_clusters['suppressed'].items(), key=lambda i: i[1]['sound_modulation_index'])]
+        cluster_order_excited = [item[0] for item in sorted(modulated_clusters['excited'].items(), key=lambda i: i[1]['sound_modulation_index'], reverse=True)]
+
+        # re-order cluster array by sound modulation index (from lowest to highest value and vice-versa for excited clusters)
+        plot_array_ordered_suppressed = plot_array.take(indices=cluster_order_suppressed, axis=0)
+        plot_array_ordered_excited = plot_array.take(indices=cluster_order_excited, axis=0)
+
+        # plot
+        fig = plt.figure(figsize=(8, 6), dpi=300, tight_layout=True)
+        ax1 = fig.add_subplot(121, label='1')
+        ax1.imshow(plot_array_ordered_suppressed, aspect='auto', vmin=0, vmax=1, cmap='cividis')
+        ax2 = fig.add_subplot(121, label='2', frame_on=False)
+        ax2.plot(range(plot_array_ordered_suppressed.shape[1]), plot_array_ordered_suppressed.mean(axis=0), ls='-', lw=3, c='#1E90FF')
+        ax2.set_xlim(0, 400)
+        ax2.set_xticks([])
+        ax2.set_yticks([])
+        ax3 = fig.add_subplot(122, label='3')
+        im = ax3.imshow(plot_array_ordered_excited, aspect='auto', vmin=0, vmax=1, cmap='cividis')
+        ax4 = fig.add_subplot(122, label='4', frame_on=False)
+        ax4.plot(range(plot_array_ordered_excited.shape[1]), plot_array_ordered_excited.mean(axis=0), ls='-', lw=3, c='#FF6347')
+        ax4.set_xlim(0, 400)
+        ax4.set_xticks([])
+        ax4.set_yticks([])
+        cb_ax = fig.add_axes([0.9, 0.05, 0.01, 0.3])
+        cbar = fig.colorbar(im, orientation='vertical', cax=cb_ax, shrink=.3)
+        cbar.set_label('Normalized activity')
+        cbar.ax.tick_params(size=0)
+        ax1.set_xticks(np.arange(0, 401, 100))
+        ax3.set_xticks(np.arange(0, 401, 100))
+        ax1.set_xticklabels([-10, -5, 0, 5, 10])
+        ax3.set_xticklabels([-10, -5, 0, 5, 10])
+        ax1.set_xlabel('Time relative to sound onset (s)')
+        ax3.set_xlabel('Time relative to sound onset (s)')
+        ax1.tick_params(axis='y', length=0)
+        ax3.tick_params(axis='y', length=0)
+        ax1.set_ylabel('Cell number')
+        for side in ['right', 'top', 'left', 'bottom']:
+            ax1.spines[side].set_visible(False)
+            ax3.spines[side].set_visible(False)
+        if save_fig:
+            if os.path.exists(save_dir):
+                fig.savefig(f'{save_dir}{os.sep}sound_peth_group.{fig_format}')
+            else:
+                print("Specified save directory doesn't exist. Try again.")
+                sys.exit()
+        plt.show()
+
+        """# order cells by sound modulation index
         cluster_order = [item[0] for item in sorted(statistics_dict.items(), key=lambda i: i[1]['sound_modulation_index'])]
 
         # re-order cluster array by sound modulation index (from lowest to highest value)
@@ -208,4 +305,4 @@ class PlotGroupResults:
             else:
                 print("Specified save directory doesn't exist. Try again.")
                 sys.exit()
-        plt.show()
+        plt.show()"""

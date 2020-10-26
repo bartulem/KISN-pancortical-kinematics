@@ -195,12 +195,13 @@ def find_event_starts(event_array, return_all=True,
         # this returns only events that satisfy: expected_event_duration - .1 < duration < expected_event_duration + .1
         event_end_frames = event_change_points[1::2]
         event_durations = (event_end_frames - event_start_frames) / camera_framerate
+
         inter_event_intervals = np.concatenate((np.array([min_inter_event_interval + .1]),
                                                 (event_start_frames[1:] - event_start_frames[:-1]) / camera_framerate))
+
         event_start_frames = event_start_frames[(event_durations > (expected_event_duration - .1))
                                                 & (event_durations < (expected_event_duration + .1))
                                                 & (inter_event_intervals > min_inter_event_interval)]
-
     return event_start_frames
 
 
@@ -249,9 +250,15 @@ def calculate_peth(input_array, event_start_frames,
         window_start_bin = int(round(event_start_frames[epoch] - (bin_step * window_one_side)))
         for one_bin in range(total_window):
             if behavior_input:
-                peth_array[epoch, one_bin] = np.nanmean(input_array[window_start_bin:window_start_bin + bin_step])
+                if window_start_bin < 0:
+                    peth_array[epoch, one_bin] = np.nan
+                else:
+                    peth_array[epoch, one_bin] = np.nanmean(input_array[window_start_bin:window_start_bin + bin_step])
             else:
-                peth_array[epoch, one_bin] = np.sum(input_array[window_start_bin:window_start_bin + bin_step]) / bin_size
+                if window_start_bin < 0:
+                    peth_array[epoch, one_bin] = np.nan
+                else:
+                    peth_array[epoch, one_bin] = np.sum(input_array[window_start_bin:window_start_bin + bin_step]) / bin_size
             window_start_bin += bin_step
 
     return peth_array
@@ -286,7 +293,7 @@ def raster_preparation(purged_spike_train, event_start_frames,
         window_start_seconds = (event / camera_framerate) - window_size
         window_centered_spikes = purged_spike_train[(purged_spike_train >= window_start_seconds)
                                                     & (purged_spike_train < window_start_seconds+(window_size*2))] - window_start_seconds
-        raster_list.append(window_centered_spikes)
+        raster_list.append(window_centered_spikes[window_centered_spikes > 0])
 
     return raster_list
 
@@ -296,7 +303,7 @@ class Spikes:
     shuffle_seed, shuffle_shifts = get_shuffling_shifts()
     print(f"The pseudorandom number generator was seeded at {shuffle_seed}.")
 
-    def __init__(self, input_file=0, purged_spikes_dictionary=0):
+    def __init__(self, input_file='', purged_spikes_dictionary=''):
         self.input_file = input_file
         self.purged_spikes_dictionary = purged_spikes_dictionary
 

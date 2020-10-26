@@ -56,7 +56,7 @@ class ClusterFinder:
                                     'intermediate': {'V1': [(0, 230)],
                                                      'V2M': [(230, 291)]}}}
 
-    def __init__(self, session=0, cluster_groups_dir=0, sp_profiles_csv=0):
+    def __init__(self, session='', cluster_groups_dir='', sp_profiles_csv=''):
         self.session = session
         self.cluster_groups_dir = cluster_groups_dir
         self.sp_profiles_csv = sp_profiles_csv

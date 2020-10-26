@@ -75,7 +75,7 @@ class Session:
                  'imu_ego2_head_2nd_der': {'type': 'np.ndarray (total frame number, 3)', 'description': 'Second derivative of IMU XY egocentric head angles: roll (X), pitch (Y) and azimuth (Z).'},
                  'imu_sound': {'type': 'np.ndarray (total frame number, )', 'description': 'Was the white noise sound ON (1) or OFF (0).'}}
 
-    def __init__(self, session=0, describe='file_info'):
+    def __init__(self, session='', describe='file_info'):
         self.session = session
         self.describe = describe
 

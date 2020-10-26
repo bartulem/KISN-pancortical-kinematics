@@ -24,7 +24,7 @@ from sklearn.preprocessing import StandardScaler
 
 class SpikingProfile:
 
-    def __init__(self, cluster_quality_dir=0, cluster_groups_dir=0):
+    def __init__(self, cluster_quality_dir='', cluster_groups_dir=''):
         self.cluster_quality_dir = cluster_quality_dir
         self.cluster_groups_dir = cluster_groups_dir
 
@@ -213,7 +213,7 @@ class SpikingProfile:
                 continue
             else:
                 # normalize the individual values by variable peaks
-                x_arr_nan = np.array([measures_info_df.loc[row, 'waveform_duration'] / normalizing_peaks[idx]])
+                x_arr_nan = np.array([measures_info_df.loc[row, 'waveform_duration'] / normalizing_peaks[0]])
 
                 # create distances dictionary
                 x_distances_dict = {'RS': 0, 'FS': 0}
