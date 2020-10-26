@@ -14,14 +14,15 @@ import numpy as np
 import os
 import sys
 import matplotlib.pyplot as plt
-from scipy.stats import sem
+import pandas as pd
 from scipy.stats import wilcoxon
 
 
 class PlotGroupResults:
-    def __init__(self, session_list=[], cluster_groups_dir=0):
+    def __init__(self, session_list=[], cluster_groups_dir=0, sp_profiles_csv=0):
         self.session_list = session_list
         self.cluster_groups_dir = cluster_groups_dir
+        self.sp_profiles_csv = sp_profiles_csv
 
     def sound_stim_summary(self, **kwargs):
         """
@@ -48,6 +49,8 @@ class PlotGroupResults:
             Smooth PETHs; defaults to False.
         smooth_sd (int)
             The SD of the smoothing window; defaults to 1 (bin).
+        profile_colors (dict)
+            What colors to use for each profile in the scatter plot; defaults to {'RS': '#B0B0B0', 'FS': '#000000'}.
         save_fig (bool)
             Save the figure or not; defaults to False.
         fig_format (str)
@@ -70,6 +73,7 @@ class PlotGroupResults:
         mod_idx_time = kwargs['mod_idx_time'] if 'mod_idx_time' in kwargs.keys() and (type(kwargs['mod_idx_time']) == int or type(kwargs['mod_idx_time']) == float) else 500
         smooth = kwargs['smooth'] if 'smooth' in kwargs.keys() and type(kwargs['smooth']) == bool else False
         smooth_sd = kwargs['smooth_sd'] if 'smooth_sd' in kwargs.keys() and type(kwargs['smooth_sd']) == int else 1
+        profile_colors = kwargs['profile_colors'] if 'profile_colors' in kwargs.keys() and type(kwargs['profile_colors']) == dict else {'RS': '#B0B0B0', 'FS': '#000000'}
         save_fig = kwargs['save_fig'] if 'save_fig' in kwargs.keys() and type(kwargs['save_fig']) == bool else False
         fig_format = kwargs['fig_format'] if 'fig_format' in kwargs.keys() and type(kwargs['fig_format']) == str else 'png'
         save_dir = kwargs['save_dir'] if 'save_dir' in kwargs.keys() and type(kwargs['save_dir']) == str else '/home/bartulm/Downloads'
@@ -110,7 +114,7 @@ class PlotGroupResults:
                 all_trials = sound_stim_data[session][cluster]['peth']
                 averaged_trials = all_trials.mean(axis=0)
 
-                # normalize each average bu its peak
+                # normalize each average by its peak
                 plot_array[cell_id, :] = averaged_trials / np.max(averaged_trials)
 
                 # # get all the details for the statistics dict
@@ -134,7 +138,7 @@ class PlotGroupResults:
                 trials_array = np.zeros((all_trials.shape[0], 2))
                 for trial in range(all_trials.shape[0]):
                     trials_array[trial, :] = [all_trials[trial, pre_bin_start:pre_bin_end].mean(), all_trials[trial, sound_bin_start:sound_bin_end].mean()]
-                statistics_dict[cell_id]['p_value'] = wilcoxon(x=trials_array[:, 0], y=trials_array[:, 1])[1]
+                statistics_dict[cell_id]['p_value'] = wilcoxon(x=trials_array[:, 0], y=trials_array[:, 1], zero_method='zsplit')[1]
 
                 cell_id += 1
 
@@ -144,17 +148,64 @@ class PlotGroupResults:
         # re-order cluster array by sound modulation index (from lowest to highest value)
         plot_array_ordered = plot_array.take(indices=cluster_order, axis=0)
 
+        # get SMIs and p_values and order them according to the cluster order
+        all_smi = []
+        all_pval = []
+        for cell in statistics_dict.keys():
+            all_smi.append(statistics_dict[cell]['sound_modulation_index'])
+            all_pval.append(statistics_dict[cell]['p_value'])
+        all_smi_ordered = [all_smi[i] for i in cluster_order]
+        all_pval_ordered = [all_pval[i] for i in cluster_order]
+
+        # get cluster profiles
+        if not os.path.exists(self.sp_profiles_csv):
+            print(f"Invalid location for file {self.sp_profiles_csv}. Please try again.")
+            sys.exit()
+        else:
+            profile_data = pd.read_csv(self.sp_profiles_csv)
+
         # plot
-        fig = plt.figure(figsize=(8, 3), dpi=300)
+        fig = plt.figure(figsize=(4, 10), dpi=300)
         ax1 = fig.add_subplot(111)
-        # ax1.plot(range(plot_array_ordered.shape[1]), plot_array_ordered[0, :])
-        # ax1.plot(range(plot_array_ordered.shape[1]), plot_array_ordered[1, :])
-        ax1.plot(range(5), np.array([0.1, 0.4, 1, 0.7, 0.6]))
-        ax1.plot(range(5), np.array([0.9, 0.4, 0.1, 0.7, 0.6])+1)
-        """for cell in range(plot_array_ordered.shape[0]):
-            ax1.plot(range(plot_array_ordered.shape[1]), (cell*100)+plot_array_ordered[cell, :]*(cell*100), '-', c='k', alpha=cell/plot_array_ordered.shape[0])"""
-        """im = ax1.imshow(plot_array_ordered, aspect='auto', vmin=0, cmap='cividis')
-        cbar = fig.colorbar(im, shrink=.3)
-        cbar.set_label('Peak normalized activity')
-        cbar.ax.tick_params(size=0)"""
+        im = ax1.imshow(plot_array_ordered, aspect='auto', vmin=0, vmax=1, cmap='cividis')
+        for cell_idx in range(plot_array_ordered.shape[0]):
+            # find if cluster is suppressed/excited by sound
+            if all_smi_ordered[cell_idx] > 0 and all_pval_ordered[cell_idx] < 0.01:
+                significance_color = '#FF6347'
+            elif all_smi_ordered[cell_idx] < 0 and all_pval_ordered[cell_idx] < 0.01:
+                significance_color = '#1E90FF'
+            else:
+                significance_color = '#C9C9C9'
+            ax1.plot(405, cell_idx, 'o', ms=1.5, c=significance_color)
+
+            # get animal name, bank id and date of session
+            session_id = statistics_dict[cell_idx]['session']
+            file_animal = [animal for animal in ClusterFinder.probe_site_areas.keys() if animal in session_id][0]
+            file_bank = [bank for bank in ['distal', 'intermediate'] if bank in session_id][0]
+            file_date = session_id[session_id.find('20')-4:session_id.find('20')+2]
+
+            # find if cluster is RS or FS
+            for idx, row in profile_data.iterrows():
+                if row[0] == f'{file_animal}_{file_date}_{file_bank}' and row[1] == statistics_dict[cell_idx]['cell_id']:
+                    cl_profile = row[-1]
+                    break
+            ax1.plot(415, cell_idx, 'o', ms=1.5, c=profile_colors[cl_profile])
+        ax1.set_xticks(np.arange(0, 401, 100))
+        ax1.set_xticklabels([-10, -5, 0, 5, 10])
+        ax1.set_xlabel('Time relative to sound onset (s)')
+        ax1.tick_params(axis='y', length=0)
+        ax1.set_ylabel('Cell number')
+        cbar = fig.colorbar(im, shrink=.2)
+        cbar.set_label('Normalized activity')
+        ax1.spines['right'].set_visible(False)
+        ax1.spines['top'].set_visible(False)
+        ax1.spines['left'].set_visible(False)
+        ax1.spines['bottom'].set_visible(False)
+        cbar.ax.tick_params(size=0)
+        if save_fig:
+            if os.path.exists(save_dir):
+                fig.savefig(f'{save_dir}{os.sep}sound_peth_group.{fig_format}')
+            else:
+                print("Specified save directory doesn't exist. Try again.")
+                sys.exit()
         plt.show()
