@@ -25,11 +25,11 @@ def get_bins(feature_arr, min_val, max_val, num_bins_1d, camera_framerate):
 
     variable_bounds = {'speeds': [0, 90], 'body_direction': [-180, 180], 'neck_elevation': [0, .35]}"""
 
-file_name, data = Session(session=ls1[0]).data_loader(extract_variables=['body_direction', 'framerate'])
+"""file_name, data = Session(session=ls1[0]).data_loader(extract_variables=['body_direction', 'framerate'])
 
 bin_edges, occ = behavior_occupancies.get_bins(data['body_direction'], -180, 180, 36, data['framerate'])
 
 fig = plt.figure()
 ax = fig.add_subplot(111)
 ax.bar(x=range(len(bin_edges)-1), height=occ)
-plt.show()
+plt.show()"""
