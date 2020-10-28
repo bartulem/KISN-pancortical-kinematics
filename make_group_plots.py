@@ -19,10 +19,14 @@ from scipy.stats import wilcoxon
 
 
 class PlotGroupResults:
-    def __init__(self, session_list=[], cluster_groups_dir='', sp_profiles_csv=''):
+    def __init__(self, session_list=[], cluster_groups_dir='', sp_profiles_csv='',
+                 save_fig=False, fig_format='png', save_dir='/home/bartulm/Downloads'):
         self.session_list = session_list
         self.cluster_groups_dir = cluster_groups_dir
         self.sp_profiles_csv = sp_profiles_csv
+        self.save_fig = save_fig
+        self.fig_format = fig_format
+        self.save_dir = save_dir
 
     def sound_stim_summary(self, **kwargs):
         """
@@ -51,14 +55,12 @@ class PlotGroupResults:
             The SD of the smoothing window; defaults to 1 (bin).
         critical_p_value (float)
             The p_value below something is considered statistically significant; defaults to 0.01
+        get_most_modulated (bool)
+            Print the five most modulated (suppressed and excited) clusters; defaults to False.
+        to_plot (bool)
+            Yey or ney on the plotting; defaults to False.
         profile_colors (dict)
-            What colors to use for each spiking profile; defaults to {'RS': '#B0B0B0', 'FS': '#000000'}.
-        save_fig (bool)
-            Save the figure or not; defaults to False.
-        fig_format (str)
-            The format of the figure; defaults to 'png'.
-        save_dir (bool)
-            Directory to save the figure in; defaults to '/home/bartulm/Downloads'.
+            What colors to use for each spiking profile; defaults to {'RS': '#698B69', 'FS': '#9BCD9B'}.
         ----------
 
         Returns
@@ -76,10 +78,9 @@ class PlotGroupResults:
         smooth = kwargs['smooth'] if 'smooth' in kwargs.keys() and type(kwargs['smooth']) == bool else False
         smooth_sd = kwargs['smooth_sd'] if 'smooth_sd' in kwargs.keys() and type(kwargs['smooth_sd']) == int else 1
         critical_p_value = kwargs['critical_p_value'] if 'critical_p_value' in kwargs.keys() and type(kwargs['critical_p_value']) == float else .01
-        profile_colors = kwargs['profile_colors'] if 'profile_colors' in kwargs.keys() and type(kwargs['profile_colors']) == dict else {'RS': '#B0B0B0', 'FS': '#000000'}
-        save_fig = kwargs['save_fig'] if 'save_fig' in kwargs.keys() and type(kwargs['save_fig']) == bool else False
-        fig_format = kwargs['fig_format'] if 'fig_format' in kwargs.keys() and type(kwargs['fig_format']) == str else 'png'
-        save_dir = kwargs['save_dir'] if 'save_dir' in kwargs.keys() and type(kwargs['save_dir']) == str else '/home/bartulm/Downloads'
+        get_most_modulated = kwargs['get_most_modulated'] if 'get_most_modulated' in kwargs.keys() and type(kwargs['get_most_modulated']) == bool else False
+        to_plot = kwargs['to_plot'] if 'to_plot' in kwargs.keys() and type(kwargs['to_plot']) == bool else False
+        profile_colors = kwargs['profile_colors'] if 'profile_colors' in kwargs.keys() and type(kwargs['profile_colors']) == dict else {'RS': '#698B69', 'FS': '#9BCD9B'}
 
         if not os.path.exists(self.cluster_groups_dir):
             print(f"Invalid location for directory {self.cluster_groups_dir}. Please try again.")
@@ -179,12 +180,16 @@ class PlotGroupResults:
                     count_dict['sign_suppressed_rs'] += 1
                 else:
                     count_dict['sign_suppressed_fs'] += 1
+                """if statistics_dict[cluster]['sound_modulation_index'] < -.5 and cl_profile == 'FS':
+                    print(statistics_dict[cluster]['session'], statistics_dict[cluster]['cell_id'], statistics_dict[cluster]['sound_modulation_index'], cl_profile)"""
             elif statistics_dict[cluster]['sound_modulation_index'] > 0 and statistics_dict[cluster]['p_value'] < critical_p_value:
                 modulated_clusters['excited'][cluster] = statistics_dict[cluster]
                 if cl_profile == 'RS':
                     count_dict['sign_excited_rs'] += 1
                 else:
                     count_dict['sign_excited_fs'] += 1
+                """if statistics_dict[cluster]['sound_modulation_index'] > .5 and cl_profile == 'FS':
+                    print(statistics_dict[cluster]['session'], statistics_dict[cluster]['cell_id'], statistics_dict[cluster]['sound_modulation_index'], cl_profile)"""
             elif statistics_dict[cluster]['p_value'] >= critical_p_value:
                 if cl_profile == 'RS':
                     count_dict['ns_rs'] += 1
@@ -195,114 +200,103 @@ class PlotGroupResults:
         cluster_order_suppressed = [item[0] for item in sorted(modulated_clusters['suppressed'].items(), key=lambda i: i[1]['sound_modulation_index'])]
         cluster_order_excited = [item[0] for item in sorted(modulated_clusters['excited'].items(), key=lambda i: i[1]['sound_modulation_index'], reverse=True)]
 
+        # find most modulated cells
+        if get_most_modulated:
+            print(f"There are {total_cluster_number} clusters in this dataset, and these are the category counts: {count_dict}")
+            for idx in range(20):
+                print(f"Number {idx+1} on the suppressed list: {statistics_dict[cluster_order_suppressed[idx]]['session']}, "
+                      f"{statistics_dict[cluster_order_suppressed[idx]]['cell_id']}, SMI: {statistics_dict[cluster_order_suppressed[idx]]['sound_modulation_index']}")
+                print(f"Number {idx+1} on the excited list: {statistics_dict[cluster_order_excited[idx]]['session']}, "
+                      f"{statistics_dict[cluster_order_excited[idx]]['cell_id']}, SMI: {statistics_dict[cluster_order_excited[idx]]['sound_modulation_index']}")
+
         # re-order cluster array by sound modulation index (from lowest to highest value and vice-versa for excited clusters)
         plot_array_ordered_suppressed = plot_array.take(indices=cluster_order_suppressed, axis=0)
         plot_array_ordered_excited = plot_array.take(indices=cluster_order_excited, axis=0)
 
         # plot
-        fig = plt.figure(figsize=(8, 6), dpi=300, tight_layout=True)
-        ax1 = fig.add_subplot(121, label='1')
-        ax1.imshow(plot_array_ordered_suppressed, aspect='auto', vmin=0, vmax=1, cmap='cividis')
-        ax2 = fig.add_subplot(121, label='2', frame_on=False)
-        ax2.plot(range(plot_array_ordered_suppressed.shape[1]), plot_array_ordered_suppressed.mean(axis=0), ls='-', lw=3, c='#1E90FF')
-        ax2.set_xlim(0, 400)
-        ax2.set_xticks([])
-        ax2.set_yticks([])
-        ax3 = fig.add_subplot(122, label='3')
-        im = ax3.imshow(plot_array_ordered_excited, aspect='auto', vmin=0, vmax=1, cmap='cividis')
-        ax4 = fig.add_subplot(122, label='4', frame_on=False)
-        ax4.plot(range(plot_array_ordered_excited.shape[1]), plot_array_ordered_excited.mean(axis=0), ls='-', lw=3, c='#FF6347')
-        ax4.set_xlim(0, 400)
-        ax4.set_xticks([])
-        ax4.set_yticks([])
-        cb_ax = fig.add_axes([0.9, 0.05, 0.01, 0.3])
-        cbar = fig.colorbar(im, orientation='vertical', cax=cb_ax, shrink=.3)
-        cbar.set_label('Normalized activity')
-        cbar.ax.tick_params(size=0)
-        ax1.set_xticks(np.arange(0, 401, 100))
-        ax3.set_xticks(np.arange(0, 401, 100))
-        ax1.set_xticklabels([-10, -5, 0, 5, 10])
-        ax3.set_xticklabels([-10, -5, 0, 5, 10])
-        ax1.set_xlabel('Time relative to sound onset (s)')
-        ax3.set_xlabel('Time relative to sound onset (s)')
-        ax1.tick_params(axis='y', length=0)
-        ax3.tick_params(axis='y', length=0)
-        ax1.set_ylabel('Cell number')
-        for side in ['right', 'top', 'left', 'bottom']:
-            ax1.spines[side].set_visible(False)
-            ax3.spines[side].set_visible(False)
-        if save_fig:
-            if os.path.exists(save_dir):
-                fig.savefig(f'{save_dir}{os.sep}sound_peth_group.{fig_format}')
-            else:
-                print("Specified save directory doesn't exist. Try again.")
-                sys.exit()
-        plt.show()
+        if to_plot:
+            # make group mean activity plot
+            fig = plt.figure(figsize=(8, 6), dpi=300, tight_layout=True)
+            ax1 = fig.add_subplot(121, label='1')
+            ax1.imshow(plot_array_ordered_suppressed, aspect='auto', vmin=0, vmax=1, cmap='cividis')
+            ax2 = fig.add_subplot(121, label='2', frame_on=False)
+            ax2.plot(range(plot_array_ordered_suppressed.shape[1]), plot_array_ordered_suppressed.mean(axis=0), ls='-', lw=3, c='#1E90FF')
+            ax2.set_xlim(0, 400)
+            ax2.set_xticks([])
+            ax2.set_yticks([])
+            ax3 = fig.add_subplot(122, label='3')
+            im = ax3.imshow(plot_array_ordered_excited, aspect='auto', vmin=0, vmax=1, cmap='cividis')
+            ax4 = fig.add_subplot(122, label='4', frame_on=False)
+            ax4.plot(range(plot_array_ordered_excited.shape[1]), plot_array_ordered_excited.mean(axis=0), ls='-', lw=3, c='#FF6347')
+            ax4.set_xlim(0, 400)
+            ax4.set_xticks([])
+            ax4.set_yticks([])
+            cb_ax = fig.add_axes([0.9, 0.05, 0.01, 0.3])
+            cbar = fig.colorbar(im, orientation='vertical', cax=cb_ax, shrink=.3)
+            cbar.set_label('Normalized activity')
+            cbar.ax.tick_params(size=0)
+            ax1.set_xticks(np.arange(0, 401, 100))
+            ax3.set_xticks(np.arange(0, 401, 100))
+            ax1.set_xticklabels([-10, -5, 0, 5, 10])
+            ax3.set_xticklabels([-10, -5, 0, 5, 10])
+            ax1.set_xlabel('Time relative to sound onset (s)')
+            ax3.set_xlabel('Time relative to sound onset (s)')
+            ax1.tick_params(axis='y', length=0)
+            ax3.tick_params(axis='y', length=0)
+            ax1.set_ylabel('Cell number')
+            for side in ['right', 'top', 'left', 'bottom']:
+                ax1.spines[side].set_visible(False)
+                ax3.spines[side].set_visible(False)
+            if self.save_fig:
+                if os.path.exists(self.save_dir):
+                    fig.savefig(f'{self.save_dir}{os.sep}sound_peth_group.{self.fig_format}')
+                else:
+                    print("Specified save directory doesn't exist. Try again.")
+                    sys.exit()
+            plt.show()
 
-        """# order cells by sound modulation index
-        cluster_order = [item[0] for item in sorted(statistics_dict.items(), key=lambda i: i[1]['sound_modulation_index'])]
+            # make pie chart
+            size = .3
+            labels = ['RS', 'FS']
+            inner_colors = ['#1E90FF', '#FF6347', '#DEDEDE']*2
+            outer_colors = [profile_colors['RS'], profile_colors['FS']]
+            pie_values = np.array([[count_dict['sign_suppressed_rs'], count_dict['sign_excited_rs'], count_dict['ns_rs']],
+                                   [count_dict['sign_suppressed_fs'], count_dict['sign_excited_fs'], count_dict['ns_fs']]])
 
-        # re-order cluster array by sound modulation index (from lowest to highest value)
-        plot_array_ordered = plot_array.take(indices=cluster_order, axis=0)
+            fig2, ax5 = plt.subplots(nrows=1, ncols=1, figsize=(8, 6), dpi=300)
+            ax5.pie(pie_values.sum(axis=1), radius=1, colors=outer_colors, shadow=False,
+                    autopct='%1.1f%%', labels=labels, wedgeprops=dict(width=size, edgecolor='#FFFFFF'))
+            ax5.pie(pie_values.flatten(), radius=1-size, colors=inner_colors,
+                    shadow=False, wedgeprops=dict(width=size, edgecolor='#FFFFFF'))
+            ax5.set(aspect="equal", title='Sound modulated cells summary`')
+            if self.save_fig:
+                if os.path.exists(self.save_dir):
+                    fig2.savefig(f'{self.save_dir}{os.sep}sound_modulation_summary.{self.fig_format}')
+                else:
+                    print("Specified save directory doesn't exist. Try again.")
+                    sys.exit()
+            plt.show()
 
-        # get SMIs and p_values and order them according to the cluster order
-        all_smi = []
-        all_pval = []
-        for cell in statistics_dict.keys():
-            all_smi.append(statistics_dict[cell]['sound_modulation_index'])
-            all_pval.append(statistics_dict[cell]['p_value'])
-        all_smi_ordered = [all_smi[i] for i in cluster_order]
-        all_pval_ordered = [all_pval[i] for i in cluster_order]
-
-        # get cluster profiles
-        if not os.path.exists(self.sp_profiles_csv):
-            print(f"Invalid location for file {self.sp_profiles_csv}. Please try again.")
-            sys.exit()
-        else:
-            profile_data = pd.read_csv(self.sp_profiles_csv)
-
-        # plot
-        fig = plt.figure(figsize=(4, 10), dpi=300)
-        ax1 = fig.add_subplot(111)
-        im = ax1.imshow(plot_array_ordered, aspect='auto', vmin=0, vmax=1, cmap='cividis')
-        for cell_idx in range(plot_array_ordered.shape[0]):
-            # find if cluster is suppressed/excited by sound
-            if all_smi_ordered[cell_idx] > 0 and all_pval_ordered[cell_idx] < 0.01:
-                significance_color = '#FF6347'
-            elif all_smi_ordered[cell_idx] < 0 and all_pval_ordered[cell_idx] < 0.01:
-                significance_color = '#1E90FF'
-            else:
-                significance_color = '#C9C9C9'
-            ax1.plot(405, cell_idx, 'o', ms=1.5, c=significance_color)
-
-            # get animal name, bank id and date of session
-            session_id = statistics_dict[cell_idx]['session']
-            file_animal = [animal for animal in ClusterFinder.probe_site_areas.keys() if animal in session_id][0]
-            file_bank = [bank for bank in ['distal', 'intermediate'] if bank in session_id][0]
-            file_date = session_id[session_id.find('20')-4:session_id.find('20')+2]
-
-            # find if cluster is RS or FS
-            for idx, row in profile_data.iterrows():
-                if row[0] == f'{file_animal}_{file_date}_{file_bank}' and row[1] == statistics_dict[cell_idx]['cell_id']:
-                    cl_profile = row[-1]
-                    break
-            ax1.plot(415, cell_idx, 'o', ms=1.5, c=profile_colors[cl_profile])
-        ax1.set_xticks(np.arange(0, 401, 100))
-        ax1.set_xticklabels([-10, -5, 0, 5, 10])
-        ax1.set_xlabel('Time relative to sound onset (s)')
-        ax1.tick_params(axis='y', length=0)
-        ax1.set_ylabel('Cell number')
-        cbar = fig.colorbar(im, shrink=.2)
-        cbar.set_label('Normalized activity')
-        ax1.spines['right'].set_visible(False)
-        ax1.spines['top'].set_visible(False)
-        ax1.spines['left'].set_visible(False)
-        ax1.spines['bottom'].set_visible(False)
-        cbar.ax.tick_params(size=0)
-        if save_fig:
-            if os.path.exists(save_dir):
-                fig.savefig(f'{save_dir}{os.sep}sound_peth_group.{fig_format}')
-            else:
-                print("Specified save directory doesn't exist. Try again.")
-                sys.exit()
-        plt.show()"""
+            # make SMI histograms
+            smi = [statistics_dict[cluster]['sound_modulation_index'] for cluster in statistics_dict.keys()]
+            smi_neg = [statistics_dict[cluster]['sound_modulation_index'] for cluster in statistics_dict.keys()
+                       if (statistics_dict[cluster]['sound_modulation_index'] < 0 and statistics_dict[cluster]['p_value'] < .01)]
+            smi_pos = [statistics_dict[cluster]['sound_modulation_index'] for cluster in statistics_dict.keys()
+                       if (statistics_dict[cluster]['sound_modulation_index'] > 0 and statistics_dict[cluster]['p_value'] < .01)]
+            fig3 = plt.figure(figsize=(8, 6), dpi=300)
+            bins = np.linspace(-1, 1, 20)
+            ax6 = fig3.add_subplot(111, label='6')
+            ax6.hist(smi, bins=bins, color='#DEDEDE', alpha=.6, edgecolor='#000000')
+            ax6.hist(smi_neg, bins=bins, color='#1E90FF', alpha=.6)
+            ax6.hist(smi_pos, bins=bins, color='#FF6347', alpha=.6)
+            ax6.set_xlabel('Sound modulation index')
+            ax6.set_ylabel('Number of cells')
+            for side in ['right', 'top']:
+                ax6.spines[side].set_visible(False)
+            if self.save_fig:
+                if os.path.exists(self.save_dir):
+                    fig3.savefig(f'{self.save_dir}{os.sep}sound_modulation_distribution.{self.fig_format}')
+                else:
+                    print("Specified save directory doesn't exist. Try again.")
+                    sys.exit()
+            plt.show()

@@ -127,7 +127,7 @@ class SpikingProfile:
         to_plot (bool)
             Yey or ney on the KMeans scatter; defaults to False.
         profile_colors (dict)
-            What colors to use for each profile in the scatter plot; defaults to {'RS': '#B0B0B0', 'FS': '#000000'}.
+            What colors to use for each profile in the scatter plot; defaults to {'RS': '#698B69', 'FS': '#9BCD9B'}.
         save_fig (bool)
             Save the figure or not; defaults to False.
         fig_format (str)
@@ -150,7 +150,7 @@ class SpikingProfile:
         relevant_variables = kwargs['relevant_variables'] if 'relevant_variables' in kwargs.keys() and type(kwargs['relevant_variables']) == list else ['waveform_duration', 'end_slope', 'pt_ratio']
         num_of_clusters = kwargs['num_of_clusters'] if 'num_of_clusters' in kwargs.keys() and type(kwargs['num_of_clusters']) == int else 2
         to_plot = kwargs['to_plot'] if 'to_plot' in kwargs.keys() and type(kwargs['to_plot']) == bool else False
-        profile_colors = kwargs['profile_colors'] if 'profile_colors' in kwargs.keys() and type(kwargs['profile_colors']) == dict else {'RS': '#B0B0B0', 'FS': '#000000'}
+        profile_colors = kwargs['profile_colors'] if 'profile_colors' in kwargs.keys() and type(kwargs['profile_colors']) == dict else {'RS': '#698B69', 'FS': '#9BCD9B'}
         save_fig = kwargs['save_fig'] if 'save_fig' in kwargs.keys() and type(kwargs['save_fig']) == bool else False
         fig_format = kwargs['fig_format'] if 'fig_format' in kwargs.keys() and type(kwargs['fig_format']) == str else 'png'
         save_fig_dir = kwargs['save_fig_dir'] if 'save_fig_dir' in kwargs.keys() and type(kwargs['save_fig_dir']) == str else '/home/bartulm/Downloads'
