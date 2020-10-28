@@ -122,7 +122,7 @@ def convert_spikes_to_frame_events(purged_spike_train, frames_total, camera_fram
     # initialize an array of zeros with the size of the number of frames
     spikes_frames = np.zeros(frames_total)
 
-    # covert spike times to frames when they happened
+    # convert spike times to frames when they happened
     spikes_tracking = purged_spike_train * camera_framerate
     spikes_tracking = np.floor(spikes_tracking, np.empty_like(spikes_tracking))
 
@@ -322,7 +322,7 @@ class Spikes:
         get_clusters (str / int / list)
             Cluster IDs to extract (if int, takes first n clusters; if 'all', takes all); defaults to 'all'.
         to_shuffle (bool)
-            Yey or ney on shuffling.
+            Yey or ney on shuffling; defaults to False.
         ----------
 
         Returns
