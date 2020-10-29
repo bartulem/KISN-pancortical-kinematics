@@ -363,7 +363,7 @@ class Spikes:
                                                                                                  camera_framerate=empirical_camera_fr).astype(np.int16))
 
             if to_shuffle:
-                activity_dictionary[cell_id]['shuffled'] = np.zeros((Spikes.shuffle_shifts.shape[0], total_frame_num))
+                activity_dictionary[cell_id]['shuffled'] = {}
 
                 # shuffle the purged spike train N times
                 shuffled_spikes_sec = shuffle_spike_train(purged_spikes_sec, Spikes.shuffle_shifts)
@@ -371,9 +371,9 @@ class Spikes:
                 # convert shuffles to frame arrays
                 for shuffle_idx in range(shuffled_spikes_sec.shape[0]):
                     purged_shuffle = purge_spikes_beyond_tracking(spike_train=shuffled_spikes_sec[shuffle_idx, :], tracking_ts=track_ts, full_purge=False)
-                    activity_dictionary[cell_id]['shuffled'][shuffle_idx, :] = sparse.COO(convert_spikes_to_frame_events(purged_spike_train=purged_shuffle,
-                                                                                                                         frames_total=total_frame_num,
-                                                                                                                         camera_framerate=empirical_camera_fr).astype(np.int16))
+                    activity_dictionary[cell_id]['shuffled'][shuffle_idx] = sparse.COO(convert_spikes_to_frame_events(purged_spike_train=purged_shuffle,
+                                                                                                                      frames_total=total_frame_num,
+                                                                                                                      camera_framerate=empirical_camera_fr).astype(np.int16))
 
         return file_id, activity_dictionary
 

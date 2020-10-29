@@ -181,7 +181,7 @@ class Decoder:
                     cells_array[:, sc_idx] = activity_dictionary[selected_cluster]['activity'].todense()
                     if decode_num == 0:
                         for shuffle_idx in range(shuffle_num):
-                            shuffled_cells_array[shuffle_idx, :, sc_idx] = activity_dictionary[selected_cluster]['shuffled'][shuffle_idx, :].todense()
+                            shuffled_cells_array[shuffle_idx, :, sc_idx] = activity_dictionary[selected_cluster]['shuffled'][shuffle_idx].todense()
 
                 # smooth spike trains if desired
                 if to_smooth:
