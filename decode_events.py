@@ -11,6 +11,7 @@ Decode events like sound stimulation or luminance.
 import os
 import time
 import numpy as np
+import gc
 import neural_activity
 from select_clusters import ClusterFinder
 from sessions2load import Session
@@ -39,10 +40,10 @@ def predict_events(total_frame_num, fold_num, train_folds, test_folds,
         test_frames = test_folds[fold_idx]
         train_arr = activity_arr.take(indices=training_frames, axis=0)
         test_arr = activity_arr.take(indices=test_frames, axis=0)
-        for test_frame in test_frames:
+        for tf_idx, test_frame in enumerate(test_frames):
             # check whether all array elements are identical (if so, their variance is 0)
-            if not (test_arr[test_frame, :] == test_arr[test_frame, 0]).all():
-                corr_arr = correlate_quickly(big_x=train_arr, y=test_arr[test_frame, :])
+            if not (test_arr[tf_idx, :] == test_arr[tf_idx, 0]).all():
+                corr_arr = correlate_quickly(big_x=train_arr, y=test_arr[tf_idx, :])
                 max_corr_train_frame_raw = np.nanargmax(corr_arr)
                 actual_train_frame = training_frames[max_corr_train_frame_raw]
                 pred_sound_events[test_frame] = sound_arr[actual_train_frame]
@@ -105,8 +106,10 @@ class Decoder:
 
         Returns
         ----------
-        file_info (str)
-            The shortened version of the file name.
+        sound_decoding_accuracy (.npy file)
+            The decoding accuracy data for a given input file.
+        sound_shuffled_decoding_accuracy (.npy file)
+            The shuffled data decoding accuracy for a given input file.
         ----------
         """
 
@@ -141,8 +144,6 @@ class Decoder:
         # get activity dictionary
         file_id, activity_dictionary = neural_activity.Spikes(input_file=self.input_file).convert_activity_to_frames_with_shuffles(get_clusters=chosen_clusters,
                                                                                                                                    to_shuffle=True)
-        # get all cluster IDs
-        all_cluster_names = list(activity_dictionary.keys())
 
         # get fold edges
         fold_edges = np.floor(np.linspace(0, extracted_frame_info['total_frame_num'], fold_n+1)).astype(np.int64)
@@ -170,17 +171,17 @@ class Decoder:
                     shuffled_cells_array = np.zeros((shuffle_num, extracted_frame_info['total_frame_num'], cell_amount))
 
                 # shuffle cluster names
-                np.random.shuffle(all_cluster_names)
+                np.random.shuffle(chosen_clusters)
 
                 # select clusters
-                selected_clusters = all_cluster_names[:cell_amount]
+                selected_clusters = chosen_clusters[:cell_amount]
 
                 # get all cell / shuffled data in their respective arrays
                 for sc_idx, selected_cluster in enumerate(selected_clusters):
-                    cells_array[:, sc_idx] = activity_dictionary[selected_cluster]['activity']
+                    cells_array[:, sc_idx] = activity_dictionary[selected_cluster]['activity'].todense()
                     if decode_num == 0:
                         for shuffle_idx in range(shuffle_num):
-                            shuffled_cells_array[shuffle_idx, :, sc_idx] = activity_dictionary[selected_cluster]['shuffled'][shuffle_idx, :]
+                            shuffled_cells_array[shuffle_idx, :, sc_idx] = activity_dictionary[selected_cluster]['shuffled'][shuffle_idx, :].todense()
 
                 # smooth spike trains if desired
                 if to_smooth:
@@ -205,6 +206,8 @@ class Decoder:
                     for sh_idx in range(shuffle_num):
                         shuffled_decoding_accuracy[ca_idx, sh_idx] = ((shuffle_predicted_sound_events[:, sh_idx]-extracted_frame_info['imu_sound']) == 0).sum() \
                                                                      / shuffle_predicted_sound_events.shape[0]
+                # free memory
+                gc.collect()
 
         # save results as .npy files
         np.save(f'{self.save_results_dir}{os.sep}sound_decoding_accuracy_{cluster_areas[0]}clusters', decoding_accuracy)

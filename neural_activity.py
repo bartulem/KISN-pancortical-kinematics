@@ -11,6 +11,7 @@ Load spike data, bin and smooth.
 import numpy as np
 from sessions2load import Session
 from numba import njit
+import sparse
 from scipy.ndimage.filters import gaussian_filter1d
 
 
@@ -357,9 +358,9 @@ class Spikes:
             self.purged_spikes_dictionary[cell_id] = purged_spikes_sec
 
             # covert spikes to frame arrays
-            activity_dictionary[cell_id]['activity'] = convert_spikes_to_frame_events(purged_spike_train=purged_spikes_sec,
-                                                                                      frames_total=total_frame_num,
-                                                                                      camera_framerate=empirical_camera_fr)
+            activity_dictionary[cell_id]['activity'] = sparse.COO(convert_spikes_to_frame_events(purged_spike_train=purged_spikes_sec,
+                                                                                                 frames_total=total_frame_num,
+                                                                                                 camera_framerate=empirical_camera_fr).astype(np.int16))
 
             if to_shuffle:
                 activity_dictionary[cell_id]['shuffled'] = np.zeros((Spikes.shuffle_shifts.shape[0], total_frame_num))
@@ -370,9 +371,9 @@ class Spikes:
                 # convert shuffles to frame arrays
                 for shuffle_idx in range(shuffled_spikes_sec.shape[0]):
                     purged_shuffle = purge_spikes_beyond_tracking(spike_train=shuffled_spikes_sec[shuffle_idx, :], tracking_ts=track_ts, full_purge=False)
-                    activity_dictionary[cell_id]['shuffled'][shuffle_idx, :] = convert_spikes_to_frame_events(purged_spike_train=purged_shuffle,
-                                                                                                              frames_total=total_frame_num,
-                                                                                                              camera_framerate=empirical_camera_fr)
+                    activity_dictionary[cell_id]['shuffled'][shuffle_idx, :] = sparse.COO(convert_spikes_to_frame_events(purged_spike_train=purged_shuffle,
+                                                                                                                         frames_total=total_frame_num,
+                                                                                                                         camera_framerate=empirical_camera_fr).astype(np.int16))
 
         return file_id, activity_dictionary
 
@@ -477,7 +478,7 @@ class Spikes:
         peth_dictionary = {}
         for cell_id in activity_dictionary.keys():
             peth_dictionary[cell_id] = {}
-            peth_array = calculate_peth(input_array=activity_dictionary[cell_id]['activity'],
+            peth_array = calculate_peth(input_array=activity_dictionary[cell_id]['activity'].todense(),
                                         event_start_frames=event_start_frames,
                                         bin_size_ms=bin_size_ms,
                                         window_size=window_size,

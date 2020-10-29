@@ -19,7 +19,6 @@ import operator
 import matplotlib.pyplot as plt
 import seaborn as sns
 from tqdm import tqdm
-from sklearn.preprocessing import StandardScaler
 
 
 class SpikingProfile:
