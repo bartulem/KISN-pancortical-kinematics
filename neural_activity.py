@@ -135,6 +135,49 @@ def convert_spikes_to_frame_events(purged_spike_train, frames_total, camera_fram
 
 
 @njit(parallel=False)
+def condense_frame_arrays(frame_array, camera_framerate=120.,
+                          bin_size_ms=50, arr_type=True):
+
+    """
+    Parameters
+    ----------
+    frame_array : np.ndarray (frames_total, )
+        The input frame array.
+    bin_size_ms : int
+        The bin size of the PETH; defaults to 50 (ms).
+    camera_framerate : np.float64
+        The sampling frequency of the tracking system; defaults to 120.
+    arr_type : bool
+        True if it's a spike array, False if it's the sound array; defaults to True.
+    ----------
+
+    Returns
+    ----------
+    new_arr : np.ndarray
+        The frame array with the reduced shape.
+    ----------
+    """
+
+    total_frames = frame_array.shape[0]
+
+    # calculate size of new frame
+    step = int(camera_framerate * (bin_size_ms / 1000))
+    new_shape = total_frames // step
+    new_arr = np.zeros(new_shape)
+
+    # fill it in
+    ls_iter = list(range(0, new_shape*step, step))
+    for idx, one_bin in enumerate(ls_iter):
+        array_excerpt = frame_array[one_bin:ls_iter[idx+1]]
+        if arr_type:
+            new_arr[idx] = array_excerpt.sum()
+        else:
+            new_arr[idx] = 1 if array_excerpt.sum() >= (step / 2) else 0
+
+    return new_arr
+
+
+@njit(parallel=False)
 def shuffle_spike_train(spike_train, random_shifts):
     """
     Parameters
@@ -324,6 +367,8 @@ class Spikes:
             Cluster IDs to extract (if int, takes first n clusters; if 'all', takes all); defaults to 'all'.
         to_shuffle (bool)
             Yey or ney on shuffling; defaults to False.
+        condense_arr (bool)
+            Yey or ney on the condensing (reducing the number of bins); defaults to False.
         ----------
 
         Returns
@@ -338,6 +383,7 @@ class Spikes:
         get_clusters = kwargs['get_clusters'] if 'get_clusters' in kwargs.keys() \
                                                  and (kwargs['get_clusters'] == 'all' or type(kwargs['get_clusters']) == int or type(kwargs['get_clusters']) == list) else 'all'
         to_shuffle = kwargs['to_shuffle'] if 'to_shuffle' in kwargs.keys() and type(kwargs['to_shuffle']) == bool else False
+        condense_arr = kwargs['condense_arr'] if 'condense_arr' in kwargs.keys() and type(kwargs['condense_arr']) == bool else False
 
         # get spike data in seconds and tracking start and end time
         file_id, extracted_data = Session(session=self.input_file).data_loader(extract_clusters=get_clusters, extract_variables=['tracking_ts', 'framerate', 'total_frame_num'])
@@ -358,9 +404,14 @@ class Spikes:
             self.purged_spikes_dictionary[cell_id] = purged_spikes_sec
 
             # covert spikes to frame arrays
-            activity_dictionary[cell_id]['activity'] = sparse.COO(convert_spikes_to_frame_events(purged_spike_train=purged_spikes_sec,
-                                                                                                 frames_total=total_frame_num,
-                                                                                                 camera_framerate=empirical_camera_fr).astype(np.int16))
+            cell_id_activity = convert_spikes_to_frame_events(purged_spike_train=purged_spikes_sec,
+                                                              frames_total=total_frame_num,
+                                                              camera_framerate=empirical_camera_fr)
+
+            if not condense_arr:
+                activity_dictionary[cell_id]['activity'] = sparse.COO(cell_id_activity).astype(np.int16)
+            else:
+                activity_dictionary[cell_id]['activity'] = sparse.COO(condense_frame_arrays(cell_id_activity)).astype(np.int16)
 
             if to_shuffle:
                 activity_dictionary[cell_id]['shuffled'] = {}
@@ -371,9 +422,13 @@ class Spikes:
                 # convert shuffles to frame arrays
                 for shuffle_idx in range(shuffled_spikes_sec.shape[0]):
                     purged_shuffle = purge_spikes_beyond_tracking(spike_train=shuffled_spikes_sec[shuffle_idx, :], tracking_ts=track_ts, full_purge=False)
-                    activity_dictionary[cell_id]['shuffled'][shuffle_idx] = sparse.COO(convert_spikes_to_frame_events(purged_spike_train=purged_shuffle,
-                                                                                                                      frames_total=total_frame_num,
-                                                                                                                      camera_framerate=empirical_camera_fr).astype(np.int16))
+                    shuffle_cell_id = convert_spikes_to_frame_events(purged_spike_train=purged_shuffle,
+                                                                     frames_total=total_frame_num,
+                                                                     camera_framerate=empirical_camera_fr)
+                    if not condense_arr:
+                        activity_dictionary[cell_id]['shuffled'][shuffle_idx] = sparse.COO(shuffle_cell_id).astype(np.int16)
+                    else:
+                        activity_dictionary[cell_id]['shuffled'][shuffle_idx] = sparse.COO(condense_frame_arrays(shuffle_cell_id)).astype(np.int16)
 
         return file_id, activity_dictionary
 
@@ -478,7 +533,7 @@ class Spikes:
         peth_dictionary = {}
         for cell_id in activity_dictionary.keys():
             peth_dictionary[cell_id] = {}
-            peth_array = calculate_peth(input_array=activity_dictionary[cell_id]['activity'].todense(),
+            peth_array = calculate_peth(input_array=activity_dictionary[cell_id]['activity'].todense().astype(np.float32),
                                         event_start_frames=event_start_frames,
                                         bin_size_ms=bin_size_ms,
                                         window_size=window_size,

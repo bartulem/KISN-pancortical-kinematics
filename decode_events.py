@@ -20,35 +20,43 @@ from tqdm import tqdm
 
 
 @njit(parallel=False)
-def correlate_quickly(big_x, y):
-    big_x_mean = np.zeros(big_x.shape[0])
-    for idx in range(big_x.shape[0]):
-        big_x_mean[idx] = big_x[idx, :].mean()
-    big_x_mean = np.reshape(big_x_mean, (big_x.shape[0], 1))
-    y_mean = y.mean()
-    r_num = ((big_x-big_x_mean)*(y-y_mean)).sum(axis=1)
-    r_den = np.sqrt(((big_x-big_x_mean)**2).sum(axis=1)*((y-y_mean)**2).sum())
-    r = r_num/r_den
-    return r
+def correlate_quickly(big_x, big_x_mean, big_y, big_y_mean):
+    big_x_shape_0 = big_x.shape[0]
+    big_y_shape_0 = big_y.shape[0]
+    big_y_shape_1 = big_y.shape[1]
+    big_x_mean = np.reshape(big_x_mean, (big_x_shape_0, 1))
+    big_y_mean = np.reshape(big_y_mean, (big_y_shape_0, 1))
+    x_ds = big_x-big_x_mean
+    y_ds = big_y-big_y_mean
+    r_num = (x_ds.reshape((big_x_shape_0, 1, big_y_shape_1))*y_ds).sum(axis=2)
+    r_den = np.sqrt(((x_ds**2).sum(axis=1).reshape((big_x_shape_0, 1)))*((y_ds**2).sum(axis=1).reshape((1, big_y_shape_0))))
+    r = r_num / r_den
+    nan_positions = np.isnan(r)
+    return r, nan_positions
 
 
 def predict_events(total_frame_num, fold_num, train_folds, test_folds,
-                   activity_arr, sound_arr, se_p):
+                   activity_arr, sound_arr, fe):
     pred_sound_events = np.zeros(total_frame_num)
     for fold_idx in range(fold_num):
         training_frames = train_folds[fold_idx]
         test_frames = test_folds[fold_idx]
         train_arr = activity_arr.take(indices=training_frames, axis=0)
         test_arr = activity_arr.take(indices=test_frames, axis=0)
-        for tf_idx, test_frame in enumerate(test_frames):
-            # check whether all array elements are identical (if so, their variance is 0)
-            if not (test_arr[tf_idx, :] == test_arr[tf_idx, 0]).all():
-                corr_arr = correlate_quickly(big_x=train_arr, y=test_arr[tf_idx, :])
-                max_corr_train_frame_raw = np.nanargmax(corr_arr)
-                actual_train_frame = training_frames[max_corr_train_frame_raw]
-                pred_sound_events[test_frame] = sound_arr[actual_train_frame]
-            else:
-                pred_sound_events[test_frame] = np.random.choice(a=2, p=se_p)
+        corr_arr, nan_pos = correlate_quickly(big_x=train_arr,
+                                              big_x_mean=train_arr.mean(axis=1),
+                                              big_y=test_arr,
+                                              big_y_mean=test_arr.mean(axis=1))
+        # exchange nans for lowest value
+        corr_arr[nan_pos] = -1
+
+        # find best congruent train frame
+        max_corr_train_frames_raw = np.nanargmax(corr_arr, axis=0)
+        actual_train_frames = training_frames.take(max_corr_train_frames_raw)
+
+        # get sound values
+        pred_sound_events[fe[fold_idx]:fe[fold_idx+1]] = sound_arr.take(actual_train_frames)
+
     return pred_sound_events
 
 
@@ -62,7 +70,7 @@ class Decoder:
         """
         Description
         ----------
-        This method uses a simple nearest neighbor decoder to classify sound stimulation
+        This method uses a simple nearest neighbor decoder to predict sound stimulation
         events. More specifically, we bin the spike train to match the tracking resolution
         and smooth it with a 3 bin Gaussian kernel. Since our three animals have a varying
         number of auditory single units (K=288, JJ=132, F=198), for each one we choose a
@@ -70,11 +78,11 @@ class Decoder:
         of the sound stimulus in each run (10 runs in total). In each run, we divided the data
         in three folds where 1/3 of the data was the test set and 2/3 were the training set.
         For each test set population vector we computed Pearson correlations to every population
-        vector in the training set and obtained a predicted sound stimulus value by assigning the
-        the sound stimulus value of the most correlated training set population vector to the
-        test set predictions. Decoding accuracy was defined as the proportion of correctly matched
-        stimulus states across the entire recording session. We also shuffled the spikes of these
-        units 1000 times in the first run to obtain the null-distribution of decoded accuracy.
+        vector in the training set. We obtained a predicted sound stimulus value for each test
+        frame by assigning it the sound stimulus value of the most correlated training set population
+        vector. Decoding accuracy was defined as the proportion of correctly matched stimulus states
+        across the entire recording session. We also shuffled the spikes of these units 1000 times
+        in the first run to obtain the null-distribution of decoded accuracy.
         ----------
 
         Parameters
@@ -102,6 +110,8 @@ class Decoder:
             The smoothing axis in a 2D array; defaults to 0.
         fold_n (int)
             The number of folds for decoding; defaults to 3.
+        condense (bool)
+            Yey or ney on the spike array condensing; defaults to True.
         ----------
 
         Returns
@@ -128,6 +138,7 @@ class Decoder:
         smooth_sd = kwargs['smooth_sd'] if 'smooth_sd' in kwargs.keys() and type(kwargs['smooth_sd']) == int else 1
         smooth_axis = kwargs['smooth_axis'] if 'smooth_axis' in kwargs.keys() and type(kwargs['smooth_axis']) == int else 0
         fold_n = kwargs['fold_n'] if 'fold_n' in kwargs.keys() and type(kwargs['fold_n']) == int else 3
+        condense = kwargs['condense'] if 'condense' in kwargs.keys() and type(kwargs['condense']) == bool else True
 
         # choose clusters you'd like to decode with
         chosen_clusters = ClusterFinder(session=self.input_file,
@@ -137,25 +148,26 @@ class Decoder:
         # get framerate and total frame count
         file_name, extracted_frame_info = Session(session=self.input_file).data_loader(extract_variables=['framerate', 'total_frame_num', 'imu_sound'])
 
-        # get sound event empirical probabilities
-        sound_event_empirical_probabilities = [(extracted_frame_info['imu_sound'] == 0).sum() / extracted_frame_info['imu_sound'].shape[0],
-                                               (extracted_frame_info['imu_sound'] == 1).sum() / extracted_frame_info['imu_sound'].shape[0]]
-
         # get activity dictionary
         file_id, activity_dictionary = neural_activity.Spikes(input_file=self.input_file).convert_activity_to_frames_with_shuffles(get_clusters=chosen_clusters,
-                                                                                                                                   to_shuffle=True)
+                                                                                                                                   to_shuffle=True,
+                                                                                                                                   condense_arr=condense)
+        if condense:
+            sound_array = neural_activity.condense_frame_arrays(frame_array=extracted_frame_info['imu_sound'], arr_type=False)
+        else:
+            sound_array = extracted_frame_info['imu_sound']
 
         # get fold edges
-        fold_edges = np.floor(np.linspace(0, extracted_frame_info['total_frame_num'], fold_n+1)).astype(np.int64)
+        fold_edges = np.floor(np.linspace(0, extracted_frame_info['total_frame_num'], fold_n+1)).astype(np.int32)
 
         # get train / test indices for each fold
         train_indices_for_folds = []
         test_indices_for_folds = []
         for fold in range(fold_n):
             all_frames = np.arange(0, extracted_frame_info['total_frame_num'])
-            ond_fold_arr = np.arange(fold_edges[fold], fold_edges[fold+1])
-            test_indices_for_folds.append(ond_fold_arr.astype(np.int64))
-            train_indices_for_folds.append(np.setdiff1d(all_frames, ond_fold_arr).astype(np.int64))
+            one_fold_arr = np.arange(fold_edges[fold], fold_edges[fold+1])
+            test_indices_for_folds.append(one_fold_arr.astype(np.int32))
+            train_indices_for_folds.append(np.setdiff1d(all_frames, one_fold_arr).astype(np.int32))
 
         # keep time
         start_time = time.time()
@@ -178,33 +190,33 @@ class Decoder:
 
                 # get all cell / shuffled data in their respective arrays
                 for sc_idx, selected_cluster in enumerate(selected_clusters):
-                    cells_array[:, sc_idx] = activity_dictionary[selected_cluster]['activity'].todense()
+                    cells_array[:, sc_idx] = activity_dictionary[selected_cluster]['activity'].todense().astype(np.float32)
                     if decode_num == 0:
                         for shuffle_idx in range(shuffle_num):
-                            shuffled_cells_array[shuffle_idx, :, sc_idx] = activity_dictionary[selected_cluster]['shuffled'][shuffle_idx].todense()
+                            shuffled_cells_array[shuffle_idx, :, sc_idx] = activity_dictionary[selected_cluster]['shuffled'][shuffle_idx].todense().astype(np.float32)
 
                 # smooth spike trains if desired
                 if to_smooth:
-                    cells_array = neural_activity.gaussian_smoothing(array=cells_array, sigma=smooth_sd, axis=smooth_axis)
+                    cells_array = neural_activity.gaussian_smoothing(array=cells_array, sigma=smooth_sd, axis=smooth_axis).astype(np.float32)
                     if decode_num == 0:
-                        shuffled_cells_array = neural_activity.gaussian_smoothing(array=shuffled_cells_array, sigma=smooth_sd, axis=smooth_axis+1)
+                        shuffled_cells_array = neural_activity.gaussian_smoothing(array=shuffled_cells_array, sigma=smooth_sd, axis=smooth_axis+1).astype(np.float32)
 
                 # go through folds and predict sound
                 predicted_sound_events = predict_events(total_frame_num=extracted_frame_info['total_frame_num'], fold_num=fold_n, train_folds=train_indices_for_folds,
-                                                        test_folds=test_indices_for_folds, activity_arr=cells_array, sound_arr=extracted_frame_info['imu_sound'],
-                                                        se_p=sound_event_empirical_probabilities)
+                                                        test_folds=test_indices_for_folds, activity_arr=cells_array, sound_arr=sound_array,
+                                                        fe=fold_edges)
                 if decode_num == 0:
                     shuffle_predicted_sound_events = np.zeros((extracted_frame_info['total_frame_num'], shuffle_num))
                     for sh in range(shuffle_num):
                         shuffle_predicted_sound_events[:, sh] = predict_events(total_frame_num=extracted_frame_info['total_frame_num'], fold_num=fold_n, train_folds=train_indices_for_folds,
-                                                                               test_folds=test_indices_for_folds, activity_arr=shuffled_cells_array[sh], sound_arr=extracted_frame_info['imu_sound'],
-                                                                               se_p=sound_event_empirical_probabilities)
+                                                                               test_folds=test_indices_for_folds, activity_arr=shuffled_cells_array[sh], sound_arr=sound_array,
+                                                                               fe=fold_edges)
 
                 # calculate accuracy and fill in the array
-                decoding_accuracy[ca_idx, decode_num] = ((predicted_sound_events-extracted_frame_info['imu_sound']) == 0).sum() / predicted_sound_events.shape[0]
+                decoding_accuracy[ca_idx, decode_num] = ((predicted_sound_events-sound_array) == 0).sum() / predicted_sound_events.shape[0]
                 if decode_num == 0:
                     for sh_idx in range(shuffle_num):
-                        shuffled_decoding_accuracy[ca_idx, sh_idx] = ((shuffle_predicted_sound_events[:, sh_idx]-extracted_frame_info['imu_sound']) == 0).sum() \
+                        shuffled_decoding_accuracy[ca_idx, sh_idx] = ((shuffle_predicted_sound_events[:, sh_idx]-sound_array) == 0).sum() \
                                                                      / shuffle_predicted_sound_events.shape[0]
                 # free memory
                 gc.collect()
