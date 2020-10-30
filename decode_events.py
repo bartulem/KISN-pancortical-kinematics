@@ -71,7 +71,7 @@ class Decoder:
         Description
         ----------
         This method uses a simple nearest neighbor decoder to predict sound stimulation
-        events. More specifically, we bin the spike train to match the tracking resolution
+        events. More specifically, we bin the spike train of every cluster in 100 ms bins
         and smooth it with a 3 bin Gaussian kernel. Since our three animals have a varying
         number of auditory single units (K=288, JJ=132, F=198), for each one we choose a
         distinct combination of units (either 5, 10, 20, 50 or 100) to decode the presence
@@ -140,13 +140,16 @@ class Decoder:
         fold_n = kwargs['fold_n'] if 'fold_n' in kwargs.keys() and type(kwargs['fold_n']) == int else 3
         condense = kwargs['condense'] if 'condense' in kwargs.keys() and type(kwargs['condense']) == bool else True
 
+        # keep time
+        start_time = time.time()
+
         # choose clusters you'd like to decode with
         chosen_clusters = ClusterFinder(session=self.input_file,
                                         cluster_groups_dir=cluster_groups_dir,
                                         sp_profiles_csv=sp_profiles_csv).get_desired_clusters(filter_by_area=cluster_areas,
                                                                                               filter_by_cluster_type=cluster_type)
         # get framerate and total frame count
-        file_name, extracted_frame_info = Session(session=self.input_file).data_loader(extract_variables=['framerate', 'total_frame_num', 'imu_sound'])
+        file_name, extracted_frame_info = Session(session=self.input_file).data_loader(extract_variables=['total_frame_num', 'imu_sound'])
 
         # get activity dictionary
         file_id, activity_dictionary = neural_activity.Spikes(input_file=self.input_file).convert_activity_to_frames_with_shuffles(get_clusters=chosen_clusters,
@@ -154,33 +157,32 @@ class Decoder:
                                                                                                                                    condense_arr=condense)
         if condense:
             sound_array = neural_activity.condense_frame_arrays(frame_array=extracted_frame_info['imu_sound'], arr_type=False)
+            total_frame_num = sound_array.shape[0]
         else:
             sound_array = extracted_frame_info['imu_sound']
+            total_frame_num = extracted_frame_info['total_frame_num']
 
         # get fold edges
-        fold_edges = np.floor(np.linspace(0, extracted_frame_info['total_frame_num'], fold_n+1)).astype(np.int32)
+        fold_edges = np.floor(np.linspace(0, total_frame_num, fold_n+1)).astype(np.int32)
 
         # get train / test indices for each fold
         train_indices_for_folds = []
         test_indices_for_folds = []
         for fold in range(fold_n):
-            all_frames = np.arange(0, extracted_frame_info['total_frame_num'])
+            all_frames = np.arange(0, total_frame_num)
             one_fold_arr = np.arange(fold_edges[fold], fold_edges[fold+1])
             test_indices_for_folds.append(one_fold_arr.astype(np.int32))
             train_indices_for_folds.append(np.setdiff1d(all_frames, one_fold_arr).astype(np.int32))
-
-        # keep time
-        start_time = time.time()
 
         # conduct decoding
         decoding_accuracy = np.zeros((decoding_cell_number_array.shape[0], number_of_decoding_per_run))
         shuffled_decoding_accuracy = np.zeros((decoding_cell_number_array.shape[0], shuffle_num))
         for decode_num in tqdm(range(number_of_decoding_per_run)):
             for ca_idx, cell_amount in enumerate(decoding_cell_number_array):
-                cells_array = np.zeros((extracted_frame_info['total_frame_num'], cell_amount))
+                cells_array = np.zeros((total_frame_num, cell_amount))
 
                 if decode_num == 0:
-                    shuffled_cells_array = np.zeros((shuffle_num, extracted_frame_info['total_frame_num'], cell_amount))
+                    shuffled_cells_array = np.zeros((shuffle_num, total_frame_num, cell_amount))
 
                 # shuffle cluster names
                 np.random.shuffle(chosen_clusters)
@@ -202,13 +204,13 @@ class Decoder:
                         shuffled_cells_array = neural_activity.gaussian_smoothing(array=shuffled_cells_array, sigma=smooth_sd, axis=smooth_axis+1).astype(np.float32)
 
                 # go through folds and predict sound
-                predicted_sound_events = predict_events(total_frame_num=extracted_frame_info['total_frame_num'], fold_num=fold_n, train_folds=train_indices_for_folds,
+                predicted_sound_events = predict_events(total_frame_num=total_frame_num, fold_num=fold_n, train_folds=train_indices_for_folds,
                                                         test_folds=test_indices_for_folds, activity_arr=cells_array, sound_arr=sound_array,
                                                         fe=fold_edges)
                 if decode_num == 0:
-                    shuffle_predicted_sound_events = np.zeros((extracted_frame_info['total_frame_num'], shuffle_num))
+                    shuffle_predicted_sound_events = np.zeros((total_frame_num, shuffle_num))
                     for sh in range(shuffle_num):
-                        shuffle_predicted_sound_events[:, sh] = predict_events(total_frame_num=extracted_frame_info['total_frame_num'], fold_num=fold_n, train_folds=train_indices_for_folds,
+                        shuffle_predicted_sound_events[:, sh] = predict_events(total_frame_num=total_frame_num, fold_num=fold_n, train_folds=train_indices_for_folds,
                                                                                test_folds=test_indices_for_folds, activity_arr=shuffled_cells_array[sh], sound_arr=sound_array,
                                                                                fe=fold_edges)
 
@@ -222,7 +224,7 @@ class Decoder:
                 gc.collect()
 
         # save results as .npy files
-        np.save(f'{self.save_results_dir}{os.sep}sound_decoding_accuracy_{cluster_areas[0]}clusters', decoding_accuracy)
-        np.save(f'{self.save_results_dir}{os.sep}sound_shuffled_decoding_accuracy_{cluster_areas[0]}clusters', shuffled_decoding_accuracy)
+        np.save(f'{self.save_results_dir}{os.sep}sound_decoding_accuracy_{cluster_areas[0]}_clusters', decoding_accuracy)
+        np.save(f'{self.save_results_dir}{os.sep}sound_shuffled_decoding_accuracy_{cluster_areas[0]}_clusters', shuffled_decoding_accuracy)
 
         print("Decoding complete! It took {:.2f} minutes.".format((time.time() - start_time) / 60))

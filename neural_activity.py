@@ -136,7 +136,7 @@ def convert_spikes_to_frame_events(purged_spike_train, frames_total, camera_fram
 
 @njit(parallel=False)
 def condense_frame_arrays(frame_array, camera_framerate=120.,
-                          bin_size_ms=50, arr_type=True):
+                          bin_size_ms=100, arr_type=True):
 
     """
     Parameters
@@ -144,7 +144,7 @@ def condense_frame_arrays(frame_array, camera_framerate=120.,
     frame_array : np.ndarray (frames_total, )
         The input frame array.
     bin_size_ms : int
-        The bin size of the PETH; defaults to 50 (ms).
+        The bin size of the PETH; defaults to 100 (ms).
     camera_framerate : np.float64
         The sampling frequency of the tracking system; defaults to 120.
     arr_type : bool
@@ -168,7 +168,7 @@ def condense_frame_arrays(frame_array, camera_framerate=120.,
     # fill it in
     ls_iter = list(range(0, new_shape*step, step))
     for idx, one_bin in enumerate(ls_iter):
-        array_excerpt = frame_array[one_bin:ls_iter[idx+1]]
+        array_excerpt = frame_array[one_bin:one_bin+step]
         if arr_type:
             new_arr[idx] = array_excerpt.sum()
         else:
@@ -411,7 +411,7 @@ class Spikes:
             if not condense_arr:
                 activity_dictionary[cell_id]['activity'] = sparse.COO(cell_id_activity).astype(np.int16)
             else:
-                activity_dictionary[cell_id]['activity'] = sparse.COO(condense_frame_arrays(cell_id_activity)).astype(np.int16)
+                activity_dictionary[cell_id]['activity'] = sparse.COO(condense_frame_arrays(frame_array=cell_id_activity)).astype(np.int16)
 
             if to_shuffle:
                 activity_dictionary[cell_id]['shuffled'] = {}
@@ -428,7 +428,7 @@ class Spikes:
                     if not condense_arr:
                         activity_dictionary[cell_id]['shuffled'][shuffle_idx] = sparse.COO(shuffle_cell_id).astype(np.int16)
                     else:
-                        activity_dictionary[cell_id]['shuffled'][shuffle_idx] = sparse.COO(condense_frame_arrays(shuffle_cell_id)).astype(np.int16)
+                        activity_dictionary[cell_id]['shuffled'][shuffle_idx] = sparse.COO(condense_frame_arrays(frame_array=shuffle_cell_id)).astype(np.int16)
 
         return file_id, activity_dictionary
 
