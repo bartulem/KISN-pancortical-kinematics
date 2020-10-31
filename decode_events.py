@@ -16,7 +16,6 @@ import neural_activity
 from select_clusters import ClusterFinder
 from sessions2load import Session
 from numba import njit
-from tqdm import tqdm
 
 
 @njit(parallel=False)
@@ -143,6 +142,9 @@ class Decoder:
         # keep time
         start_time = time.time()
 
+        # get animal name
+        animal_name = [name for name in ['kavorka', 'frank', 'johnjohn'] if name in self.input_file][0]
+
         # choose clusters you'd like to decode with
         chosen_clusters = ClusterFinder(session=self.input_file,
                                         cluster_groups_dir=cluster_groups_dir,
@@ -177,7 +179,7 @@ class Decoder:
         # conduct decoding
         decoding_accuracy = np.zeros((decoding_cell_number_array.shape[0], number_of_decoding_per_run))
         shuffled_decoding_accuracy = np.zeros((decoding_cell_number_array.shape[0], shuffle_num))
-        for decode_num in tqdm(range(number_of_decoding_per_run)):
+        for decode_num in range(number_of_decoding_per_run):
             for ca_idx, cell_amount in enumerate(decoding_cell_number_array):
                 cells_array = np.zeros((total_frame_num, cell_amount))
 
@@ -224,7 +226,7 @@ class Decoder:
                 gc.collect()
 
         # save results as .npy files
-        np.save(f'{self.save_results_dir}{os.sep}sound_decoding_accuracy_{cluster_areas[0]}_clusters', decoding_accuracy)
-        np.save(f'{self.save_results_dir}{os.sep}sound_shuffled_decoding_accuracy_{cluster_areas[0]}_clusters', shuffled_decoding_accuracy)
+        np.save(f'{self.save_results_dir}{os.sep}{animal_name}_sound_decoding_accuracy_{cluster_areas[0]}_clusters', decoding_accuracy)
+        np.save(f'{self.save_results_dir}{os.sep}{animal_name}_sound_shuffled_decoding_accuracy_{cluster_areas[0]}_clusters', shuffled_decoding_accuracy)
 
         print("Decoding complete! It took {:.2f} minutes.".format((time.time() - start_time) / 60))
