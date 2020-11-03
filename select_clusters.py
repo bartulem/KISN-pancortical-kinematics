@@ -9,6 +9,7 @@ Select appropriate clusters.
 """
 
 import os
+import re
 import sys
 import pickle
 import json
@@ -124,7 +125,8 @@ class ClusterFinder:
                     # get animal name, bank id and date of session
                     file_animal = [name for name in ClusterFinder.probe_site_areas.keys() if name in file_info][0]
                     file_bank = [bank for bank in ['distal', 'intermediate'] if bank in file_info][0]
-                    file_date = file_info[file_info.find('20')-4:file_info.find('20')+2]
+                    get_date_idx = [date.start() for date in re.finditer('20', file_info)][-1]
+                    file_date = file_info[get_date_idx-4:get_date_idx+2]
 
                     for cluster in clusters:
                         if filter_by_area is True and filter_by_cluster_type is True and filter_by_spiking_profile is True:
