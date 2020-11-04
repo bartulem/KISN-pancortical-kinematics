@@ -16,17 +16,21 @@ import sys
 import matplotlib.pyplot as plt
 import pandas as pd
 from scipy.stats import wilcoxon
+from scipy.stats import sem
 
 
 class PlotGroupResults:
     def __init__(self, session_list=[], cluster_groups_dir='', sp_profiles_csv='',
-                 save_fig=False, fig_format='png', save_dir='/home/bartulm/Downloads'):
+                 save_fig=False, fig_format='png', save_dir='/home/bartulm/Downloads',
+                 decoding_dir='', animal_ids={'frank': '26473', 'johnjohn': '26471', 'kavorka': '26525'}):
         self.session_list = session_list
         self.cluster_groups_dir = cluster_groups_dir
         self.sp_profiles_csv = sp_profiles_csv
         self.save_fig = save_fig
         self.fig_format = fig_format
         self.save_dir = save_dir
+        self.decoding_dir = decoding_dir
+        self.animal_ids = animal_ids
 
     def sound_stim_summary(self, **kwargs):
         """
@@ -300,3 +304,80 @@ class PlotGroupResults:
                     print("Specified save directory doesn't exist. Try again.")
                     sys.exit()
             plt.show()
+
+    def decoding_summary(self, **kwargs):
+
+        file_dict = {'data': {'A': [], 'V': []}, 'shuffled': {'A': [], 'V': []}}
+        if not os.path.exists(self.decoding_dir):
+            print(f"Invalid location for directory {self.decoding_dir}. Please try again.")
+            sys.exit()
+        else:
+            for decoding_file_name in os.listdir(self.decoding_dir):
+                if 'shuffled' in decoding_file_name:
+                    if 'A' in decoding_file_name:
+                        file_dict['shuffled']['A'].append(decoding_file_name)
+                    else:
+                        file_dict['shuffled']['V'].append(decoding_file_name)
+                else:
+                    if 'A' in decoding_file_name:
+                        file_dict['data']['A'].append(decoding_file_name)
+                    else:
+                        file_dict['data']['V'].append(decoding_file_name)
+
+        # sort dict by file name
+        for data_type in file_dict.keys():
+            for data_area in file_dict[data_type].keys():
+                file_dict[data_type][data_area].sort()
+
+        # load the data
+        decoding_data = {'data': {'A': {}, 'V': {}}, 'shuffled': {'A': {}, 'V': {}}}
+        for data_type in decoding_data.keys():
+            for data_area in decoding_data[data_type].keys():
+                for file_idx, one_file in enumerate(file_dict[data_type][data_area]):
+                    decoding_data[data_type][data_area][list(self.animal_ids.keys())[file_idx]] = np.load(f'{self.decoding_dir}{os.sep}{one_file}')
+
+        # get data to plot
+        plot_data = {'A': {'decoding_accuracy': {'mean': {}, 'sem': {}}, 'shuffled': np.array([[1000., 0.]]*5)},
+                     'V': {'decoding_accuracy': {'mean': {}, 'sem': {}}, 'shuffled': np.array([[1000., 0.]]*5)}}
+        for area in decoding_data['data']:
+            for animal in decoding_data['data'][area].keys():
+                plot_data[area]['decoding_accuracy']['mean'][animal] = decoding_data['data'][area][animal].mean(axis=1)
+                plot_data[area]['decoding_accuracy']['sem'][animal] = sem(decoding_data['data'][area][animal], axis=1)
+                down_percentiles = np.percentile(decoding_data['shuffled'][area][animal], q=.5, axis=1)
+                for d_idx, d_per in enumerate(down_percentiles):
+                    if d_per < plot_data[area]['shuffled'][d_idx, 0]:
+                        plot_data[area]['shuffled'][d_idx, 0] = d_per
+                up_percentiles = np.percentile(decoding_data['shuffled'][area][animal], q=99.5, axis=1)
+                for u_idx, u_per in enumerate(up_percentiles):
+                    if u_per > plot_data[area]['shuffled'][u_idx, 1]:
+                        plot_data[area]['shuffled'][u_idx, 1] = u_per
+
+        # plot
+        x_values = np.array([5, 10, 20, 50, 100])
+        fig, ax = plt.subplots(nrows=1, ncols=2, figsize=(8, 5), dpi=300)
+        ax[0].errorbar(x=x_values, y=plot_data['A']['decoding_accuracy']['mean']['kavorka'], yerr=plot_data['A']['decoding_accuracy']['sem']['kavorka']*3,
+                     color='#000000', fmt='-o', label=f"#{self.animal_ids['kavorka']}")
+        ax[0].errorbar(x=x_values, y=plot_data['A']['decoding_accuracy']['mean']['frank'], yerr=plot_data['A']['decoding_accuracy']['sem']['frank']*3,
+                     color='#000000', fmt='-^', label=f"#{self.animal_ids['frank']}")
+        ax[0].errorbar(x=x_values, y=plot_data['A']['decoding_accuracy']['mean']['johnjohn'], yerr=plot_data['A']['decoding_accuracy']['sem']['johnjohn']*3,
+                     color='#000000', fmt='-s', label=f"#{self.animal_ids['johnjohn']}")
+        ax[0].fill_between(x=x_values, y1=plot_data['A']['shuffled'][:, 0], y2=plot_data['A']['shuffled'][:, 1], color='grey', alpha=.25)
+        ax[0].set_ylim(.5, 1)
+        ax[0].legend()
+        ax[0].set_title('Decoding of sound stim by A cells')
+        ax[0].set_xlabel('Number of cells')
+        ax[0].set_ylabel('Decoding accuracy')
+
+        ax[1].errorbar(x=x_values, y=plot_data['V']['decoding_accuracy']['mean']['kavorka'], yerr=plot_data['V']['decoding_accuracy']['sem']['kavorka']*3,
+                     color='#000000', fmt='-o', label=f"#{self.animal_ids['kavorka']}")
+        ax[1].errorbar(x=x_values, y=plot_data['V']['decoding_accuracy']['mean']['frank'], yerr=plot_data['V']['decoding_accuracy']['sem']['frank']*3,
+                     color='#000000', fmt='-^', label=f"#{self.animal_ids['frank']}")
+        ax[1].errorbar(x=x_values, y=plot_data['V']['decoding_accuracy']['mean']['johnjohn'], yerr=plot_data['V']['decoding_accuracy']['sem']['johnjohn']*3,
+                     color='#000000', fmt='-s', label=f"#{self.animal_ids['johnjohn']}")
+        ax[1].fill_between(x=x_values, y1=plot_data['V']['shuffled'][:, 0], y2=plot_data['V']['shuffled'][:, 1], color='grey', alpha=.25)
+        ax[1].set_ylim(.5, 1)
+        ax[1].legend()
+        ax[1].set_title('Decoding of sound stim by V cells')
+        ax[1].set_xlabel('Number of cells')
+        ax[1].set_ylabel('Decoding accuracy')
+        plt.show()

@@ -35,8 +35,8 @@ def correlate_quickly(big_x, big_x_mean, big_y, big_y_mean):
 
 
 def predict_events(total_frame_num, fold_num, train_folds, test_folds,
-                   activity_arr, sound_arr, fe):
-    pred_sound_events = np.zeros(total_frame_num)
+                   activity_arr, event_arr, fe, luminance=False):
+    pred_events = np.zeros(total_frame_num)
     for fold_idx in range(fold_num):
         training_frames = train_folds[fold_idx]
         test_frames = test_folds[fold_idx]
@@ -53,10 +53,16 @@ def predict_events(total_frame_num, fold_num, train_folds, test_folds,
         max_corr_train_frames_raw = np.nanargmax(corr_arr, axis=0)
         actual_train_frames = training_frames.take(max_corr_train_frames_raw)
 
-        # get sound values
-        pred_sound_events[fe[fold_idx]:fe[fold_idx+1]] = sound_arr.take(actual_train_frames)
+        # get event values
+        if not luminance:
+            pred_events[fe[fold_idx]:fe[fold_idx+1]] = event_arr.take(actual_train_frames)
+        else:
+            all_pred_events = event_arr.take(actual_train_frames)
+            first_half_end = fe[fold_idx+1]-fe[fold_idx]
+            pred_events[fe[fold_idx]:fe[fold_idx+1]] = all_pred_events[:first_half_end]
+            pred_events[fe[fold_idx+3]:fe[fold_idx+3+1]] = all_pred_events[first_half_end:]
 
-    return pred_sound_events
+    return pred_events
 
 
 class Decoder:
@@ -64,7 +70,7 @@ class Decoder:
     def __init__(self, input_file='', save_results_dir='', input_ldl=['', '', ''],
                  cluster_groups_dir='/home/bartulm/Insync/mimica.bartul@gmail.com/OneDrive/Work/data/posture_2020/cluster_groups_info',
                  sp_profiles_csv='/home/bartulm/Insync/mimica.bartul@gmail.com/OneDrive/Work/data/posture_2020/spiking_profiles/spiking_profiles.csv',
-                 number_of_decoding_per_run=10, decoding_cell_number_array=[5, 10, 20, 50, 100], fold_n=3, shuffle_num=1000,
+                 number_of_decoding_per_run=10, decoding_cell_number_array=np.array([5, 10, 20, 50, 100]), fold_n=3, shuffle_num=1000,
                  to_smooth=False, smooth_sd=1, smooth_axis=0, condense=True,
                  cluster_areas=['A'], cluster_type=True, animal_names=['kavorka', 'frank', 'johnjohn']):
         self.input_file = input_file
@@ -208,13 +214,13 @@ class Decoder:
 
                 # go through folds and predict sound
                 predicted_sound_events = predict_events(total_frame_num=total_frame_num, fold_num=self.fold_n, train_folds=train_indices_for_folds,
-                                                        test_folds=test_indices_for_folds, activity_arr=clusters_array, sound_arr=sound_array,
+                                                        test_folds=test_indices_for_folds, activity_arr=clusters_array, event_arr=sound_array,
                                                         fe=fold_edges)
                 if decode_num == 0:
                     shuffle_predicted_sound_events = np.zeros((total_frame_num, self.shuffle_num))
                     for sh in range(self.shuffle_num):
                         shuffle_predicted_sound_events[:, sh] = predict_events(total_frame_num=total_frame_num, fold_num=self.fold_n, train_folds=train_indices_for_folds,
-                                                                               test_folds=test_indices_for_folds, activity_arr=shuffled_clusters_array[sh], sound_arr=sound_array,
+                                                                               test_folds=test_indices_for_folds, activity_arr=shuffled_clusters_array[sh], event_arr=sound_array,
                                                                                fe=fold_edges)
 
                 # calculate accuracy and fill in the array
@@ -376,7 +382,7 @@ class Decoder:
                         if selected_cluster in light_dark_activity[luminance_type].keys():
                             temp_cl_arr = light_dark_activity[luminance_type][selected_cluster]['activity'][:seq_len].todense().astype(np.float32)
                             if self.to_smooth:
-                                temp_cl_arr = neural_activity.gaussian_smoothing(array=temp_cl_arr, sigma=self.smooth_sd).astype(np.float32)
+                                temp_cl_arr = neural_activity.gaussian_smoothing(array=temp_cl_arr, sigma=self.smooth_sd, axis=self.smooth_axis).astype(np.float32)
                             if luminance_type == 0:
                                 clusters_array[:change_point, sc_idx] = temp_cl_arr
                             else:
@@ -395,7 +401,7 @@ class Decoder:
                                     lum_type = abs(luminance_type-1)
                                     temp_shuffled_cl_arr = light_dark_activity[lum_type][selected_cluster]['shuffled'][shuffle_idx, seq_len:(seq_len*2)].todense().astype(np.float32)
                                 if self.to_smooth:
-                                    temp_shuffled_cl_arr = neural_activity.gaussian_smoothing(array=temp_shuffled_cl_arr, sigma=self.smooth_sd).astype(np.float32)
+                                    temp_shuffled_cl_arr = neural_activity.gaussian_smoothing(array=temp_shuffled_cl_arr, sigma=self.smooth_sd, axis=self.smooth_axis).astype(np.float32)
                                 if luminance_type == 0:
                                     shuffled_clusters_array[shuffle_idx, :change_point, sc_idx] = temp_shuffled_cl_arr
                                 else:
@@ -403,14 +409,14 @@ class Decoder:
 
                 # go through folds and predict sound
                 predicted_luminance_events = predict_events(total_frame_num=total_frame_num, fold_num=self.fold_n, train_folds=train_indices_for_folds,
-                                                            test_folds=test_indices_for_folds, activity_arr=clusters_array, sound_arr=luminance_array,
-                                                            fe=fold_edges)
+                                                            test_folds=test_indices_for_folds, activity_arr=clusters_array, event_arr=luminance_array,
+                                                            fe=fold_edges, luminance=True)
                 if decode_num == 0:
                     shuffle_predicted_luminance_events = np.zeros((total_frame_num, self.shuffle_num))
                     for sh in range(self.shuffle_num):
                         shuffle_predicted_luminance_events[:, sh] = predict_events(total_frame_num=total_frame_num, fold_num=self.fold_n, train_folds=train_indices_for_folds,
-                                                                                   test_folds=test_indices_for_folds, activity_arr=shuffled_clusters_array[sh], sound_arr=luminance_array,
-                                                                                   fe=fold_edges)
+                                                                                   test_folds=test_indices_for_folds, activity_arr=shuffled_clusters_array[sh], event_arr=luminance_array,
+                                                                                   fe=fold_edges, luminance=True)
 
                 # calculate accuracy and fill in the array
                 decoding_accuracy[ca_idx, decode_num] = ((predicted_luminance_events-luminance_array) == 0).sum() / predicted_luminance_events.shape[0]
