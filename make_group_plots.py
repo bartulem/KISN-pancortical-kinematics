@@ -306,6 +306,38 @@ class PlotGroupResults:
             plt.show()
 
     def decoding_summary(self, **kwargs):
+        """
+        Description
+        ----------
+        This method plots the event (sound, luminance, etc.) decoding accuracy separately
+        for each animal. The lines representing animals represent the means of decoding
+        accuracy across the 10 obtained runs for each number of clusters on the x-axis
+        (which is, by default, [5, 10, 20, 50, 100]). The vertical lines represent 3*SEM
+        at each of these points. The grey shaded area represent the results for 99% of the
+        shuffled data.
+        ----------
+
+        Parameters
+        ----------
+        **kwargs (dictionary)
+        x_values_arr (np.ndarray)
+            An array of numbers of cells to decode with; defaults to np.array([5, 10, 20, 50, 100]).
+        decoding_event (str)
+            Decoding event for figure title; defaults to 'sound stimulation'.
+        z_value_sem (float)
+            The z-value for the SEM calculation; defaults to 2.58 (3 SD).
+        ----------
+
+        Returns
+        ----------
+        decoding_accuracy (fig)
+            A plot of decoding accuracy across A and V cortices for a particular event.
+        ----------
+        """
+
+        x_values_arr = kwargs['x_values_arr'] if 'x_values_arr' in kwargs.keys() and type(kwargs['x_values_arr']) == np.array else np.array([5, 10, 20, 50, 100])
+        decoding_event = kwargs['decoding_event'] if 'decoding_event' in kwargs.keys() and type(kwargs['decoding_event']) == str else 'sound stimulation'
+        z_value_sem = kwargs['z_value_sem'] if 'z_value_sem' in kwargs.keys() and type(kwargs['z_value_sem']) == float else 2.58
 
         file_dict = {'data': {'A': [], 'V': []}, 'shuffled': {'A': [], 'V': []}}
         if not os.path.exists(self.decoding_dir):
@@ -353,31 +385,39 @@ class PlotGroupResults:
                         plot_data[area]['shuffled'][u_idx, 1] = u_per
 
         # plot
-        x_values = np.array([5, 10, 20, 50, 100])
-        fig, ax = plt.subplots(nrows=1, ncols=2, figsize=(8, 5), dpi=300)
-        ax[0].errorbar(x=x_values, y=plot_data['A']['decoding_accuracy']['mean']['kavorka'], yerr=plot_data['A']['decoding_accuracy']['sem']['kavorka']*3,
-                     color='#000000', fmt='-o', label=f"#{self.animal_ids['kavorka']}")
-        ax[0].errorbar(x=x_values, y=plot_data['A']['decoding_accuracy']['mean']['frank'], yerr=plot_data['A']['decoding_accuracy']['sem']['frank']*3,
-                     color='#000000', fmt='-^', label=f"#{self.animal_ids['frank']}")
-        ax[0].errorbar(x=x_values, y=plot_data['A']['decoding_accuracy']['mean']['johnjohn'], yerr=plot_data['A']['decoding_accuracy']['sem']['johnjohn']*3,
-                     color='#000000', fmt='-s', label=f"#{self.animal_ids['johnjohn']}")
+        x_values = x_values_arr
+        fig, ax = plt.subplots(nrows=1, ncols=2, figsize=(8, 5), dpi=300, tight_layout=True)
+        ax[0].errorbar(x=x_values, y=plot_data['A']['decoding_accuracy']['mean']['kavorka'], yerr=plot_data['A']['decoding_accuracy']['sem']['kavorka']*z_value_sem,
+                       color='#000000', fmt='-o', label=f"#{self.animal_ids['kavorka']}")
+        ax[0].errorbar(x=x_values, y=plot_data['A']['decoding_accuracy']['mean']['frank'], yerr=plot_data['A']['decoding_accuracy']['sem']['frank']*z_value_sem,
+                       color='#000000', fmt='-^', label=f"#{self.animal_ids['frank']}")
+        ax[0].errorbar(x=x_values, y=plot_data['A']['decoding_accuracy']['mean']['johnjohn'], yerr=plot_data['A']['decoding_accuracy']['sem']['johnjohn']*z_value_sem,
+                       color='#000000', fmt='-s', label=f"#{self.animal_ids['johnjohn']}")
         ax[0].fill_between(x=x_values, y1=plot_data['A']['shuffled'][:, 0], y2=plot_data['A']['shuffled'][:, 1], color='grey', alpha=.25)
         ax[0].set_ylim(.5, 1)
+        ax[0].set_xlim(0)
         ax[0].legend()
-        ax[0].set_title('Decoding of sound stim by A cells')
-        ax[0].set_xlabel('Number of cells')
+        ax[0].set_title(f'Decoding of {decoding_event} by A cells')
+        ax[0].set_xlabel('Number of cells used for classifying')
         ax[0].set_ylabel('Decoding accuracy')
 
-        ax[1].errorbar(x=x_values, y=plot_data['V']['decoding_accuracy']['mean']['kavorka'], yerr=plot_data['V']['decoding_accuracy']['sem']['kavorka']*3,
-                     color='#000000', fmt='-o', label=f"#{self.animal_ids['kavorka']}")
-        ax[1].errorbar(x=x_values, y=plot_data['V']['decoding_accuracy']['mean']['frank'], yerr=plot_data['V']['decoding_accuracy']['sem']['frank']*3,
-                     color='#000000', fmt='-^', label=f"#{self.animal_ids['frank']}")
-        ax[1].errorbar(x=x_values, y=plot_data['V']['decoding_accuracy']['mean']['johnjohn'], yerr=plot_data['V']['decoding_accuracy']['sem']['johnjohn']*3,
-                     color='#000000', fmt='-s', label=f"#{self.animal_ids['johnjohn']}")
-        ax[1].fill_between(x=x_values, y1=plot_data['V']['shuffled'][:, 0], y2=plot_data['V']['shuffled'][:, 1], color='grey', alpha=.25)
+        ax[1].errorbar(x=x_values, y=plot_data['V']['decoding_accuracy']['mean']['kavorka'], yerr=plot_data['V']['decoding_accuracy']['sem']['kavorka']*z_value_sem,
+                       color='#000000', fmt='-o', label=f"#{self.animal_ids['kavorka']}")
+        ax[1].errorbar(x=x_values, y=plot_data['V']['decoding_accuracy']['mean']['frank'], yerr=plot_data['V']['decoding_accuracy']['sem']['frank']*z_value_sem,
+                       color='#000000', fmt='-^', label=f"#{self.animal_ids['frank']}")
+        ax[1].errorbar(x=x_values, y=plot_data['V']['decoding_accuracy']['mean']['johnjohn'], yerr=plot_data['V']['decoding_accuracy']['sem']['johnjohn']*z_value_sem,
+                       color='#000000', fmt='-s', label=f"#{self.animal_ids['johnjohn']}")
+        ax[1].fill_between(x=x_values, y1=plot_data['V']['shuffled'][:, 0], y2=plot_data['V']['shuffled'][:, 1], color='#808080', alpha=.25)
         ax[1].set_ylim(.5, 1)
+        ax[1].set_xlim(0)
         ax[1].legend()
-        ax[1].set_title('Decoding of sound stim by V cells')
-        ax[1].set_xlabel('Number of cells')
+        ax[1].set_title(f'Decoding of {decoding_event} by V cells')
+        ax[1].set_xlabel('Number of cells used for classifying')
         ax[1].set_ylabel('Decoding accuracy')
+        if self.save_fig:
+            if os.path.exists(self.save_dir):
+                fig.savefig(f'{self.save_dir}{os.sep}{decoding_event}_decoding_accuracy.{self.fig_format}')
+            else:
+                print("Specified save directory doesn't exist. Try again.")
+                sys.exit()
         plt.show()

@@ -35,8 +35,11 @@ def correlate_quickly(big_x, big_x_mean, big_y, big_y_mean):
 
 
 def predict_events(total_frame_num, fold_num, train_folds, test_folds,
-                   activity_arr, event_arr, fe, luminance=False):
-    pred_events = np.zeros(total_frame_num)
+                   activity_arr, event_arr, fe, luminance=False, hd=[0, 0]):
+    if not luminance:
+        pred_events = np.zeros(total_frame_num).astype(np.float32)
+    else:
+        pred_events = np.concatenate((np.zeros(hd[0]), np.ones(hd[1]))).astype(np.float32)
     for fold_idx in range(fold_num):
         training_frames = train_folds[fold_idx]
         test_frames = test_folds[fold_idx]
@@ -327,12 +330,12 @@ class Decoder:
             total_frame_num = np.array([l_extracted_frame_info['total_frame_num'], d_extracted_frame_info['total_frame_num']]).min() // int(120. * (condensed_bin_size / 1e3))
             change_point = total_frame_num // 2
             half_durations = [change_point, total_frame_num-change_point]
-            luminance_array = np.concatenate((np.ones(half_durations[0]), np.zeros(half_durations[1])))
+            luminance_array = np.concatenate((np.ones(half_durations[0]), np.zeros(half_durations[1]))).astype(np.float32)
         else:
             total_frame_num = np.array([l_extracted_frame_info['total_frame_num'], d_extracted_frame_info['total_frame_num']]).min()
             change_point = total_frame_num // 2
             half_durations = [change_point, total_frame_num-change_point]
-            luminance_array = np.concatenate((np.ones(half_durations[0]), np.zeros(half_durations[1])))
+            luminance_array = np.concatenate((np.ones(half_durations[0]), np.zeros(half_durations[1]))).astype(np.float32)
 
         # get activity dictionary
         light_dark_activity = {0: {}, 1: {}}
@@ -396,10 +399,10 @@ class Decoder:
                         if decode_num == 0:
                             for shuffle_idx in range(self.shuffle_num):
                                 if selected_cluster in light_dark_activity[luminance_type].keys():
-                                    temp_shuffled_cl_arr = light_dark_activity[luminance_type][selected_cluster]['shuffled'][shuffle_idx, :seq_len].todense().astype(np.float32)
+                                    temp_shuffled_cl_arr = light_dark_activity[luminance_type][selected_cluster]['shuffled'][shuffle_idx][:seq_len].todense().astype(np.float32)
                                 else:
                                     lum_type = abs(luminance_type-1)
-                                    temp_shuffled_cl_arr = light_dark_activity[lum_type][selected_cluster]['shuffled'][shuffle_idx, seq_len:(seq_len*2)].todense().astype(np.float32)
+                                    temp_shuffled_cl_arr = light_dark_activity[lum_type][selected_cluster]['shuffled'][shuffle_idx][seq_len:(seq_len*2)].todense().astype(np.float32)
                                 if self.to_smooth:
                                     temp_shuffled_cl_arr = neural_activity.gaussian_smoothing(array=temp_shuffled_cl_arr, sigma=self.smooth_sd, axis=self.smooth_axis).astype(np.float32)
                                 if luminance_type == 0:
@@ -410,13 +413,13 @@ class Decoder:
                 # go through folds and predict sound
                 predicted_luminance_events = predict_events(total_frame_num=total_frame_num, fold_num=self.fold_n, train_folds=train_indices_for_folds,
                                                             test_folds=test_indices_for_folds, activity_arr=clusters_array, event_arr=luminance_array,
-                                                            fe=fold_edges, luminance=True)
+                                                            fe=fold_edges, luminance=True, hd=half_durations)
                 if decode_num == 0:
                     shuffle_predicted_luminance_events = np.zeros((total_frame_num, self.shuffle_num))
                     for sh in range(self.shuffle_num):
                         shuffle_predicted_luminance_events[:, sh] = predict_events(total_frame_num=total_frame_num, fold_num=self.fold_n, train_folds=train_indices_for_folds,
                                                                                    test_folds=test_indices_for_folds, activity_arr=shuffled_clusters_array[sh], event_arr=luminance_array,
-                                                                                   fe=fold_edges, luminance=True)
+                                                                                   fe=fold_edges, luminance=True, hd=half_durations)
 
                 # calculate accuracy and fill in the array
                 decoding_accuracy[ca_idx, decode_num] = ((predicted_luminance_events-luminance_array) == 0).sum() / predicted_luminance_events.shape[0]

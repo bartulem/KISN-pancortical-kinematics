@@ -224,6 +224,16 @@ class SpikingProfile:
                 # select the profile with the smallest distance from centroid to point (idx 0 is kye, idx 1 is item)
                 measures_info_df.loc[row, 'profile'] = min(x_distances_dict.items(), key=operator.itemgetter(1))[0]
 
+        if to_plot:
+            sizes = np.array([(measures_info_df.loc[:, 'profile'] == 'RS').sum()/measures_info_df.shape[0], (measures_info_df.loc[:, 'profile'] == 'FS').sum()/measures_info_df.shape[0]])
+            fig = plt.figure(figsize=(5, 5), tight_layout=True)
+            ax = fig.add_subplot(111)
+            ax.pie(sizes, labels=['RS', 'FS'], autopct='%1.1f%%', colors=list(profile_colors.values()))
+            ax.set_title(f'Total number of single units: {measures_info_df.shape[0]}')
+            if save_fig:
+                fig.savefig(f'{save_fig_dir}{os.sep}spiking_profiles_breakdown.{fig_format}', dpi=300)
+            plt.show()
+
         # save dataframe for posterity
         if save_df:
             measures_info_df.to_csv(path_or_buf=f'{save_df_dir}{os.sep}spiking_profiles.csv', sep=';', index=False)
