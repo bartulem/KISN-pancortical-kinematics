@@ -402,7 +402,7 @@ class Decoder:
                                     temp_shuffled_cl_arr = light_dark_activity[luminance_type][selected_cluster]['shuffled'][shuffle_idx][:seq_len].todense().astype(np.float32)
                                 else:
                                     lum_type = abs(luminance_type-1)
-                                    temp_shuffled_cl_arr = light_dark_activity[lum_type][selected_cluster]['shuffled'][shuffle_idx][seq_len:(seq_len*2)].todense().astype(np.float32)
+                                    temp_shuffled_cl_arr = light_dark_activity[lum_type][selected_cluster]['shuffled'][shuffle_idx][seq_len:].todense().astype(np.float32)
                                 if self.to_smooth:
                                     temp_shuffled_cl_arr = neural_activity.gaussian_smoothing(array=temp_shuffled_cl_arr, sigma=self.smooth_sd, axis=self.smooth_axis).astype(np.float32)
                                 if luminance_type == 0:
