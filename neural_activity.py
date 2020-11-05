@@ -342,14 +342,59 @@ def raster_preparation(purged_spike_train, event_start_frames,
     return raster_list
 
 
+@njit(parallel=False)
+def find_variable_sequences(variable, threshold=5.,
+                            min_seq_duration=2, camera_framerate=120.):
+
+    """
+    Parameters
+    ----------
+    variable : np.ndarray
+        The spike train without spikes that precede or succeed tracking, relative to tracking start.
+    threshold : int/float
+        Value below which variable should not be considered; defaults to 5.
+    min_seq_duration : int/float
+        The minimum duration for chosen sequences; defaults to 5 (seconds).
+    camera_framerate : np.float64
+        The sampling frequency of the tracking system; defaults to 120.
+    ----------
+
+    Returns
+    ----------
+    seq_starts : np.ndarray
+        An array of sequence starts for the designated variable.
+    ----------
+    """
+
+    # transform sequence duration to bins
+    min_seq_duration = int(round(min_seq_duration*camera_framerate))
+
+    indices_above_threshold = np.where(variable <= threshold)[0]
+    seq_starts = []
+    for idx, item in enumerate(indices_above_threshold):
+        # both idx and item need to be below array length minus min_seq_duration
+        idx_truth = idx <= indices_above_threshold.shape[0]-min_seq_duration
+        item_truth = item <= variable.shape[0]-min_seq_duration
+        if idx_truth and item_truth \
+                and (np.arange(item, item+min_seq_duration, 1) == indices_above_threshold[idx:idx+min_seq_duration]).all():
+            if len(seq_starts) == 0:
+                seq_starts.append(item)
+            else:
+                if item > seq_starts[-1]+(min_seq_duration*2):
+                    seq_starts.append(item)
+
+    return np.array(seq_starts).astype(np.int32)
+
+
 class Spikes:
     # get shuffling shifts
     shuffle_seed, shuffle_shifts = get_shuffling_shifts()
     print(f"The pseudorandom number generator was seeded at {shuffle_seed}.")
 
-    def __init__(self, input_file='', purged_spikes_dictionary=''):
+    def __init__(self, input_file='', purged_spikes_dictionary='', input_ldl=['', '', '']):
         self.input_file = input_file
         self.purged_spikes_dictionary = purged_spikes_dictionary
+        self.input_ldl = input_ldl
 
     def convert_activity_to_frames_with_shuffles(self, **kwargs):
         """
@@ -560,3 +605,54 @@ class Spikes:
             return ses_name, peth_dictionary, raster_dictionary
         else:
             return ses_name, peth_dictionary
+
+    def get_discontinuous_peths(self, **kwargs):
+        """
+        Description
+        ----------
+        This method converts cluster spiking activity into peri-event time histograms (PETHs),
+        where you have the option to define bin and window size. It should be used to construct
+        PETHs whose trial parts come from different sessions.
+
+        Details: Each session spike train is zeroed to tracking start and purged of spikes that exceed
+        those boundaries. The spike train is then binned to match the tracking resolution, and
+        spike counts are allocated to the appropriate frames. These spike counts are further
+        binned (50 ms) to encompass a window (2 s) after every event onset (NB: which for our purpose
+        is a 2s window where the speed of the animal was < 5 cm/s) Rates are calculated and smoothed
+        with a 3 bin Gaussian kernel for each session segment separately. Raster arrays are prepared
+        by zeroing spike times to each start of the trial window.
+        ----------
+
+        Parameters
+        ----------
+        **kwargs (dictionary)
+        get_clusters (str / int / list)
+            Cluster IDs to extract (if int, takes first n clusters; if 'all', takes all); defaults to 'all'.
+        bin_size_ms (int)
+            The bin size of the PETH; defaults to 50 (ms).
+        window_size (int / float)
+            The unilateral window size; defaults to 10 (seconds).
+        return_all (bool)
+            Return all event starts, irrespective of duration; defaults to True.
+        expected_event_duration (int / float)
+            The expected duration of the designated event; defaults to 5 (seconds).
+        min_inter_event_interval (int / float)
+            The minimum interval between any two adjacent events; defaults to 10 (seconds).
+        smooth (bool)
+            Smooth PETHs; defaults to False.
+        smooth_sd (int)
+            The SD of the smoothing window; defaults to 1 (bin).
+        smooth_axis (int)
+            The smoothing axis in a 2D array; defaults to 1 (smooths within rows).
+        raster (bool)
+            Prepare arrays from making raster plots; defaults to False.
+        ----------
+
+        Returns
+        ----------
+        peth_dictionary (dict)
+            Peri-event time histogram for all clusters (np.ndarray (epoch_num, total_window)).
+        raster_dictionary (dict)
+            Raster arrays for all clusters zeroed to window start.
+        ----------
+        """

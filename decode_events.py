@@ -68,6 +68,42 @@ def predict_events(total_frame_num, fold_num, train_folds, test_folds,
     return pred_events
 
 
+def choose_ldl_clusters(the_input_ldl, cl_gr_dir, sp_prof_csv, cl_areas, cl_type):
+    chosen_clusters = []
+    extra_chosen_clusters = {0: [], 1: []}
+    cluster_dict = {0: [], 1: [], 2: []}
+    for session_idx, one_session in enumerate(the_input_ldl):
+        cluster_dict[session_idx] = ClusterFinder(session=one_session,
+                                                  cluster_groups_dir=cl_gr_dir,
+                                                  sp_profiles_csv=sp_prof_csv).get_desired_clusters(filter_by_area=cl_areas,
+                                                                                                    filter_by_cluster_type=cl_type)
+
+    # find clusters present in all 3 sessions
+    if 'V' in cl_areas:
+        for one_cl in list(set(cluster_dict[0]).intersection(cluster_dict[1], cluster_dict[2])):
+            chosen_clusters.append(one_cl)
+    else:
+        for one_cl in list(set(cluster_dict[0]).intersection(cluster_dict[1])):
+            chosen_clusters.append(one_cl)
+
+    # find cells present only in the dark session
+    if 'V' in cl_areas:
+        for d_cl in cluster_dict[1]:
+            if d_cl not in chosen_clusters:
+                extra_chosen_clusters[1].append(d_cl)
+
+    # find clusters present in two light session but not in the dark
+    if 'V' in cl_areas:
+        for l_cl in cluster_dict[0]:
+            if l_cl in cluster_dict[2] and l_cl not in chosen_clusters:
+                extra_chosen_clusters[0].append(l_cl)
+
+    # all chosen clusters
+    all_clusters = chosen_clusters + extra_chosen_clusters[0] + extra_chosen_clusters[1]
+
+    return all_clusters, chosen_clusters, extra_chosen_clusters
+
+
 class Decoder:
 
     def __init__(self, input_file='', save_results_dir='', input_ldl=['', '', ''],
@@ -258,8 +294,11 @@ class Decoder:
         vector in the training set. We obtained a predicted sound stimulus value for each test
         frame by assigning it the luminance status of the most correlated training set population
         vector. Decoding accuracy was defined as the proportion of correctly matched stimulus states
-        across the entire recording session. We also shuffled the spikes of these units 1000 times
-        in the first run to obtain the null-distribution of decoded accuracy.
+        across the entire recording session. Since the luminance condition didn't change within a
+        session, shuffling spike trains would not make sense because even time shifted activity, if
+        it's overall lower/higher relative to the other session, would still enable accurate decoding.
+        Instead, we randomly permuted the joint unit activity (half light / half dark) at each time
+        point a 1000 times to obtain the null-distribution of decoded accuracy.
         ----------
 
         Parameters
@@ -287,39 +326,11 @@ class Decoder:
         animal_name = [name for name in self.animal_names if name in self.input_ldl[0]][0]
 
         # choose clusters for decoding
-        chosen_clusters = []
-        extra_chosen_clusters = {0: [], 1: []}
-        cluster_dict = {0: [], 1: [], 2: []}
-        for session_idx, one_session in enumerate(self.input_ldl):
-            cluster_dict[session_idx] = ClusterFinder(session=one_session,
-                                                      cluster_groups_dir=self.cluster_groups_dir,
-                                                      sp_profiles_csv=self.sp_profiles_csv).get_desired_clusters(filter_by_area=self.cluster_areas,
-                                                                                                                 filter_by_cluster_type=self.cluster_type)
-
-        # find clusters present in all 3 sessions
-        if 'V' in self.cluster_areas:
-            for one_cl in list(set(cluster_dict[0]).intersection(cluster_dict[1], cluster_dict[2])):
-                if one_cl not in chosen_clusters:
-                    chosen_clusters.append(one_cl)
-        else:
-            for one_cl in list(set(cluster_dict[0]).intersection(cluster_dict[1])):
-                if one_cl not in chosen_clusters:
-                    chosen_clusters.append(one_cl)
-
-        # find cells present only in the dark session
-        if 'V' in self.cluster_areas:
-            for d_cl in cluster_dict[1]:
-                if d_cl not in chosen_clusters:
-                    extra_chosen_clusters[1].append(d_cl)
-
-        # find clusters present in two light session but not in the dark
-        if 'V' in self.cluster_areas:
-            for l_cl in cluster_dict[0]:
-                if l_cl in cluster_dict[2] and l_cl not in chosen_clusters:
-                    extra_chosen_clusters[0].append(l_cl)
-
-        # all chosen clusters
-        all_clusters = chosen_clusters + extra_chosen_clusters[0] + extra_chosen_clusters[1]
+        all_clusters, chosen_clusters, extra_chosen_clusters = choose_ldl_clusters(the_input_ldl=self.input_ldl,
+                                                                                   cl_gr_dir=self.cluster_groups_dir,
+                                                                                   sp_prof_csv=self.sp_profiles_csv,
+                                                                                   cl_areas=self.cluster_areas,
+                                                                                   cl_type=self.cluster_type)
 
         # get total frame count in each session
         l_name, l_extracted_frame_info = Session(session=self.input_ldl[0]).data_loader(extract_variables=['total_frame_num'])
@@ -370,7 +381,7 @@ class Decoder:
                 clusters_array = np.zeros((total_frame_num, cell_amount)).astype(np.float32)
 
                 if decode_num == 0:
-                    shuffled_clusters_array = np.zeros((self.shuffle_num, total_frame_num, cell_amount))
+                    shuffled_clusters_array = np.zeros((self.shuffle_num, total_frame_num, cell_amount)).astype(np.float32)
 
                 # shuffle cluster names
                 np.random.shuffle(all_clusters)
@@ -390,26 +401,11 @@ class Decoder:
                                 clusters_array[:change_point, sc_idx] = temp_cl_arr
                             else:
                                 clusters_array[change_point:, sc_idx] = temp_cl_arr
-                        else:
-                            if luminance_type == 0:
-                                clusters_array[:change_point, sc_idx] = np.zeros(seq_len).astype(np.float32)
-                            else:
-                                clusters_array[change_point:, sc_idx] = np.zeros(seq_len).astype(np.float32)
 
-                        if decode_num == 0:
-                            for shuffle_idx in range(self.shuffle_num):
-                                if selected_cluster in light_dark_activity[luminance_type].keys():
-                                    temp_shuffled_cl_arr = light_dark_activity[luminance_type][selected_cluster]['shuffled'][shuffle_idx][:seq_len].todense().astype(np.float32)
-                                else:
-                                    lum_type = abs(luminance_type-1)
-                                    seq_len_lum = half_durations[lum_type]
-                                    temp_shuffled_cl_arr = light_dark_activity[lum_type][selected_cluster]['shuffled'][shuffle_idx][seq_len_lum:seq_len_lum+seq_len].todense().astype(np.float32)
-                                if self.to_smooth:
-                                    temp_shuffled_cl_arr = neural_activity.gaussian_smoothing(array=temp_shuffled_cl_arr, sigma=self.smooth_sd, axis=self.smooth_axis).astype(np.float32)
-                                if luminance_type == 0:
-                                    shuffled_clusters_array[shuffle_idx, :change_point, sc_idx] = temp_shuffled_cl_arr
-                                else:
-                                    shuffled_clusters_array[shuffle_idx, change_point:, sc_idx] = temp_shuffled_cl_arr
+                if decode_num == 0:
+                    for shuffle_idx in range(self.shuffle_num):
+                        np.random.shuffle(clusters_array)
+                        shuffled_clusters_array[shuffle_idx, :, :] = clusters_array
 
                 # go through folds and predict sound
                 predicted_luminance_events = predict_events(total_frame_num=total_frame_num, fold_num=self.fold_n, train_folds=train_indices_for_folds,
