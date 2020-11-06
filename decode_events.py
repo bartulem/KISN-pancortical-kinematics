@@ -100,19 +100,19 @@ def choose_012_clusters(the_input_012, cl_gr_dir, sp_prof_csv, cl_areas, cl_type
         # find cells present only in the dark session
         if 'V' in cl_areas:
             for d_cl in cluster_dict[1]:
-                if d_cl not in chosen_clusters:
+                if d_cl not in cluster_dict[0] and d_cl not in cluster_dict[2]:
                     extra_chosen_clusters[1].append(d_cl)
 
         # find clusters present in two light session but not in the dark
         if 'V' in cl_areas:
             for l_cl in cluster_dict[0]:
-                if l_cl in cluster_dict[2] and l_cl not in chosen_clusters:
+                if l_cl in cluster_dict[2] and l_cl not in cluster_dict[1]:
                     extra_chosen_clusters[0].append(l_cl)
 
     # all chosen clusters
     all_clusters = chosen_clusters + extra_chosen_clusters[0] + extra_chosen_clusters[1]
 
-    return all_clusters, chosen_clusters, extra_chosen_clusters
+    return all_clusters, chosen_clusters, extra_chosen_clusters, cluster_dict
 
 
 class Decoder:
@@ -211,9 +211,9 @@ class Decoder:
         file_name, extracted_frame_info = Session(session=self.input_file).data_loader(extract_variables=['total_frame_num', 'imu_sound'])
 
         # get activity dictionary
-        file_id, activity_dictionary = neural_activity.Spikes(input_file=self.input_file).convert_activity_to_frames_with_shuffles(get_clusters=chosen_clusters,
-                                                                                                                                   to_shuffle=True,
-                                                                                                                                   condense_arr=self.condense)
+        file_id, activity_dictionary, purged_spikes_dict = neural_activity.Spikes(input_file=self.input_file).convert_activity_to_frames_with_shuffles(get_clusters=chosen_clusters,
+                                                                                                                                                       to_shuffle=True,
+                                                                                                                                                       condense_arr=self.condense)
         if self.condense:
             sound_array = neural_activity.condense_frame_arrays(frame_array=extracted_frame_info['imu_sound'], arr_type=False)
             total_frame_num = sound_array.shape[0]
@@ -340,12 +340,12 @@ class Decoder:
         animal_name = [name for name in self.animal_names if name in self.input_012[0]][0]
 
         # choose clusters for decoding
-        all_clusters, chosen_clusters, extra_chosen_clusters = choose_012_clusters(the_input_012=self.input_012,
-                                                                                   cl_gr_dir=self.cluster_groups_dir,
-                                                                                   sp_prof_csv=self.sp_profiles_csv,
-                                                                                   cl_areas=self.cluster_areas,
-                                                                                   cl_type=self.cluster_type,
-                                                                                   dec_type=decode_what)
+        all_clusters, chosen_clusters, extra_chosen_clusters, cluster_dict = choose_012_clusters(the_input_012=self.input_012,
+                                                                                                 cl_gr_dir=self.cluster_groups_dir,
+                                                                                                 sp_prof_csv=self.sp_profiles_csv,
+                                                                                                 cl_areas=self.cluster_areas,
+                                                                                                 cl_type=self.cluster_type,
+                                                                                                 dec_type=decode_what)
 
         # get total frame count in each session
         zero_ses_name, zero_extracted_frame_info = Session(session=self.input_012[0]).data_loader(extract_variables=['total_frame_num'])
@@ -367,13 +367,13 @@ class Decoder:
         zero_first_activity = {0: {}, 1: {}}
         for file_idx, one_file in enumerate(self.input_012[:2]):
             if 'V' in self.cluster_areas and decode_what == 'luminance':
-                file_id, activity_dictionary = neural_activity.Spikes(input_file=one_file).convert_activity_to_frames_with_shuffles(get_clusters=chosen_clusters+extra_chosen_clusters[file_idx],
-                                                                                                                                    to_shuffle=False,
-                                                                                                                                    condense_arr=self.condense)
+                file_id, activity_dictionary, purged_spikes_dict = neural_activity.Spikes(input_file=one_file).convert_activity_to_frames_with_shuffles(get_clusters=chosen_clusters+extra_chosen_clusters[file_idx],
+                                                                                                                                                        to_shuffle=False,
+                                                                                                                                                        condense_arr=self.condense)
             else:
-                file_id, activity_dictionary = neural_activity.Spikes(input_file=one_file).convert_activity_to_frames_with_shuffles(get_clusters=chosen_clusters,
-                                                                                                                                    to_shuffle=False,
-                                                                                                                                    condense_arr=self.condense)
+                file_id, activity_dictionary, purged_spikes_dict= neural_activity.Spikes(input_file=one_file).convert_activity_to_frames_with_shuffles(get_clusters=chosen_clusters,
+                                                                                                                                                       to_shuffle=False,
+                                                                                                                                                       condense_arr=self.condense)
             zero_first_activity[file_idx] = activity_dictionary
 
         # get fold edges

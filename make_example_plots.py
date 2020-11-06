@@ -18,13 +18,16 @@ from scipy.stats import sem
 
 class PlotExamples:
     def __init__(self, session=0, cluster_name='', kilosort_output_dir='',
-                 save_fig=False, fig_format='png', save_dir='/home/bartulm/Downloads'):
+                 save_fig=False, fig_format='png', save_dir='/home/bartulm/Downloads',
+                 input_012=['', '', ''], cl_brain_area=''):
         self.session = session
+        self.input_012 = input_012
         self.cluster_name = cluster_name
         self.kilosort_output_dir = kilosort_output_dir
         self.save_fig = save_fig
         self.fig_format = fig_format
         self.save_dir = save_dir
+        self.cl_brain_area = cl_brain_area
 
     def plot_peth(self, **kwargs):
         """
@@ -95,6 +98,72 @@ class PlotExamples:
         if self.save_fig:
             if os.path.exists(self.save_dir):
                 fig.savefig(f'{self.save_dir}{os.sep}{self.cluster_name}_wh_noise_peth.{self.fig_format}')
+            else:
+                print("The specified save directory doesn't exist. Try again.")
+                sys.exit()
+        plt.show()
+
+    def plot_discontinuous_peth(self, **kwargs):
+        """
+        Description
+        ----------
+        This method creates a discontinuous PETH plot for a given cluster across
+        three different recording sessions.
+        ----------
+
+        Parameters
+        ----------
+        **kwargs (dictionary)
+        peth_color (str)
+            Color of the PETH; defaults to '#000000'.
+        raster_color (str)
+            Color of the discontinuous_raster; defaults to '#808080'.
+        ----------
+
+        Returns
+        ----------
+        discontinuous_peth (fig)
+            A discontinuous peri-event time histogram.
+        ----------
+        """
+
+        peth_color = kwargs['peth_color'] if 'peth_color' in kwargs.keys() and type(kwargs['peth_color']) == str else '#000000'
+        raster_color = kwargs['raster_color'] if 'raster_color' in kwargs.keys() and type(kwargs['raster_color']) == str else '#808080'
+
+        # get discontinuous_peth and discontinuous_raster
+        discontinuous_peth, discontinuous_raster = Spikes(input_012=self.input_012).get_discontinuous_peths(get_clusters=[self.cluster_name],
+                                                                                                            cluster_type='good',
+                                                                                                            cluster_areas=[self.cl_brain_area],
+                                                                                                            discontinuous_raster=True,
+                                                                                                            to_smooth=True,
+                                                                                                            smooth_sd=3)
+
+        # get means/SEMs for spikes/behavior
+        discontinuous_peth_mean = np.nanmean(discontinuous_peth[self.cluster_name]['discontinuous_peth'], axis=0)
+        peth_sem = sem(a=discontinuous_peth[self.cluster_name]['discontinuous_peth'], axis=0, nan_policy='omit')
+
+        # plot figure
+        fig = plt.figure(figsize=(5, 5), dpi=300, tight_layout=True)
+        ax1 = fig.add_subplot(111, label='1')
+        ax2 = fig.add_subplot(111, label='2', frame_on=False)
+        ax1.eventplot(discontinuous_raster[self.cluster_name], colors=raster_color, lineoffsets=1, linelengths=1, linewidths=.1)
+        ax2.plot(range(discontinuous_peth[self.cluster_name]['discontinuous_peth'].shape[1]), discontinuous_peth_mean, color=peth_color)
+        ax2.fill_between(range(discontinuous_peth[self.cluster_name]['discontinuous_peth'].shape[1]), discontinuous_peth_mean+peth_sem, discontinuous_peth_mean-peth_sem, color=peth_color, alpha=.3)
+        ax2.axvspan(40, 80, alpha=0.2, color=raster_color)
+        ax1.set_xlim(0, 6)
+        ax1.set_xticks([])
+        ax1.set_ylabel('Trial number')
+        # ax1.set_ylim(1)
+        ax2.set_xticks([])
+        ax2.set_xticks(np.arange(0, 121, 20))
+        ax2.set_xticklabels(np.arange(0, 7, 1))
+        ax2.set_xlabel('light-dark-light (s)')
+        ax2.yaxis.tick_right()
+        ax2.yaxis.set_label_position('right')
+        ax2.set_ylabel('Firing rate (spikes/s)')
+        if self.save_fig:
+            if os.path.exists(self.save_dir):
+                fig.savefig(f'{self.save_dir}{os.sep}{self.cluster_name}_discontinuous_peth.{self.fig_format}')
             else:
                 print("The specified save directory doesn't exist. Try again.")
                 sys.exit()
