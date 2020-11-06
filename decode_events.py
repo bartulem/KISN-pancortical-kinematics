@@ -4,7 +4,7 @@
 
 @author: bartulem
 
-Decode events like sound stimulation or luminance.
+Decode events like sound stimulation or luminance/weight presence.
 
 """
 
@@ -35,8 +35,8 @@ def correlate_quickly(big_x, big_x_mean, big_y, big_y_mean):
 
 
 def predict_events(total_frame_num, fold_num, train_folds, test_folds,
-                   activity_arr, event_arr, fe, luminance=False, hd=[0, 0]):
-    if not luminance:
+                   activity_arr, event_arr, fe, half_half=False, hd=[0, 0]):
+    if not half_half:
         pred_events = np.zeros(total_frame_num).astype(np.float32)
     else:
         pred_events = np.concatenate((np.zeros(hd[0]), np.ones(hd[1]))).astype(np.float32)
@@ -57,7 +57,7 @@ def predict_events(total_frame_num, fold_num, train_folds, test_folds,
         actual_train_frames = training_frames.take(max_corr_train_frames_raw)
 
         # get event values
-        if not luminance:
+        if not half_half:
             pred_events[fe[fold_idx]:fe[fold_idx+1]] = event_arr.take(actual_train_frames)
         else:
             all_pred_events = event_arr.take(actual_train_frames)
@@ -68,35 +68,40 @@ def predict_events(total_frame_num, fold_num, train_folds, test_folds,
     return pred_events
 
 
-def choose_ldl_clusters(the_input_ldl, cl_gr_dir, sp_prof_csv, cl_areas, cl_type):
+def choose_012_clusters(the_input_012, cl_gr_dir, sp_prof_csv, cl_areas, cl_type, dec_type):
     chosen_clusters = []
     extra_chosen_clusters = {0: [], 1: []}
     cluster_dict = {0: [], 1: [], 2: []}
-    for session_idx, one_session in enumerate(the_input_ldl):
+    for session_idx, one_session in enumerate(the_input_012):
         cluster_dict[session_idx] = ClusterFinder(session=one_session,
                                                   cluster_groups_dir=cl_gr_dir,
                                                   sp_profiles_csv=sp_prof_csv).get_desired_clusters(filter_by_area=cl_areas,
                                                                                                     filter_by_cluster_type=cl_type)
 
     # find clusters present in all 3 sessions
-    if 'V' in cl_areas:
+    if dec_type == 'luminance':
+        if 'V' in cl_areas:
+            for one_cl in list(set(cluster_dict[0]).intersection(cluster_dict[1], cluster_dict[2])):
+                chosen_clusters.append(one_cl)
+        else:
+            for one_cl in list(set(cluster_dict[0]).intersection(cluster_dict[1])):
+                chosen_clusters.append(one_cl)
+    else:
         for one_cl in list(set(cluster_dict[0]).intersection(cluster_dict[1], cluster_dict[2])):
             chosen_clusters.append(one_cl)
-    else:
-        for one_cl in list(set(cluster_dict[0]).intersection(cluster_dict[1])):
-            chosen_clusters.append(one_cl)
 
-    # find cells present only in the dark session
-    if 'V' in cl_areas:
-        for d_cl in cluster_dict[1]:
-            if d_cl not in chosen_clusters:
-                extra_chosen_clusters[1].append(d_cl)
+    if dec_type == 'luminance':
+        # find cells present only in the dark session
+        if 'V' in cl_areas:
+            for d_cl in cluster_dict[1]:
+                if d_cl not in chosen_clusters:
+                    extra_chosen_clusters[1].append(d_cl)
 
-    # find clusters present in two light session but not in the dark
-    if 'V' in cl_areas:
-        for l_cl in cluster_dict[0]:
-            if l_cl in cluster_dict[2] and l_cl not in chosen_clusters:
-                extra_chosen_clusters[0].append(l_cl)
+        # find clusters present in two light session but not in the dark
+        if 'V' in cl_areas:
+            for l_cl in cluster_dict[0]:
+                if l_cl in cluster_dict[2] and l_cl not in chosen_clusters:
+                    extra_chosen_clusters[0].append(l_cl)
 
     # all chosen clusters
     all_clusters = chosen_clusters + extra_chosen_clusters[0] + extra_chosen_clusters[1]
@@ -106,7 +111,7 @@ def choose_ldl_clusters(the_input_ldl, cl_gr_dir, sp_prof_csv, cl_areas, cl_type
 
 class Decoder:
 
-    def __init__(self, input_file='', save_results_dir='', input_ldl=['', '', ''],
+    def __init__(self, input_file='', save_results_dir='', input_012=['', '', ''],
                  cluster_groups_dir='/home/bartulm/Insync/mimica.bartul@gmail.com/OneDrive/Work/data/posture_2020/cluster_groups_info',
                  sp_profiles_csv='/home/bartulm/Insync/mimica.bartul@gmail.com/OneDrive/Work/data/posture_2020/spiking_profiles/spiking_profiles.csv',
                  number_of_decoding_per_run=10, decoding_cell_number_array=np.array([5, 10, 20, 50, 100]), fold_n=3, shuffle_num=1000,
@@ -114,7 +119,7 @@ class Decoder:
                  cluster_areas=['A'], cluster_type=True, animal_names=['kavorka', 'frank', 'johnjohn']):
         self.input_file = input_file
         self.save_results_dir = save_results_dir
-        self.input_ldl = input_ldl
+        self.input_012 = input_012
         self.cluster_groups_dir = cluster_groups_dir
         self.sp_profiles_csv = sp_profiles_csv
         self.number_of_decoding_per_run = number_of_decoding_per_run
@@ -277,13 +282,13 @@ class Decoder:
 
         print("Sound decoding complete! It took {:.2f} hours.".format((time.time() - start_time) / 3600))
 
-    def decode_luminance_condition(self, **kwargs):
+    def decode_session_type(self, **kwargs):
         """
         Description
         ----------
-        This method uses a nearest neighbor decoder to predict the luminance condition
-        of individual timepoints over two recording sessions (light / dark). We take half
-        of each recording and bin the spike train of every cluster common to both sessions
+        This method uses a nearest neighbor decoder to predict the luminance / weight condition
+        of individual timepoints over two recording sessions (light / dark or no weight / weight).
+        We take half of each recording and bin the spike train of every cluster common to both sessions
         in 100 ms bins and smooth them separately with a 3 bin Gaussian kernel. Since our
         three animals have a varying number of visual single units (K=410, JJ=404, F=193),
         for each one we choose a distinct combination of units (either 5, 10, 20, 50 or 100)
@@ -305,53 +310,57 @@ class Decoder:
         ----------
         **kwargs (dictionary)
         condensed_bin_size (int)
-            Condensed bin size ; defaults to 100 (ms).
+            Condensed bin size; defaults to 100 (ms).
+        decode_what (str)
+            What are you decoding; defaults to 'luminance'.
         ----------
 
         Returns
         ----------
-        luminance_decoding_accuracy (.npy file)
+        decoding_accuracy (.npy file)
             The decoding accuracy data for a given input file pair.
-        luminance_shuffled_decoding_accuracy (.npy file)
+        shuffled_decoding_accuracy (.npy file)
             The shuffled data decoding accuracy for a given input file pair.
         ----------
         """
 
         condensed_bin_size = kwargs['condensed_bin_size'] if 'condensed_bin_size' in kwargs.keys() and type(kwargs['condensed_bin_size']) == int else 100
+        decode_what = kwargs['decode_what'] if 'decode_what' in kwargs.keys() and type(kwargs['decode_what']) == str else 'luminance'
 
         # keep time
-        luminance_decoding_start_time = time.time()
+        session_type_decoding_start_time = time.time()
 
         # get animal name
-        animal_name = [name for name in self.animal_names if name in self.input_ldl[0]][0]
+        animal_name = [name for name in self.animal_names if name in self.input_012[0]][0]
 
         # choose clusters for decoding
-        all_clusters, chosen_clusters, extra_chosen_clusters = choose_ldl_clusters(the_input_ldl=self.input_ldl,
+        all_clusters, chosen_clusters, extra_chosen_clusters = choose_012_clusters(the_input_012=self.input_012,
                                                                                    cl_gr_dir=self.cluster_groups_dir,
                                                                                    sp_prof_csv=self.sp_profiles_csv,
                                                                                    cl_areas=self.cluster_areas,
-                                                                                   cl_type=self.cluster_type)
+                                                                                   cl_type=self.cluster_type,
+                                                                                   dec_type=decode_what)
 
         # get total frame count in each session
-        l_name, l_extracted_frame_info = Session(session=self.input_ldl[0]).data_loader(extract_variables=['total_frame_num'])
-        d_name, d_extracted_frame_info = Session(session=self.input_ldl[1]).data_loader(extract_variables=['total_frame_num'])
+        zero_ses_name, zero_extracted_frame_info = Session(session=self.input_012[0]).data_loader(extract_variables=['total_frame_num'])
+        first_ses_name, first_extracted_frame_info = Session(session=self.input_012[1]).data_loader(extract_variables=['total_frame_num'])
 
         # get total frame number in future array
         if self.condense:
-            total_frame_num = np.array([l_extracted_frame_info['total_frame_num'], d_extracted_frame_info['total_frame_num']]).min() // int(120. * (condensed_bin_size / 1e3))
+            total_frame_num = np.array([zero_extracted_frame_info['total_frame_num'], first_extracted_frame_info['total_frame_num']]).min() // int(120. * (condensed_bin_size / 1e3))
             change_point = total_frame_num // 2
             half_durations = [change_point, total_frame_num-change_point]
-            luminance_array = np.concatenate((np.ones(half_durations[0]), np.zeros(half_durations[1]))).astype(np.float32)
+            decoding_event_array = np.concatenate((np.ones(half_durations[0]), np.zeros(half_durations[1]))).astype(np.float32)
         else:
-            total_frame_num = np.array([l_extracted_frame_info['total_frame_num'], d_extracted_frame_info['total_frame_num']]).min()
+            total_frame_num = np.array([zero_extracted_frame_info['total_frame_num'], first_extracted_frame_info['total_frame_num']]).min()
             change_point = total_frame_num // 2
             half_durations = [change_point, total_frame_num-change_point]
-            luminance_array = np.concatenate((np.ones(half_durations[0]), np.zeros(half_durations[1]))).astype(np.float32)
+            decoding_event_array = np.concatenate((np.ones(half_durations[0]), np.zeros(half_durations[1]))).astype(np.float32)
 
         # get activity dictionary
-        light_dark_activity = {0: {}, 1: {}}
-        for file_idx, one_file in enumerate(self.input_ldl[:2]):
-            if 'V' in self.cluster_areas:
+        zero_first_activity = {0: {}, 1: {}}
+        for file_idx, one_file in enumerate(self.input_012[:2]):
+            if 'V' in self.cluster_areas and decode_what == 'luminance':
                 file_id, activity_dictionary = neural_activity.Spikes(input_file=one_file).convert_activity_to_frames_with_shuffles(get_clusters=chosen_clusters+extra_chosen_clusters[file_idx],
                                                                                                                                     to_shuffle=True,
                                                                                                                                     condense_arr=self.condense)
@@ -359,7 +368,7 @@ class Decoder:
                 file_id, activity_dictionary = neural_activity.Spikes(input_file=one_file).convert_activity_to_frames_with_shuffles(get_clusters=chosen_clusters,
                                                                                                                                     to_shuffle=True,
                                                                                                                                     condense_arr=self.condense)
-            light_dark_activity[file_idx] = activity_dictionary
+            zero_first_activity[file_idx] = activity_dictionary
 
         # get fold edges
         fold_edges = np.floor(np.linspace(0, total_frame_num, (self.fold_n*2)+1)).astype(np.int32)
@@ -391,13 +400,13 @@ class Decoder:
 
                 # get all cell / shuffled data in their respective arrays
                 for sc_idx, selected_cluster in enumerate(selected_clusters):
-                    for luminance_type in light_dark_activity.keys():
-                        seq_len = half_durations[luminance_type]
-                        if selected_cluster in light_dark_activity[luminance_type].keys():
-                            temp_cl_arr = light_dark_activity[luminance_type][selected_cluster]['activity'][:seq_len].todense().astype(np.float32)
+                    for condition_type in zero_first_activity.keys():
+                        seq_len = half_durations[condition_type]
+                        if selected_cluster in zero_first_activity[condition_type].keys():
+                            temp_cl_arr = zero_first_activity[condition_type][selected_cluster]['activity'][:seq_len].todense().astype(np.float32)
                             if self.to_smooth:
                                 temp_cl_arr = neural_activity.gaussian_smoothing(array=temp_cl_arr, sigma=self.smooth_sd, axis=self.smooth_axis).astype(np.float32)
-                            if luminance_type == 0:
+                            if condition_type == 0:
                                 clusters_array[:change_point, sc_idx] = temp_cl_arr
                             else:
                                 clusters_array[change_point:, sc_idx] = temp_cl_arr
@@ -408,28 +417,28 @@ class Decoder:
                         shuffled_clusters_array[shuffle_idx, :, :] = clusters_array
 
                 # go through folds and predict sound
-                predicted_luminance_events = predict_events(total_frame_num=total_frame_num, fold_num=self.fold_n, train_folds=train_indices_for_folds,
-                                                            test_folds=test_indices_for_folds, activity_arr=clusters_array, event_arr=luminance_array,
-                                                            fe=fold_edges, luminance=True, hd=half_durations)
+                predicted_condition_events = predict_events(total_frame_num=total_frame_num, fold_num=self.fold_n, train_folds=train_indices_for_folds,
+                                                            test_folds=test_indices_for_folds, activity_arr=clusters_array, event_arr=decoding_event_array,
+                                                            fe=fold_edges, half_half=True, hd=half_durations)
                 if decode_num == 0:
-                    shuffle_predicted_luminance_events = np.zeros((total_frame_num, self.shuffle_num))
+                    shuffle_predicted_condition_events = np.zeros((total_frame_num, self.shuffle_num))
                     for sh in range(self.shuffle_num):
-                        shuffle_predicted_luminance_events[:, sh] = predict_events(total_frame_num=total_frame_num, fold_num=self.fold_n, train_folds=train_indices_for_folds,
-                                                                                   test_folds=test_indices_for_folds, activity_arr=shuffled_clusters_array[sh], event_arr=luminance_array,
-                                                                                   fe=fold_edges, luminance=True, hd=half_durations)
+                        shuffle_predicted_condition_events[:, sh] = predict_events(total_frame_num=total_frame_num, fold_num=self.fold_n, train_folds=train_indices_for_folds,
+                                                                                   test_folds=test_indices_for_folds, activity_arr=shuffled_clusters_array[sh], event_arr=decoding_event_array,
+                                                                                   fe=fold_edges, half_half=True, hd=half_durations)
 
                 # calculate accuracy and fill in the array
-                decoding_accuracy[ca_idx, decode_num] = ((predicted_luminance_events-luminance_array) == 0).sum() / predicted_luminance_events.shape[0]
+                decoding_accuracy[ca_idx, decode_num] = ((predicted_condition_events-decoding_event_array) == 0).sum() / predicted_condition_events.shape[0]
                 if decode_num == 0:
                     for sh_idx in range(self.shuffle_num):
-                        shuffled_decoding_accuracy[ca_idx, sh_idx] = ((shuffle_predicted_luminance_events[:, sh_idx]-luminance_array) == 0).sum() \
-                                                                     / shuffle_predicted_luminance_events.shape[0]
+                        shuffled_decoding_accuracy[ca_idx, sh_idx] = ((shuffle_predicted_condition_events[:, sh_idx]-decoding_event_array) == 0).sum() \
+                                                                     / shuffle_predicted_condition_events.shape[0]
                 # free memory
                 gc.collect()
 
         # save results as .npy files
-        np.save(f'{self.save_results_dir}{os.sep}{animal_name}_luminance_decoding_accuracy_{self.cluster_areas[0]}_clusters', decoding_accuracy)
-        np.save(f'{self.save_results_dir}{os.sep}{animal_name}_luminance_shuffled_decoding_accuracy_{self.cluster_areas[0]}_clusters', shuffled_decoding_accuracy)
+        np.save(f'{self.save_results_dir}{os.sep}{animal_name}_{decode_what}_decoding_accuracy_{self.cluster_areas[0]}_clusters', decoding_accuracy)
+        np.save(f'{self.save_results_dir}{os.sep}{animal_name}_{decode_what}_shuffled_decoding_accuracy_{self.cluster_areas[0]}_clusters', shuffled_decoding_accuracy)
 
-        print("Luminance decoding complete! It took {:.2f} hours.".format((time.time() - luminance_decoding_start_time) / 3600))
+        print("Decoding complete! It took {:.2f} hours.".format((time.time() - session_type_decoding_start_time) / 3600))
 
