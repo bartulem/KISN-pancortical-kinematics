@@ -43,8 +43,8 @@ def predict_events(total_frame_num, fold_num, train_folds, test_folds,
     for fold_idx in range(fold_num):
         training_frames = train_folds[fold_idx]
         test_frames = test_folds[fold_idx]
-        train_arr = activity_arr.take(indices=training_frames, axis=0)
-        test_arr = activity_arr.take(indices=test_frames, axis=0)
+        train_arr = activity_arr.take(indices=training_frames, axis=0).astype(np.float32)
+        test_arr = activity_arr.take(indices=test_frames, axis=0).astype(np.float32)
         corr_arr, nan_pos = correlate_quickly(big_x=train_arr,
                                               big_x_mean=train_arr.mean(axis=1),
                                               big_y=test_arr,
@@ -53,7 +53,13 @@ def predict_events(total_frame_num, fold_num, train_folds, test_folds,
         corr_arr[nan_pos] = -1
 
         # find best congruent train frame
-        max_corr_train_frames_raw = np.nanargmax(corr_arr, axis=0)
+        # since argmax would always take the first frame if multiple frames had the same max value,
+        # it's necessary to make a random selection from all the frames that have the max value
+        max_corr_each_frame = np.nanmax(corr_arr, axis=0).astype(np.float32)
+        max_corr_train_frames_raw = np.zeros(max_corr_each_frame.shape[0]).astype(np.int32)
+        for test_fr in range(max_corr_each_frame.shape[0]):
+            max_corr_train_frames_raw[test_fr] = np.random.choice(np.where(corr_arr[:, test_fr] == max_corr_each_frame[test_fr])[0]).astype(np.int32)
+
         actual_train_frames = training_frames.take(max_corr_train_frames_raw)
 
         # get event values
@@ -362,11 +368,11 @@ class Decoder:
         for file_idx, one_file in enumerate(self.input_012[:2]):
             if 'V' in self.cluster_areas and decode_what == 'luminance':
                 file_id, activity_dictionary = neural_activity.Spikes(input_file=one_file).convert_activity_to_frames_with_shuffles(get_clusters=chosen_clusters+extra_chosen_clusters[file_idx],
-                                                                                                                                    to_shuffle=True,
+                                                                                                                                    to_shuffle=False,
                                                                                                                                     condense_arr=self.condense)
             else:
                 file_id, activity_dictionary = neural_activity.Spikes(input_file=one_file).convert_activity_to_frames_with_shuffles(get_clusters=chosen_clusters,
-                                                                                                                                    to_shuffle=True,
+                                                                                                                                    to_shuffle=False,
                                                                                                                                     condense_arr=self.condense)
             zero_first_activity[file_idx] = activity_dictionary
 
