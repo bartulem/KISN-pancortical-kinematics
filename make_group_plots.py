@@ -10,9 +10,12 @@ Make group plots.
 
 from neural_activity import Spikes
 from select_clusters import ClusterFinder
+import decode_events
 import numpy as np
 import os
 import sys
+import re
+import pickle
 import matplotlib.pyplot as plt
 import pandas as pd
 from scipy.stats import wilcoxon
@@ -22,7 +25,10 @@ from scipy.stats import sem
 class PlotGroupResults:
     def __init__(self, session_list=[], cluster_groups_dir='', sp_profiles_csv='',
                  save_fig=False, fig_format='png', save_dir='/home/bartulm/Downloads',
-                 decoding_dir='', animal_ids={'frank': '26473', 'johnjohn': '26471', 'kavorka': '26525'}):
+                 decoding_dir='', animal_ids={'frank': '26473', 'johnjohn': '26471', 'kavorka': '26525'},
+                 relevant_areas=['A'], relevant_cluster_types='good',
+                 bin_size_ms=50, window_size=10, smooth=False, smooth_sd=1, to_plot=False,
+                 input_012_list=[]):
         self.session_list = session_list
         self.cluster_groups_dir = cluster_groups_dir
         self.sp_profiles_csv = sp_profiles_csv
@@ -31,8 +37,16 @@ class PlotGroupResults:
         self.save_dir = save_dir
         self.decoding_dir = decoding_dir
         self.animal_ids = animal_ids
+        self.relevant_areas = relevant_areas
+        self.relevant_cluster_types = relevant_cluster_types
+        self.bin_size_ms = bin_size_ms
+        self.window_size = window_size
+        self.smooth = False
+        self.smooth_sd = smooth_sd
+        self.to_plot = to_plot
+        self.input_012_list = input_012_list
 
-    def sound_stim_summary(self, **kwargs):
+    def sound_modulation_summary(self, **kwargs):
         """
         Description
         ----------
@@ -69,21 +83,18 @@ class PlotGroupResults:
 
         Returns
         ----------
-        sound_stim_scatter (fig)
-            A scatter plot of the sound stimulation effects.
+        mean_activity_plot (fig)
+            A "snake" plot of the sound stimulation effect.
+        pie_chart (fig)
+            A pie chart breakdown of sound modulation effects for RS and FS cells.
+        SMI_histogram (fig)
+            A histogram of the SMIs.
         ----------
         """
 
-        relevant_areas = kwargs['relevant_areas'] if 'relevant_areas' in kwargs.keys() and type(kwargs['relevant_areas']) == list else ['A']
-        relevant_cluster_types = kwargs['relevant_cluster_types'] if 'relevant_cluster_types' in kwargs.keys() and type(kwargs['relevant_cluster_types']) == str else 'good'
-        bin_size_ms = kwargs['bin_size_ms'] if 'bin_size_ms' in kwargs.keys() and type(kwargs['bin_size_ms']) == int else 50
-        window_size = kwargs['window_size'] if 'window_size' in kwargs.keys() and (type(kwargs['window_size']) == int or type(kwargs['window_size']) == float) else 10
         mod_idx_time = kwargs['mod_idx_time'] if 'mod_idx_time' in kwargs.keys() and (type(kwargs['mod_idx_time']) == int or type(kwargs['mod_idx_time']) == float) else 500
-        smooth = kwargs['smooth'] if 'smooth' in kwargs.keys() and type(kwargs['smooth']) == bool else False
-        smooth_sd = kwargs['smooth_sd'] if 'smooth_sd' in kwargs.keys() and type(kwargs['smooth_sd']) == int else 1
         critical_p_value = kwargs['critical_p_value'] if 'critical_p_value' in kwargs.keys() and type(kwargs['critical_p_value']) == float else .01
         get_most_modulated = kwargs['get_most_modulated'] if 'get_most_modulated' in kwargs.keys() and type(kwargs['get_most_modulated']) == bool else False
-        to_plot = kwargs['to_plot'] if 'to_plot' in kwargs.keys() and type(kwargs['to_plot']) == bool else False
         profile_colors = kwargs['profile_colors'] if 'profile_colors' in kwargs.keys() and type(kwargs['profile_colors']) == dict else {'RS': '#698B69', 'FS': '#9BCD9B'}
 
         if not os.path.exists(self.cluster_groups_dir):
@@ -96,13 +107,13 @@ class PlotGroupResults:
             for one_session in self.session_list:
                 if os.path.exists(one_session):
                     relevant_session_clusters = ClusterFinder(session=one_session,
-                                                              cluster_groups_dir=self.cluster_groups_dir).get_desired_clusters(filter_by_area=relevant_areas,
-                                                                                                                               filter_by_cluster_type=relevant_cluster_types)
+                                                              cluster_groups_dir=self.cluster_groups_dir).get_desired_clusters(filter_by_area=self.relevant_areas,
+                                                                                                                               filter_by_cluster_type=self.relevant_cluster_types)
                     session_name, peth = Spikes(input_file=one_session).get_peths(get_clusters=relevant_session_clusters,
-                                                                                  bin_size_ms=bin_size_ms,
-                                                                                  window_size=window_size,
-                                                                                  smooth=smooth,
-                                                                                  smooth_sd=smooth_sd)
+                                                                                  bin_size_ms=self.bin_size_ms,
+                                                                                  window_size=self.window_size,
+                                                                                  smooth=self.smooth,
+                                                                                  smooth_sd=self.smooth_sd)
                     sound_stim_data[session_name] = peth
                 else:
                     print(f"Invalid location for file {one_session}. Please try again.")
@@ -113,7 +124,7 @@ class PlotGroupResults:
 
         # prepare the arrays for plotting and calculate all the statistics
         total_num_clusters = np.sum([len(sound_stim_data[session].keys()) for session in sound_stim_data.keys()])
-        plot_array = np.zeros((total_num_clusters, 2*int(round(window_size / (bin_size_ms / 1e3)))))
+        plot_array = np.zeros((total_num_clusters, 2 * int(round(self.window_size / (self.bin_size_ms / 1e3)))))
         statistics_dict = {}
         cell_id = 0
         for session in sound_stim_data.keys():
@@ -134,7 +145,7 @@ class PlotGroupResults:
 
                 # get sound modulation index
                 zero_bin = averaged_trials.shape[0] // 2
-                bins_to_skip = mod_idx_time // bin_size_ms
+                bins_to_skip = mod_idx_time // self.bin_size_ms
                 sound_bin_start = zero_bin + bins_to_skip
                 sound_bin_end = sound_bin_start + bins_to_skip
                 pre_bin_end = zero_bin - bins_to_skip
@@ -173,7 +184,7 @@ class PlotGroupResults:
             session_id = statistics_dict[cluster]['session']
             file_animal = [animal for animal in ClusterFinder.probe_site_areas.keys() if animal in session_id][0]
             file_bank = [bank for bank in ['distal', 'intermediate'] if bank in session_id][0]
-            file_date = session_id[session_id.find('20')-4:session_id.find('20')+2]
+            file_date = session_id[session_id.find('20') - 4:session_id.find('20') + 2]
             for idx, row in profile_data.iterrows():
                 if row[0] == f'{file_animal}_{file_date}_{file_bank}' and row[1] == statistics_dict[cluster]['cell_id']:
                     cl_profile = row[-1]
@@ -208,9 +219,9 @@ class PlotGroupResults:
         if get_most_modulated:
             print(f"There are {total_cluster_number} clusters in this dataset, and these are the category counts: {count_dict}")
             for idx in range(20):
-                print(f"Number {idx+1} on the suppressed list: {statistics_dict[cluster_order_suppressed[idx]]['session']}, "
+                print(f"Number {idx + 1} on the suppressed list: {statistics_dict[cluster_order_suppressed[idx]]['session']}, "
                       f"{statistics_dict[cluster_order_suppressed[idx]]['cell_id']}, SMI: {statistics_dict[cluster_order_suppressed[idx]]['sound_modulation_index']}")
-                print(f"Number {idx+1} on the excited list: {statistics_dict[cluster_order_excited[idx]]['session']}, "
+                print(f"Number {idx + 1} on the excited list: {statistics_dict[cluster_order_excited[idx]]['session']}, "
                       f"{statistics_dict[cluster_order_excited[idx]]['cell_id']}, SMI: {statistics_dict[cluster_order_excited[idx]]['sound_modulation_index']}")
 
         # re-order cluster array by sound modulation index (from lowest to highest value and vice-versa for excited clusters)
@@ -218,7 +229,7 @@ class PlotGroupResults:
         plot_array_ordered_excited = plot_array.take(indices=cluster_order_excited, axis=0)
 
         # plot
-        if to_plot:
+        if self.to_plot:
             # make group mean activity plot
             fig = plt.figure(figsize=(8, 6), dpi=300, tight_layout=True)
             ax1 = fig.add_subplot(121, label='1')
@@ -262,7 +273,7 @@ class PlotGroupResults:
             # make pie chart
             size = .3
             labels = ['RS', 'FS']
-            inner_colors = ['#1E90FF', '#FF6347', '#DEDEDE']*2
+            inner_colors = ['#1E90FF', '#FF6347', '#DEDEDE'] * 2
             outer_colors = [profile_colors['RS'], profile_colors['FS']]
             pie_values = np.array([[count_dict['sign_suppressed_rs'], count_dict['sign_excited_rs'], count_dict['ns_rs']],
                                    [count_dict['sign_suppressed_fs'], count_dict['sign_excited_fs'], count_dict['ns_fs']]])
@@ -270,7 +281,7 @@ class PlotGroupResults:
             fig2, ax5 = plt.subplots(nrows=1, ncols=1, figsize=(8, 6), dpi=300)
             ax5.pie(pie_values.sum(axis=1), radius=1, colors=outer_colors, shadow=False,
                     autopct='%1.1f%%', labels=labels, wedgeprops=dict(width=size, edgecolor='#FFFFFF'))
-            ax5.pie(pie_values.flatten(), radius=1-size, colors=inner_colors,
+            ax5.pie(pie_values.flatten(), radius=1 - size, colors=inner_colors,
                     shadow=False, wedgeprops=dict(width=size, edgecolor='#FFFFFF'))
             ax5.set(aspect="equal", title='Sound modulated cells summary`')
             if self.save_fig:
@@ -304,6 +315,114 @@ class PlotGroupResults:
                     print("Specified save directory doesn't exist. Try again.")
                     sys.exit()
             plt.show()
+
+    def luminance_modulation_summary(self, **kwargs):
+        """
+        Description
+        ----------
+        This method plots the luminance modulation effect for a group of cells (can be across
+        different animals).
+        ----------
+
+        Parameters
+        ----------
+        **kwargs (dictionary)
+        decode_what (str)
+            The modulation of interest; defaults to 'luminance'.
+        speed_threshold_low (int/float)
+            Value above which variable should be considered; defaults to 0.
+        speed_threshold_high (int/float)
+            Value below which variable should not be considered; defaults to 5.
+        speed_min_seq_duration (int/float)
+            The minimum duration for chosen sequences; defaults to 2 (seconds).
+        bin_size_ms (int)
+            The bin size of the PETH; defaults to 50 (ms).
+        window_size (int / float)
+            The unilateral window size; defaults to 10 (seconds).
+        ----------
+
+        Returns
+        ----------
+        mean_activity_plot (fig)
+            A "snake" plot of the sound stimulation effect.
+        pie_chart (fig)
+            A pie chart breakdown of sound modulation effects for RS and FS cells.
+        SMI_histogram (fig)
+            A histogram of the SMIs.
+        ----------
+        """
+
+        decode_what = kwargs['decode_what'] if 'decode_what' in kwargs.keys() and type(kwargs['decode_what']) == str else 'luminance'
+        speed_threshold_high = kwargs['speed_threshold_high'] if 'speed_threshold_high' in kwargs.keys() and (type(kwargs['speed_threshold_high']) == int or type(kwargs['speed_threshold_high']) == float) else 5.
+        speed_threshold_low = kwargs['speed_threshold_low'] if 'speed_threshold_low' in kwargs.keys() and (type(kwargs['speed_threshold_low']) == int or type(kwargs['speed_threshold_low']) == float) else 0.
+        speed_min_seq_duration = kwargs['speed_min_seq_duration'] if 'speed_min_seq_duration' in kwargs.keys() \
+                                                                     and (type(kwargs['speed_min_seq_duration']) == int or type(kwargs['speed_min_seq_duration']) == float) else 2.
+
+        # get discontinuous PETH data for chosen clusters in designated sessions
+        luminance_modulation_data = {}
+        for three_sessions in self.input_012_list:
+            # get details of the three sessions
+            file_animal = [name for name in ClusterFinder.probe_site_areas.keys() if name in three_sessions[0]][0]
+            file_bank = [bank for bank in ['distal', 'intermediate'] if bank in three_sessions[0]][0]
+            get_date_idx = [date.start() for date in re.finditer('20', three_sessions[0])][-1]
+            file_date = three_sessions[0][get_date_idx - 4:get_date_idx + 2]
+
+            # get relevant clusters
+            all_clusters, chosen_clusters, extra_chosen_clusters, cluster_dict = decode_events.choose_012_clusters(the_input_012=three_sessions,
+                                                                                                                   cl_gr_dir=self.cluster_groups_dir,
+                                                                                                                   sp_prof_csv=self.sp_profiles_csv,
+                                                                                                                   cl_areas=self.relevant_areas,
+                                                                                                                   cl_type=self.relevant_cluster_types,
+                                                                                                                   dec_type=decode_what)
+
+            # get discontinuous PETHs
+            discontinuous_peths = Spikes(input_012=three_sessions).get_discontinuous_peths(get_clusters=all_clusters,
+                                                                                           cluster_type=self.relevant_cluster_types,
+                                                                                           cluster_areas=self.relevant_areas,
+                                                                                           discontinuous_raster=False,
+                                                                                           to_smooth=self.smooth,
+                                                                                           smooth_sd=self.smooth_sd,
+                                                                                           speed_threshold_high=speed_threshold_high,
+                                                                                           speed_threshold_low=speed_threshold_low,
+                                                                                           speed_min_seq_duration=speed_min_seq_duration,
+                                                                                           bin_size_ms=self.bin_size_ms,
+                                                                                           window_size=self.window_size)
+
+            luminance_modulation_data[f'{file_animal}_{file_date}_{file_bank}'] = discontinuous_peths
+
+        # prepare the arrays for plotting and calculate all the statistics
+        total_cluster_num = np.sum([len(luminance_modulation_data[session].keys()) for session in luminance_modulation_data.keys()])
+        statistics_dict = {'plot_array': np.zeros((total_cluster_num, 2 * int(round(self.window_size / (self.bin_size_ms / 1e3)))))}
+        cell_id = 0
+        for session in luminance_modulation_data.keys():
+            for cluster in luminance_modulation_data[session].keys():
+                # # get mean PETH for plotting
+                all_trials = luminance_modulation_data[session][cluster]['discontinuous_peth']
+                averaged_trials = np.nanmean(all_trials, axis=0)
+
+                # # get all the details for the statistics dict
+                statistics_dict[cell_id] = {}
+
+                # get session and cluster id
+                statistics_dict[cell_id]['session'] = session
+                statistics_dict[cell_id]['cell_id'] = cluster
+
+                # normalize each average by its peak
+                statistics_dict['plot_array'][cell_id, :] = averaged_trials / np.max(averaged_trials)
+
+                statistics_dict[cell_id]['luminance_modulation_index'] = (averaged_trials[:40].mean() - averaged_trials[40:80].mean()) / \
+                                                                         (averaged_trials[:40].mean() + averaged_trials[40:80].mean())
+
+                trials_array = np.zeros((all_trials.shape[0], 2))
+                for trial in range(all_trials.shape[0]):
+                    trials_array[trial, :] = [all_trials[trial, :40].mean()-all_trials[trial, 40:80].mean(),  all_trials[trial, :40].mean()-all_trials[trial, 80:].mean()]
+                statistics_dict[cell_id]['p_value'] = wilcoxon(x=trials_array[:, 0], y=trials_array[:, 1], zero_method='zsplit')[1]
+
+                cell_id += 1
+
+        # save statistics dict as .pkl file
+        with open(f'luminance_modulation_{self.relevant_areas[0]}_data.pkl', 'wb') as pickle_file:
+            pickle.dump(statistics_dict, pickle_file)
 
     def decoding_summary(self, **kwargs):
         """
@@ -369,8 +488,8 @@ class PlotGroupResults:
                     decoding_data[data_type][data_area][list(self.animal_ids.keys())[file_idx]] = np.load(f'{self.decoding_dir}{os.sep}{one_file}')
 
         # get data to plot
-        plot_data = {'A': {'decoding_accuracy': {'mean': {}, 'sem': {}}, 'shuffled': np.array([[1000., 0.]]*5)},
-                     'V': {'decoding_accuracy': {'mean': {}, 'sem': {}}, 'shuffled': np.array([[1000., 0.]]*5)}}
+        plot_data = {'A': {'decoding_accuracy': {'mean': {}, 'sem': {}}, 'shuffled': np.array([[1000., 0.]] * 5)},
+                     'V': {'decoding_accuracy': {'mean': {}, 'sem': {}}, 'shuffled': np.array([[1000., 0.]] * 5)}}
         for area in decoding_data['data']:
             for animal in decoding_data['data'][area].keys():
                 plot_data[area]['decoding_accuracy']['mean'][animal] = decoding_data['data'][area][animal].mean(axis=1)
@@ -387,11 +506,11 @@ class PlotGroupResults:
         # plot
         x_values = x_values_arr
         fig, ax = plt.subplots(nrows=1, ncols=2, figsize=(8, 5), dpi=300, tight_layout=True)
-        ax[0].errorbar(x=x_values, y=plot_data['A']['decoding_accuracy']['mean']['kavorka'], yerr=plot_data['A']['decoding_accuracy']['sem']['kavorka']*z_value_sem,
+        ax[0].errorbar(x=x_values, y=plot_data['A']['decoding_accuracy']['mean']['kavorka'], yerr=plot_data['A']['decoding_accuracy']['sem']['kavorka'] * z_value_sem,
                        color='#000000', fmt='-o', label=f"#{self.animal_ids['kavorka']}")
-        ax[0].errorbar(x=x_values, y=plot_data['A']['decoding_accuracy']['mean']['frank'], yerr=plot_data['A']['decoding_accuracy']['sem']['frank']*z_value_sem,
+        ax[0].errorbar(x=x_values, y=plot_data['A']['decoding_accuracy']['mean']['frank'], yerr=plot_data['A']['decoding_accuracy']['sem']['frank'] * z_value_sem,
                        color='#000000', fmt='-^', label=f"#{self.animal_ids['frank']}")
-        ax[0].errorbar(x=x_values, y=plot_data['A']['decoding_accuracy']['mean']['johnjohn'], yerr=plot_data['A']['decoding_accuracy']['sem']['johnjohn']*z_value_sem,
+        ax[0].errorbar(x=x_values, y=plot_data['A']['decoding_accuracy']['mean']['johnjohn'], yerr=plot_data['A']['decoding_accuracy']['sem']['johnjohn'] * z_value_sem,
                        color='#000000', fmt='-s', label=f"#{self.animal_ids['johnjohn']}")
         ax[0].fill_between(x=x_values, y1=plot_data['A']['shuffled'][:, 0], y2=plot_data['A']['shuffled'][:, 1], color='grey', alpha=.25)
         ax[0].set_ylim(.5, 1)
@@ -401,11 +520,11 @@ class PlotGroupResults:
         ax[0].set_xlabel('Number of cells used for classifying')
         ax[0].set_ylabel('Decoding accuracy')
 
-        ax[1].errorbar(x=x_values, y=plot_data['V']['decoding_accuracy']['mean']['kavorka'], yerr=plot_data['V']['decoding_accuracy']['sem']['kavorka']*z_value_sem,
+        ax[1].errorbar(x=x_values, y=plot_data['V']['decoding_accuracy']['mean']['kavorka'], yerr=plot_data['V']['decoding_accuracy']['sem']['kavorka'] * z_value_sem,
                        color='#000000', fmt='-o', label=f"#{self.animal_ids['kavorka']}")
-        ax[1].errorbar(x=x_values, y=plot_data['V']['decoding_accuracy']['mean']['frank'], yerr=plot_data['V']['decoding_accuracy']['sem']['frank']*z_value_sem,
+        ax[1].errorbar(x=x_values, y=plot_data['V']['decoding_accuracy']['mean']['frank'], yerr=plot_data['V']['decoding_accuracy']['sem']['frank'] * z_value_sem,
                        color='#000000', fmt='-^', label=f"#{self.animal_ids['frank']}")
-        ax[1].errorbar(x=x_values, y=plot_data['V']['decoding_accuracy']['mean']['johnjohn'], yerr=plot_data['V']['decoding_accuracy']['sem']['johnjohn']*z_value_sem,
+        ax[1].errorbar(x=x_values, y=plot_data['V']['decoding_accuracy']['mean']['johnjohn'], yerr=plot_data['V']['decoding_accuracy']['sem']['johnjohn'] * z_value_sem,
                        color='#000000', fmt='-s', label=f"#{self.animal_ids['johnjohn']}")
         ax[1].fill_between(x=x_values, y1=plot_data['V']['shuffled'][:, 0], y2=plot_data['V']['shuffled'][:, 1], color='#808080', alpha=.25)
         ax[1].set_ylim(.5, 1)

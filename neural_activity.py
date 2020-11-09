@@ -15,6 +15,9 @@ import decode_events
 from numba import njit
 import sparse
 from scipy.ndimage.filters import gaussian_filter1d
+import warnings
+
+warnings.simplefilter('ignore')
 
 
 def gaussian_smoothing(array, sigma=1, axis=1):
@@ -310,10 +313,10 @@ def calculate_peth(input_array, event_start_frames,
     return peth_array
 
 
+@njit(parallel=False)
 def calculate_discontinuous_peth(input_array_lst, esf, event_number,
                                  bin_size_ms=50, window_size=6,
-                                 camera_framerate=120.,
-                                 to_smooth=False, smooth_sd=1):
+                                 camera_framerate=120.):
     """
     Parameters
     ----------
@@ -329,10 +332,6 @@ def calculate_discontinuous_peth(input_array_lst, esf, event_number,
         The complete window size; defaults to 6 (seconds).
     camera_framerate : np.float64
         The sampling frequency of the tracking system; defaults to 120.
-    to_smooth (bool)
-        Smooth PETHs; defaults to False.
-    smooth_sd (int)
-        The SD of the smoothing window; defaults to 3 (bin).
     ----------
 
     Returns
@@ -361,12 +360,6 @@ def calculate_discontinuous_peth(input_array_lst, esf, event_number,
                 real_bin = one_bin + switch_points[arr_idx]
                 peth_array[epoch, real_bin] = np.sum(arr[window_start_bin:window_start_bin + bin_step]) / bin_size
                 window_start_bin += bin_step
-
-    # smooth every sequence separately
-    if to_smooth:
-        for epoch in range(event_number):
-            for sp_idx, sp in enumerate(switch_points):
-                peth_array[epoch, sp:sp+(total_window // 3)] = gaussian_smoothing(array=peth_array[epoch, sp:sp+(total_window // 3)], sigma=smooth_sd, axis=0)
 
     return peth_array
 
@@ -405,23 +398,21 @@ def raster_preparation(purged_spike_train, event_start_frames,
     return raster_list
 
 
-def discontinuous_raster_preparation(purged_spike_dict, event_start_dict, event_number,
-                                     cl_id, camera_framerate, window_size=2):
+def discontinuous_raster_preparation(purged_spike_arr, event_start_arr, event_number,
+                                     camera_framerate_arr, window_size=2):
     """
     Parameters
     ----------
-    purged_spike_dict : dict
-        The dictionary of spike trains without spikes that precede or succeed tracking, relative to tracking start.
-    event_start_dict : dict
-        The dictionary of every start frame of speed below the chosen value.
+    purged_spike_arr : np.ndarray
+        An array of spike trains without spikes that precede or succeed tracking, relative to tracking start.
+    event_start_arr : np.ndarray
+        An array of every start frame of speed within a specified range.
     event_number : int
         Number of events to consider.
-    camera_framerate : dict
-        The dictionary with camera sampling frequencies for all sessions.
+    camera_framerate_arr : np.ndarray
+        An array with camera sampling frequencies for all sessions.
     window_size : int
         The unilateral window size; defaults to 2 (seconds).
-    cl_id : str
-        The ID of the cell of interest.
     ----------
 
     Returns
@@ -435,10 +426,10 @@ def discontinuous_raster_preparation(purged_spike_dict, event_start_dict, event_
 
     for event_idx in range(event_number):
         temp_raster_list = []
-        for session_idx, session in enumerate(event_start_dict.keys()):
-            if cl_id in purged_spike_dict[session].keys():
-                purged_spike_train = purged_spike_dict[session][cl_id]
-                window_start_seconds = (event_start_dict[session][event_idx] / camera_framerate[session_idx]['framerate'])
+        for session_idx, session in enumerate(event_start_arr):
+            if len(purged_spike_arr[session_idx]) > 0:
+                purged_spike_train = purged_spike_arr[session_idx]
+                window_start_seconds = (session[event_idx] / camera_framerate_arr[session_idx])
                 window_centered_spikes = purged_spike_train[(purged_spike_train >= window_start_seconds)
                                                             & (purged_spike_train < window_start_seconds+window_size)] - window_start_seconds + (session_idx*2)
                 for spike in window_centered_spikes:
@@ -449,7 +440,7 @@ def discontinuous_raster_preparation(purged_spike_dict, event_start_dict, event_
 
 
 @njit(parallel=False)
-def find_variable_sequences(variable, threshold=5.,
+def find_variable_sequences(variable, threshold_low=0., threshold_high=5.,
                             min_seq_duration=2, camera_framerate=120.):
 
     """
@@ -457,8 +448,10 @@ def find_variable_sequences(variable, threshold=5.,
     ----------
     variable : np.ndarray
         The spike train without spikes that precede or succeed tracking, relative to tracking start.
-    threshold : int/float
-        Value below which variable should not be considered; defaults to 5.
+    threshold_low : int/float
+        Value above which variable should be considered; defaults to 0.
+    threshold_high : int/float
+        Value above which variable should not be considered; defaults to 5.
     min_seq_duration : int/float
         The minimum duration for chosen sequences; defaults to 2 (seconds).
     camera_framerate : np.float64
@@ -475,7 +468,7 @@ def find_variable_sequences(variable, threshold=5.,
     # transform sequence duration to bins
     min_seq_duration = int(round(min_seq_duration*camera_framerate))
 
-    indices_above_threshold = np.where(variable <= threshold)[0]
+    indices_above_threshold = np.where((threshold_low <= variable) & (variable <= threshold_high))[0]
     seq_starts = []
     for idx, item in enumerate(indices_above_threshold):
         # both idx and item need to be below array length minus min_seq_duration
@@ -744,7 +737,9 @@ class Spikes:
             Cluster area(s) of choice; defaults to ['A'].
         cluster_type (str)
             Cluster type of choice; defaults to True.
-        speed_threshold (int/float)
+        speed_threshold_low (int/float)
+            Value above which variable should be considered; defaults to 0.
+        speed_threshold_high (int/float)
             Value below which variable should not be considered; defaults to 5.
         speed_min_seq_duration (int/float)
             The minimum duration for chosen sequences; defaults to 2 (seconds).
@@ -774,7 +769,8 @@ class Spikes:
         decode_what = kwargs['decode_what'] if 'decode_what' in kwargs.keys() and type(kwargs['decode_what']) == str else 'luminance'
         cluster_areas = kwargs['cluster_areas'] if 'cluster_areas' in kwargs.keys() and type(kwargs['cluster_areas']) == list else ['A']
         cluster_type = kwargs['cluster_type'] if 'cluster_type' in kwargs.keys() and type(kwargs['cluster_type']) == str else True
-        speed_threshold = kwargs['speed_threshold'] if 'speed_threshold' in kwargs.keys() and (type(kwargs['speed_threshold']) == int or type(kwargs['speed_threshold']) == float) else 5.
+        speed_threshold_high = kwargs['speed_threshold_high'] if 'speed_threshold_high' in kwargs.keys() and (type(kwargs['speed_threshold_high']) == int or type(kwargs['speed_threshold_high']) == float) else 5.
+        speed_threshold_low = kwargs['speed_threshold_low'] if 'speed_threshold_low' in kwargs.keys() and (type(kwargs['speed_threshold_low']) == int or type(kwargs['speed_threshold_low']) == float) else 0.
         speed_min_seq_duration = kwargs['speed_min_seq_duration'] if 'speed_min_seq_duration' in kwargs.keys() \
                                                                      and (type(kwargs['speed_min_seq_duration']) == int or type(kwargs['speed_min_seq_duration']) == float) else 2.
         discontinuous_raster = kwargs['discontinuous_raster'] if 'discontinuous_raster' in kwargs.keys() and type(kwargs['discontinuous_raster']) == bool else False
@@ -790,7 +786,6 @@ class Spikes:
                                                                                                                cl_areas=cluster_areas,
                                                                                                                cl_type=cluster_type,
                                                                                                                dec_type=decode_what)
-        print(extra_chosen_clusters)
         # check if cluster(s) exist in the input sessions
         for cluster in get_clusters:
             if cluster not in all_clusters:
@@ -815,7 +810,8 @@ class Spikes:
             ses_name, session_vars = Session(session=one_file).data_loader(extract_variables=['speeds', 'framerate'])
             session_variables[file_idx] = session_vars
             zero_first_second_behavior[file_idx] = find_variable_sequences(variable=session_vars['speeds'][:, 3],
-                                                                           threshold=speed_threshold,
+                                                                           threshold_low=speed_threshold_low,
+                                                                           threshold_high=speed_threshold_high,
                                                                            min_seq_duration=speed_min_seq_duration,
                                                                            camera_framerate=session_variables[file_idx]['framerate'])
 
@@ -826,11 +822,22 @@ class Spikes:
         if discontinuous_raster:
             raster_dictionary = {}
             for cluster in get_clusters:
-                raster_dictionary[cluster] = discontinuous_raster_preparation(purged_spike_dict=zero_first_second_purged_spikes,
-                                                                              event_start_dict=zero_first_second_behavior,
+
+                pu_sp_tr_lst = []
+                es_lst = []
+                cam_fr = []
+                for session_idx in range(len(self.input_012)):
+                    cam_fr.append(session_variables[session_idx]['framerate'])
+                    es_lst.append(zero_first_second_behavior[session_idx])
+                    if cluster in zero_first_second_purged_spikes[session_idx].keys():
+                        pu_sp_tr_lst.append(zero_first_second_purged_spikes[session_idx][cluster])
+                    else:
+                        pu_sp_tr_lst.append(np.empty(1))
+
+                raster_dictionary[cluster] = discontinuous_raster_preparation(purged_spike_arr=np.array(pu_sp_tr_lst),
+                                                                              event_start_arr=np.array(es_lst),
                                                                               event_number=max_event_num_all_sessions,
-                                                                              cl_id=cluster,
-                                                                              camera_framerate=session_variables,
+                                                                              camera_framerate_arr=np.array(cam_fr),
                                                                               window_size=speed_min_seq_duration)
 
         # get PETHs for each cluster and smooth if necessary
@@ -850,9 +857,14 @@ class Spikes:
                                                       esf=esf_lst,
                                                       event_number=max_event_num_all_sessions,
                                                       bin_size_ms=bin_size_ms,
-                                                      window_size=window_size,
-                                                      to_smooth=to_smooth,
-                                                      smooth_sd=smooth_sd)
+                                                      window_size=window_size)
+            # smooth every sequence separately
+            if to_smooth:
+                total_window = int(round((window_size / (bin_size_ms / 1e3))))
+                switch_points = np.arange(0, total_window, total_window // 3)
+                for epoch in range(max_event_num_all_sessions):
+                    for sp_idx, sp in enumerate(switch_points):
+                        peth_array[epoch, sp:sp+(total_window // 3)] = gaussian_smoothing(array=peth_array[epoch, sp:sp+(total_window // 3)], sigma=smooth_sd, axis=0)
 
             peth_dictionary[cluster]['discontinuous_peth'] = peth_array
 
