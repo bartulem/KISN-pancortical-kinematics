@@ -9,7 +9,9 @@ Make group plots.
 """
 
 from neural_activity import Spikes
+from neural_activity import gaussian_smoothing
 from select_clusters import ClusterFinder
+from tqdm import tqdm
 import decode_events
 import numpy as np
 import os
@@ -28,7 +30,8 @@ class PlotGroupResults:
                  decoding_dir='', animal_ids={'frank': '26473', 'johnjohn': '26471', 'kavorka': '26525'},
                  relevant_areas=['A'], relevant_cluster_types='good',
                  bin_size_ms=50, window_size=10, smooth=False, smooth_sd=1, to_plot=False,
-                 input_012_list=[]):
+                 input_012_list=[], pkl_load_dir='', critical_p_value=.01,
+                 profile_colors={'RS': '#698B69', 'FS': '#9BCD9B'}):
         self.session_list = session_list
         self.cluster_groups_dir = cluster_groups_dir
         self.sp_profiles_csv = sp_profiles_csv
@@ -41,10 +44,13 @@ class PlotGroupResults:
         self.relevant_cluster_types = relevant_cluster_types
         self.bin_size_ms = bin_size_ms
         self.window_size = window_size
-        self.smooth = False
+        self.smooth = smooth
         self.smooth_sd = smooth_sd
         self.to_plot = to_plot
         self.input_012_list = input_012_list
+        self.pkl_load_dir = pkl_load_dir
+        self.critical_p_value = critical_p_value
+        self.profile_colors = profile_colors
 
     def sound_modulation_summary(self, **kwargs):
         """
@@ -93,9 +99,7 @@ class PlotGroupResults:
         """
 
         mod_idx_time = kwargs['mod_idx_time'] if 'mod_idx_time' in kwargs.keys() and (type(kwargs['mod_idx_time']) == int or type(kwargs['mod_idx_time']) == float) else 500
-        critical_p_value = kwargs['critical_p_value'] if 'critical_p_value' in kwargs.keys() and type(kwargs['critical_p_value']) == float else .01
         get_most_modulated = kwargs['get_most_modulated'] if 'get_most_modulated' in kwargs.keys() and type(kwargs['get_most_modulated']) == bool else False
-        profile_colors = kwargs['profile_colors'] if 'profile_colors' in kwargs.keys() and type(kwargs['profile_colors']) == dict else {'RS': '#698B69', 'FS': '#9BCD9B'}
 
         if not os.path.exists(self.cluster_groups_dir):
             print(f"Invalid location for directory {self.cluster_groups_dir}. Please try again.")
@@ -189,7 +193,7 @@ class PlotGroupResults:
                 if row[0] == f'{file_animal}_{file_date}_{file_bank}' and row[1] == statistics_dict[cluster]['cell_id']:
                     cl_profile = row[-1]
                     break
-            if statistics_dict[cluster]['sound_modulation_index'] < 0 and statistics_dict[cluster]['p_value'] < critical_p_value:
+            if statistics_dict[cluster]['sound_modulation_index'] < 0 and statistics_dict[cluster]['p_value'] < self.critical_p_value:
                 modulated_clusters['suppressed'][cluster] = statistics_dict[cluster]
                 if cl_profile == 'RS':
                     count_dict['sign_suppressed_rs'] += 1
@@ -197,7 +201,7 @@ class PlotGroupResults:
                     count_dict['sign_suppressed_fs'] += 1
                 """if statistics_dict[cluster]['sound_modulation_index'] < -.5 and cl_profile == 'FS':
                     print(statistics_dict[cluster]['session'], statistics_dict[cluster]['cell_id'], statistics_dict[cluster]['sound_modulation_index'], cl_profile)"""
-            elif statistics_dict[cluster]['sound_modulation_index'] > 0 and statistics_dict[cluster]['p_value'] < critical_p_value:
+            elif statistics_dict[cluster]['sound_modulation_index'] > 0 and statistics_dict[cluster]['p_value'] < self.critical_p_value:
                 modulated_clusters['excited'][cluster] = statistics_dict[cluster]
                 if cl_profile == 'RS':
                     count_dict['sign_excited_rs'] += 1
@@ -205,7 +209,7 @@ class PlotGroupResults:
                     count_dict['sign_excited_fs'] += 1
                 """if statistics_dict[cluster]['sound_modulation_index'] > .5 and cl_profile == 'FS':
                     print(statistics_dict[cluster]['session'], statistics_dict[cluster]['cell_id'], statistics_dict[cluster]['sound_modulation_index'], cl_profile)"""
-            elif statistics_dict[cluster]['p_value'] >= critical_p_value:
+            elif statistics_dict[cluster]['p_value'] >= self.critical_p_value:
                 if cl_profile == 'RS':
                     count_dict['ns_rs'] += 1
                 else:
@@ -274,7 +278,7 @@ class PlotGroupResults:
             size = .3
             labels = ['RS', 'FS']
             inner_colors = ['#1E90FF', '#FF6347', '#DEDEDE'] * 2
-            outer_colors = [profile_colors['RS'], profile_colors['FS']]
+            outer_colors = [self.profile_colors['RS'], self.profile_colors['FS']]
             pie_values = np.array([[count_dict['sign_suppressed_rs'], count_dict['sign_excited_rs'], count_dict['ns_rs']],
                                    [count_dict['sign_suppressed_fs'], count_dict['sign_excited_fs'], count_dict['ns_fs']]])
 
@@ -327,6 +331,8 @@ class PlotGroupResults:
         Parameters
         ----------
         **kwargs (dictionary)
+        to_calculate (bool)
+            Calculate luminance modulation across files; defaults to False.
         decode_what (str)
             The modulation of interest; defaults to 'luminance'.
         speed_threshold_low (int/float)
@@ -335,10 +341,6 @@ class PlotGroupResults:
             Value below which variable should not be considered; defaults to 5.
         speed_min_seq_duration (int/float)
             The minimum duration for chosen sequences; defaults to 2 (seconds).
-        bin_size_ms (int)
-            The bin size of the PETH; defaults to 50 (ms).
-        window_size (int / float)
-            The unilateral window size; defaults to 10 (seconds).
         ----------
 
         Returns
@@ -352,77 +354,234 @@ class PlotGroupResults:
         ----------
         """
 
+        to_calculate = kwargs['to_calculate'] if 'to_calculate' in kwargs.keys() and type(kwargs['to_calculate']) == bool else False
         decode_what = kwargs['decode_what'] if 'decode_what' in kwargs.keys() and type(kwargs['decode_what']) == str else 'luminance'
         speed_threshold_high = kwargs['speed_threshold_high'] if 'speed_threshold_high' in kwargs.keys() and (type(kwargs['speed_threshold_high']) == int or type(kwargs['speed_threshold_high']) == float) else 5.
         speed_threshold_low = kwargs['speed_threshold_low'] if 'speed_threshold_low' in kwargs.keys() and (type(kwargs['speed_threshold_low']) == int or type(kwargs['speed_threshold_low']) == float) else 0.
         speed_min_seq_duration = kwargs['speed_min_seq_duration'] if 'speed_min_seq_duration' in kwargs.keys() \
                                                                      and (type(kwargs['speed_min_seq_duration']) == int or type(kwargs['speed_min_seq_duration']) == float) else 2.
 
-        # get discontinuous PETH data for chosen clusters in designated sessions
-        luminance_modulation_data = {}
-        for three_sessions in self.input_012_list:
-            # get details of the three sessions
-            file_animal = [name for name in ClusterFinder.probe_site_areas.keys() if name in three_sessions[0]][0]
-            file_bank = [bank for bank in ['distal', 'intermediate'] if bank in three_sessions[0]][0]
-            get_date_idx = [date.start() for date in re.finditer('20', three_sessions[0])][-1]
-            file_date = three_sessions[0][get_date_idx - 4:get_date_idx + 2]
+        if to_calculate:
+            # get discontinuous PETH data for chosen clusters in designated sessions
+            luminance_modulation_data = {}
+            for three_sessions in self.input_012_list:
+                # get details of the three sessions
+                file_animal = [name for name in ClusterFinder.probe_site_areas.keys() if name in three_sessions[0]][0]
+                file_bank = [bank for bank in ['distal', 'intermediate'] if bank in three_sessions[0]][0]
+                get_date_idx = [date.start() for date in re.finditer('20', three_sessions[0])][-1]
+                file_date = three_sessions[0][get_date_idx - 4:get_date_idx + 2]
 
-            # get relevant clusters
-            all_clusters, chosen_clusters, extra_chosen_clusters, cluster_dict = decode_events.choose_012_clusters(the_input_012=three_sessions,
-                                                                                                                   cl_gr_dir=self.cluster_groups_dir,
-                                                                                                                   sp_prof_csv=self.sp_profiles_csv,
-                                                                                                                   cl_areas=self.relevant_areas,
-                                                                                                                   cl_type=self.relevant_cluster_types,
-                                                                                                                   dec_type=decode_what)
+                # get relevant clusters
+                all_clusters, chosen_clusters, extra_chosen_clusters, cluster_dict = decode_events.choose_012_clusters(the_input_012=three_sessions,
+                                                                                                                       cl_gr_dir=self.cluster_groups_dir,
+                                                                                                                       sp_prof_csv=self.sp_profiles_csv,
+                                                                                                                       cl_areas=self.relevant_areas,
+                                                                                                                       cl_type=self.relevant_cluster_types,
+                                                                                                                       dec_type=decode_what)
 
-            # get discontinuous PETHs
-            discontinuous_peths = Spikes(input_012=three_sessions).get_discontinuous_peths(get_clusters=all_clusters,
-                                                                                           cluster_type=self.relevant_cluster_types,
-                                                                                           cluster_areas=self.relevant_areas,
-                                                                                           discontinuous_raster=False,
-                                                                                           to_smooth=self.smooth,
-                                                                                           smooth_sd=self.smooth_sd,
-                                                                                           speed_threshold_high=speed_threshold_high,
-                                                                                           speed_threshold_low=speed_threshold_low,
-                                                                                           speed_min_seq_duration=speed_min_seq_duration,
-                                                                                           bin_size_ms=self.bin_size_ms,
-                                                                                           window_size=self.window_size)
+                # get discontinuous PETHs
+                discontinuous_peths = Spikes(input_012=three_sessions,
+                                             cluster_groups_dir=self.cluster_groups_dir,
+                                             sp_profiles_csv=self.sp_profiles_csv).get_discontinuous_peths(get_clusters=all_clusters,
+                                                                                                           cluster_type=self.relevant_cluster_types,
+                                                                                                           cluster_areas=self.relevant_areas,
+                                                                                                           discontinuous_raster=False,
+                                                                                                           to_smooth=self.smooth,
+                                                                                                           smooth_sd=self.smooth_sd,
+                                                                                                           speed_threshold_high=speed_threshold_high,
+                                                                                                           speed_threshold_low=speed_threshold_low,
+                                                                                                           speed_min_seq_duration=speed_min_seq_duration,
+                                                                                                           bin_size_ms=self.bin_size_ms,
+                                                                                                           window_size=self.window_size)
 
-            luminance_modulation_data[f'{file_animal}_{file_date}_{file_bank}'] = discontinuous_peths
+                luminance_modulation_data[f'{file_animal}_{file_date}_{file_bank}'] = discontinuous_peths
 
-        # prepare the arrays for plotting and calculate all the statistics
-        total_cluster_num = np.sum([len(luminance_modulation_data[session].keys()) for session in luminance_modulation_data.keys()])
-        statistics_dict = {'plot_array': np.zeros((total_cluster_num, 2 * int(round(self.window_size / (self.bin_size_ms / 1e3)))))}
-        cell_id = 0
-        for session in luminance_modulation_data.keys():
-            for cluster in luminance_modulation_data[session].keys():
-                # # get mean PETH for plotting
-                all_trials = luminance_modulation_data[session][cluster]['discontinuous_peth']
-                averaged_trials = np.nanmean(all_trials, axis=0)
+            # prepare the arrays for plotting and calculate all the statistics
+            total_cluster_num = np.sum([len(luminance_modulation_data[session].keys()) for session in luminance_modulation_data.keys()])
+            statistics_dict = {'plot_array': np.zeros((total_cluster_num, int(round(self.window_size / (self.bin_size_ms / 1e3)))))}
+            cell_id = 0
+            for session in luminance_modulation_data.keys():
+                for cluster in luminance_modulation_data[session].keys():
+                    # # get mean PETH for plotting
+                    all_trials = luminance_modulation_data[session][cluster]['discontinuous_peth']
+                    averaged_trials = np.nanmean(all_trials, axis=0)
 
-                # # get all the details for the statistics dict
-                statistics_dict[cell_id] = {}
+                    # # get all the details for the statistics dict
+                    statistics_dict[cell_id] = {}
 
-                # get session and cluster id
-                statistics_dict[cell_id]['session'] = session
-                statistics_dict[cell_id]['cell_id'] = cluster
+                    # get session and cluster id
+                    statistics_dict[cell_id]['session'] = session
+                    statistics_dict[cell_id]['cell_id'] = cluster
 
-                # normalize each average by its peak
-                statistics_dict['plot_array'][cell_id, :] = averaged_trials / np.max(averaged_trials)
+                    # normalize each average by its peak
+                    statistics_dict['plot_array'][cell_id, :] = averaged_trials / np.max(averaged_trials)
 
-                statistics_dict[cell_id]['luminance_modulation_index'] = (averaged_trials[:40].mean() - averaged_trials[40:80].mean()) / \
-                                                                         (averaged_trials[:40].mean() + averaged_trials[40:80].mean())
+                    statistics_dict[cell_id]['luminance_modulation_index'] = (averaged_trials[:40].mean() - averaged_trials[40:80].mean()) / \
+                                                                             (averaged_trials[:40].mean() + averaged_trials[40:80].mean())
 
-                trials_array = np.zeros((all_trials.shape[0], 2))
-                for trial in range(all_trials.shape[0]):
-                    trials_array[trial, :] = [all_trials[trial, :40].mean()-all_trials[trial, 40:80].mean(),  all_trials[trial, :40].mean()-all_trials[trial, 80:].mean()]
-                statistics_dict[cell_id]['p_value'] = wilcoxon(x=trials_array[:, 0], y=trials_array[:, 1], zero_method='zsplit')[1]
+                    trials_array = np.zeros((all_trials.shape[0], 2))
+                    for trial in range(all_trials.shape[0]):
+                        trials_array[trial, :] = [all_trials[trial, :40].mean()-all_trials[trial, 40:80].mean(),  all_trials[trial, :40].mean()-all_trials[trial, 80:].mean()]
+                    statistics_dict[cell_id]['p_value'] = wilcoxon(x=trials_array[:, 0], y=trials_array[:, 1], zero_method='zsplit')[1]
 
-                cell_id += 1
+                    cell_id += 1
 
-        # save statistics dict as .pkl file
-        with open(f'luminance_modulation_{self.relevant_areas[0]}_data.pkl', 'wb') as pickle_file:
-            pickle.dump(statistics_dict, pickle_file)
+            # save statistics dict as .pkl file
+            with open(f'{self.save_dir}{os.sep}luminance_modulation_{self.relevant_areas[0]}_data.pkl', 'wb') as pickle_file:
+                pickle.dump(statistics_dict, pickle_file)
+
+        if self.to_plot:
+
+            # load pickle with luminance info
+            with open(f'{self.pkl_load_dir}{os.sep}luminance_modulation_{self.relevant_areas[0]}_data.pkl', 'rb') as pickle_file:
+                statistics_dict = pickle.load(pickle_file)
+
+            # get total number of clusters in the dataset
+            total_cluster_number = len(statistics_dict.keys())-1
+
+            # get plot array and delete it from the dict
+            plot_arr = statistics_dict['plot_array']
+            del statistics_dict['plot_array']
+
+            # get cluster profiles
+            if not os.path.exists(self.sp_profiles_csv):
+                print(f"Invalid location for file {self.sp_profiles_csv}. Please try again.")
+                sys.exit()
+            else:
+                profile_data = pd.read_csv(self.sp_profiles_csv)
+
+            # separate significantly suppressed and sound excited clusters
+            modulated_clusters = {'suppressed': {}, 'excited': {}}
+            count_dict = {'sign_excited_rs': 0,
+                          'sign_excited_fs': 0,
+                          'sign_suppressed_rs': 0,
+                          'sign_suppressed_fs': 0,
+                          'ns_rs': 0,
+                          'ns_fs': 0}
+
+            for cluster in tqdm(statistics_dict.keys()):
+                session_id = statistics_dict[cluster]['session']
+                file_animal = [animal for animal in ClusterFinder.probe_site_areas.keys() if animal in session_id][0]
+                file_bank = [bank for bank in ['distal', 'intermediate'] if bank in session_id][0]
+                get_date_idx = [date.start() for date in re.finditer('20', session_id)][-1]
+                file_date = session_id[get_date_idx-4:get_date_idx+2]
+                for idx, row in profile_data.iterrows():
+                    if row[0] == f'{file_animal}_{file_date}_{file_bank}' and row[1] == statistics_dict[cluster]['cell_id']:
+                        cl_profile = row[-1]
+                        break
+                if statistics_dict[cluster][f'{decode_what}_modulation_index'] < 0 and statistics_dict[cluster]['p_value'] < self.critical_p_value:
+                    modulated_clusters['suppressed'][cluster] = statistics_dict[cluster]
+                    if cl_profile == 'RS':
+                        count_dict['sign_suppressed_rs'] += 1
+                    else:
+                        count_dict['sign_suppressed_fs'] += 1
+                elif statistics_dict[cluster][f'{decode_what}_modulation_index'] > 0 and statistics_dict[cluster]['p_value'] < self.critical_p_value:
+                    modulated_clusters['excited'][cluster] = statistics_dict[cluster]
+                    if cl_profile == 'RS':
+                        count_dict['sign_excited_rs'] += 1
+                    else:
+                        count_dict['sign_excited_fs'] += 1
+                elif statistics_dict[cluster]['p_value'] >= self.critical_p_value:
+                    if cl_profile == 'RS':
+                        count_dict['ns_rs'] += 1
+                    else:
+                        count_dict['ns_fs'] += 1
+
+            print(count_dict)
+
+            # order clusters in each category separately
+            cluster_order_suppressed = [item[0] for item in sorted(modulated_clusters['suppressed'].items(), key=lambda i: i[1][f'{decode_what}_modulation_index'])]
+            cluster_order_excited = [item[0] for item in sorted(modulated_clusters['excited'].items(), key=lambda i: i[1][f'{decode_what}_modulation_index'], reverse=True)]
+
+            # re-order cluster array by sound modulation index (from lowest to highest value and vice-versa for excited clusters)
+            plot_array_ordered_suppressed = plot_arr.take(indices=cluster_order_suppressed, axis=0)
+            plot_array_ordered_excited = plot_arr.take(indices=cluster_order_excited, axis=0)
+
+            # make group mean activity plot
+            fig = plt.figure(figsize=(8, 6), dpi=300, tight_layout=True)
+            ax1 = fig.add_subplot(121, label='1')
+            ax1.imshow(plot_array_ordered_suppressed, aspect='auto', vmin=0, vmax=1, cmap='cividis')
+            ax2 = fig.add_subplot(121, label='2', frame_on=False)
+            ax2.plot(range(plot_array_ordered_suppressed.shape[1]), plot_array_ordered_suppressed.mean(axis=0), ls='-', lw=3, c='#00008B')
+            ax2.set_xlim(0, 120)
+            ax2.set_xticks([])
+            ax2.set_yticks([])
+            ax3 = fig.add_subplot(122, label='3')
+            im = ax3.imshow(plot_array_ordered_excited, aspect='auto', vmin=0, vmax=1, cmap='cividis')
+            ax4 = fig.add_subplot(122, label='4', frame_on=False)
+            ax4.plot(range(plot_array_ordered_excited.shape[1]), plot_array_ordered_excited.mean(axis=0), ls='-', lw=3, c='#EEC900')
+            ax4.set_xlim(0, 120)
+            ax4.set_xticks([])
+            ax4.set_yticks([])
+            cb_ax = fig.add_axes([0.9, 0.05, 0.01, 0.3])
+            cbar = fig.colorbar(im, orientation='vertical', cax=cb_ax, shrink=.3)
+            cbar.set_label('Normalized activity')
+            cbar.ax.tick_params(size=0)
+            ax1.set_xticks(np.arange(0, 121, 20))
+            ax3.set_xticks(np.arange(0, 121, 20))
+            ax1.set_xticklabels(np.arange(0, 7, 1))
+            ax3.set_xticklabels(np.arange(0, 7, 1))
+            ax1.set_xlabel('light-dark-light (s)')
+            ax3.set_xlabel('light-dark-light (s)')
+            ax1.tick_params(axis='y', length=0)
+            ax3.tick_params(axis='y', length=0)
+            ax1.set_ylabel('Cell number')
+            for side in ['right', 'top', 'left', 'bottom']:
+                ax1.spines[side].set_visible(False)
+                ax3.spines[side].set_visible(False)
+            if self.save_fig:
+                if os.path.exists(self.save_dir):
+                    fig.savefig(f'{self.save_dir}{os.sep}{decode_what}_peth_group.{self.fig_format}')
+                else:
+                    print("Specified save directory doesn't exist. Try again.")
+                    sys.exit()
+            plt.show()
+
+            # make pie chart
+            size = .3
+            labels = ['RS', 'FS']
+            inner_colors = ['#00008B', '#EEC900', '#DEDEDE'] * 2
+            outer_colors = [self.profile_colors['RS'], self.profile_colors['FS']]
+            pie_values = np.array([[count_dict['sign_suppressed_rs'], count_dict['sign_excited_rs'], count_dict['ns_rs']],
+                                   [count_dict['sign_suppressed_fs'], count_dict['sign_excited_fs'], count_dict['ns_fs']]])
+
+            fig2, ax5 = plt.subplots(nrows=1, ncols=1, figsize=(8, 6), dpi=300)
+            ax5.pie(pie_values.sum(axis=1), radius=1, colors=outer_colors, shadow=False,
+                    autopct='%1.1f%%', labels=labels, wedgeprops=dict(width=size, edgecolor='#FFFFFF'))
+            ax5.pie(pie_values.flatten(), radius=1 - size, colors=inner_colors,
+                    shadow=False, wedgeprops=dict(width=size, edgecolor='#FFFFFF'))
+            ax5.set(aspect="equal", title='Luminance modulated cells summary`')
+            if self.save_fig:
+                if os.path.exists(self.save_dir):
+                    fig2.savefig(f'{self.save_dir}{os.sep}{decode_what}_modulation_summary.{self.fig_format}')
+                else:
+                    print("Specified save directory doesn't exist. Try again.")
+                    sys.exit()
+            plt.show()
+
+            # make SMI histograms
+            smi = [statistics_dict[cluster]['luminance_modulation_index'] for cluster in statistics_dict.keys()]
+            smi_neg = [statistics_dict[cluster]['luminance_modulation_index'] for cluster in statistics_dict.keys()
+                       if (statistics_dict[cluster]['luminance_modulation_index'] < 0 and statistics_dict[cluster]['p_value'] < self.critical_p_value)]
+            smi_pos = [statistics_dict[cluster]['luminance_modulation_index'] for cluster in statistics_dict.keys()
+                       if (statistics_dict[cluster]['luminance_modulation_index'] > 0 and statistics_dict[cluster]['p_value'] < self.critical_p_value)]
+            fig3 = plt.figure(figsize=(8, 6), dpi=300)
+            bins = np.linspace(-1, 1, 20)
+            ax6 = fig3.add_subplot(111, label='6')
+            ax6.hist(smi, bins=bins, color='#DEDEDE', alpha=.6, edgecolor='#000000')
+            ax6.hist(smi_neg, bins=bins, color='#00008B', alpha=.6)
+            ax6.hist(smi_pos, bins=bins, color='#EEC900', alpha=.6)
+            ax6.set_xlabel('Luminance modulation index')
+            ax6.set_ylabel('Number of cells')
+            for side in ['right', 'top']:
+                ax6.spines[side].set_visible(False)
+            if self.save_fig:
+                if os.path.exists(self.save_dir):
+                    fig3.savefig(f'{self.save_dir}{os.sep}{decode_what}_modulation_distribution.{self.fig_format}')
+                else:
+                    print("Specified save directory doesn't exist. Try again.")
+                    sys.exit()
+            plt.show()
 
     def decoding_summary(self, **kwargs):
         """
