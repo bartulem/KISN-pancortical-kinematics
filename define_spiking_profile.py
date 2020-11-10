@@ -11,14 +11,14 @@ Define spiking profile: regular (RS) or fast (FS) spiking.
 import os
 import sys
 import json
+import operator
 import pandas as pd
 import numpy as np
-from sklearn.cluster import KMeans
-from collections import Counter
-import operator
 import matplotlib.pyplot as plt
 import seaborn as sns
 from tqdm import tqdm
+from sklearn.cluster import KMeans
+from collections import Counter
 
 
 class SpikingProfile:

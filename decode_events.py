@@ -9,13 +9,13 @@ Decode events like sound stimulation or luminance/weight presence.
 """
 
 import os
+import gc
 import time
 import numpy as np
-import gc
+from numba import njit
 import neural_activity
 from select_clusters import ClusterFinder
 from sessions2load import Session
-from numba import njit
 
 
 @njit(parallel=False)

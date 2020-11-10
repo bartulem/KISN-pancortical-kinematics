@@ -8,20 +8,19 @@ Make group plots.
 
 """
 
-from neural_activity import Spikes
-from neural_activity import gaussian_smoothing
-from select_clusters import ClusterFinder
-from tqdm import tqdm
-import decode_events
-import numpy as np
 import os
 import sys
 import re
 import pickle
+import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
+from tqdm import tqdm
 from scipy.stats import wilcoxon
 from scipy.stats import sem
+import decode_events
+from neural_activity import Spikes
+from select_clusters import ClusterFinder
 
 
 class PlotGroupResults:
@@ -57,7 +56,7 @@ class PlotGroupResults:
         Description
         ----------
         This method plots the sound stimulation effect for a group of cells (can be across
-        different animals).
+        different animals). PETHs were smoothed with a Gaussian of 3 bins width.
         ----------
 
         Parameters
@@ -325,7 +324,7 @@ class PlotGroupResults:
         Description
         ----------
         This method plots the luminance modulation effect for a group of cells (can be across
-        different animals).
+        different animals). PETHs were smoothed with a Gaussian of 1 bins width.
         ----------
 
         Parameters

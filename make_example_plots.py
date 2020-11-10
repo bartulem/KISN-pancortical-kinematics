@@ -8,12 +8,12 @@ Make example plots.
 
 """
 
-from neural_activity import Spikes
-import numpy as np
 import os
 import sys
+import numpy as np
 import matplotlib.pyplot as plt
 from scipy.stats import sem
+from neural_activity import Spikes
 
 
 class PlotExamples:
