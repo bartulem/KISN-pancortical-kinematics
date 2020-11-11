@@ -12,11 +12,9 @@ import sys
 import sparse
 import warnings
 import numpy as np
-import matplotlib.pyplot as plt
 from scipy.ndimage.filters import gaussian_filter1d
 from numba import njit
 from sessions2load import Session
-from select_clusters import ClusterFinder
 import decode_events
 
 warnings.simplefilter('ignore')

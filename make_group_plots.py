@@ -8,9 +8,11 @@ Make group plots.
 
 """
 
+import io
 import os
 import sys
 import re
+import json
 import pickle
 import numpy as np
 import matplotlib.pyplot as plt
@@ -30,7 +32,7 @@ class PlotGroupResults:
                  relevant_areas=['A'], relevant_cluster_types='good',
                  bin_size_ms=50, window_size=10, smooth=False, smooth_sd=1, to_plot=False,
                  input_012_list=[], pkl_load_dir='', critical_p_value=.01,
-                 profile_colors={'RS': '#698B69', 'FS': '#9BCD9B'}):
+                 profile_colors={'RS': '#698B69', 'FS': '#9BCD9B'}, modulation_indices_dir=''):
         self.session_list = session_list
         self.cluster_groups_dir = cluster_groups_dir
         self.sp_profiles_csv = sp_profiles_csv
@@ -50,6 +52,7 @@ class PlotGroupResults:
         self.pkl_load_dir = pkl_load_dir
         self.critical_p_value = critical_p_value
         self.profile_colors = profile_colors
+        self.modulation_indices_dir = modulation_indices_dir
 
     def sound_modulation_summary(self, **kwargs):
         """
@@ -183,17 +186,21 @@ class PlotGroupResults:
                       'ns_rs': 0,
                       'ns_fs': 0}
 
+        significance_dict = {}
         for cluster in statistics_dict.keys():
             session_id = statistics_dict[cluster]['session']
             file_animal = [animal for animal in ClusterFinder.probe_site_areas.keys() if animal in session_id][0]
             file_bank = [bank for bank in ['distal', 'intermediate'] if bank in session_id][0]
             file_date = session_id[session_id.find('20') - 4:session_id.find('20') + 2]
+            if file_animal not in significance_dict.keys():
+                significance_dict[file_animal] = {}
             for idx, row in profile_data.iterrows():
                 if row[0] == f'{file_animal}_{file_date}_{file_bank}' and row[1] == statistics_dict[cluster]['cell_id']:
                     cl_profile = row[-1]
                     break
             if statistics_dict[cluster]['sound_modulation_index'] < 0 and statistics_dict[cluster]['p_value'] < self.critical_p_value:
                 modulated_clusters['suppressed'][cluster] = statistics_dict[cluster]
+                significance_dict[file_animal][statistics_dict[cluster]['cell_id']] = cl_profile
                 if cl_profile == 'RS':
                     count_dict['sign_suppressed_rs'] += 1
                 else:
@@ -202,6 +209,7 @@ class PlotGroupResults:
                     print(statistics_dict[cluster]['session'], statistics_dict[cluster]['cell_id'], statistics_dict[cluster]['sound_modulation_index'], cl_profile)"""
             elif statistics_dict[cluster]['sound_modulation_index'] > 0 and statistics_dict[cluster]['p_value'] < self.critical_p_value:
                 modulated_clusters['excited'][cluster] = statistics_dict[cluster]
+                significance_dict[file_animal][statistics_dict[cluster]['cell_id']] = cl_profile
                 if cl_profile == 'RS':
                     count_dict['sign_excited_rs'] += 1
                 else:
@@ -213,6 +221,10 @@ class PlotGroupResults:
                     count_dict['ns_rs'] += 1
                 else:
                     count_dict['ns_fs'] += 1
+
+        if False:
+            with io.open(f'smi_significant_{self.relevant_areas[0]}.json', 'w', encoding='utf-8') as mi_file:
+                mi_file.write(json.dumps(significance_dict, ensure_ascii=False, indent=4))
 
         # order clusters in each category separately
         cluster_order_suppressed = [item[0] for item in sorted(modulated_clusters['suppressed'].items(), key=lambda i: i[1]['sound_modulation_index'])]
@@ -458,6 +470,7 @@ class PlotGroupResults:
                           'ns_rs': 0,
                           'ns_fs': 0}
 
+            significance_dict = {'kavorka': {'distal': {}, 'intermediate': {}}, 'johnjohn': {'distal': {}, 'intermediate': {}}, 'frank': {'distal': {}, 'intermediate': {}}}
             for cluster in tqdm(statistics_dict.keys()):
                 session_id = statistics_dict[cluster]['session']
                 file_animal = [animal for animal in ClusterFinder.probe_site_areas.keys() if animal in session_id][0]
@@ -470,12 +483,14 @@ class PlotGroupResults:
                         break
                 if statistics_dict[cluster][f'{decode_what}_modulation_index'] < 0 and statistics_dict[cluster]['p_value'] < self.critical_p_value:
                     modulated_clusters['suppressed'][cluster] = statistics_dict[cluster]
+                    significance_dict[file_animal][file_bank][statistics_dict[cluster]['cell_id']] = cl_profile
                     if cl_profile == 'RS':
                         count_dict['sign_suppressed_rs'] += 1
                     else:
                         count_dict['sign_suppressed_fs'] += 1
                 elif statistics_dict[cluster][f'{decode_what}_modulation_index'] > 0 and statistics_dict[cluster]['p_value'] < self.critical_p_value:
                     modulated_clusters['excited'][cluster] = statistics_dict[cluster]
+                    significance_dict[file_animal][file_bank][statistics_dict[cluster]['cell_id']] = cl_profile
                     if cl_profile == 'RS':
                         count_dict['sign_excited_rs'] += 1
                     else:
@@ -485,6 +500,10 @@ class PlotGroupResults:
                         count_dict['ns_rs'] += 1
                     else:
                         count_dict['ns_fs'] += 1
+
+            if True:
+                with io.open(f'lmi_significant_{self.relevant_areas[0]}.json', 'w', encoding='utf-8') as mi_file:
+                    mi_file.write(json.dumps(significance_dict, ensure_ascii=False, indent=4))
 
             print(count_dict)
 
@@ -698,3 +717,85 @@ class PlotGroupResults:
                 print("Specified save directory doesn't exist. Try again.")
                 sys.exit()
         plt.show()
+
+    def modulation_along_probe(self, **kwargs):
+        """
+        Description
+        ----------
+        This method plots sound and luminance modulation significant units with respect
+        to their position along the probe. It sums all the significantly modulated units
+        (suppressed or excited) at their respective peak channels and normalizes their
+        counts by the maximum number of units at any channel.
+        ----------
+
+        Parameters
+        ----------
+        **kwargs (dictionary)
+        cmap_smi (str)
+            The colormap for SMI; defaults to 'Blues'.
+        cmap_lmi (str)
+            The colormap for LMI; defaults to 'Reds'.
+        ----------
+
+        Returns
+        ----------
+        modulation_along_probe (fig)
+            A plot of SMI and LMI significant unit concentration along probe.
+        ----------
+        """
+
+        cmap_smi = kwargs['cmap_smi'] if 'cmap_smi' in kwargs.keys() and type(kwargs['cmap_smi']) == str else 'Blues'
+        cmap_lmi = kwargs['cmap_lmi'] if 'cmap_lmi' in kwargs.keys() and type(kwargs['cmap_lmi']) == str else 'Reds'
+
+        data = {}
+        for file in os.listdir(self.modulation_indices_dir):
+            with open(f'{self.modulation_indices_dir}{os.sep}{file}') as json_file:
+                temp_data = json.load(json_file)
+            index_type = 'smi' if 'smi' in file else 'lmi'
+            brain_area = 'V' if 'V' in file else 'A'
+            data[f'{index_type}_{brain_area}'] = temp_data
+
+        for animal in ['frank', 'johnjohn', 'kavorka']:
+            plot_modulation_data = {'smi': list(data['smi_A'][animal].keys()) + list(data['smi_V'][animal].keys()),
+                                    'lmi_distal': list(data['lmi_A'][animal].keys()) + list(data['lmi_V'][animal]['distal'].keys()),
+                                    'lmi_intermediate': list(data['lmi_V'][animal]['intermediate'].keys())}
+
+            plot_modulation_arrays = {'smi_probe_arr': np.zeros((384, 2)),
+                                      'lmi_probe_arr': np.zeros((384, 2))}
+
+            for data_type in plot_modulation_data.keys():
+                index_type = 'smi' if 'smi' in data_type else 'lmi'
+                bank = 'intermediate' if 'intermediate' in data_type else 'distal'
+
+                for item in plot_modulation_data[data_type]:
+                    if bank == 'distal':
+                        ch = int(item[item.index('ch')+2:])
+                    else:
+                        ch = int(item[item.index('ch')+2:]) + 384
+                    modulo = ch % 2
+                    row = ch // 2
+                    if modulo == 0:
+                        col = 0
+                    else:
+                        col = 1
+                    plot_modulation_arrays[f'{index_type}_probe_arr'][row, col] += 1
+
+            for arr_name in plot_modulation_arrays:
+                plot_modulation_arrays[arr_name] = plot_modulation_arrays[arr_name] / plot_modulation_arrays[arr_name].max()
+
+            fig = plt.figure(figsize=(1.5, 8))
+            ax = fig.add_subplot(111)
+            im = ax.imshow(plot_modulation_arrays['smi_probe_arr'], aspect='auto', vmin=0, vmax=1, cmap=cmap_smi, alpha=1, origin='lower')
+            im2 = ax.imshow(plot_modulation_arrays['lmi_probe_arr'], aspect='auto', vmin=0, vmax=1, cmap=cmap_lmi, alpha=.5, origin='lower')
+            cbar = fig.colorbar(im, orientation='vertical', shrink=.3)
+            cbar.ax.tick_params(size=0)
+            cbar2 = fig.colorbar(im2, orientation='vertical', shrink=.3)
+            cbar2.ax.tick_params(size=0)
+            if self.save_fig:
+                if os.path.exists(self.save_dir):
+                    fig.savefig(f'{self.save_dir}{os.sep}{animal}_modulation_along_probe.{self.fig_format}', dpi=300)
+                else:
+                    print("Specified save directory doesn't exist. Try again.")
+                    sys.exit()
+            plt.show()
+
