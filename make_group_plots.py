@@ -288,7 +288,7 @@ class PlotGroupResults:
             # make pie chart
             size = .3
             labels = ['RS', 'FS']
-            inner_colors = ['#1E90FF', '#FF6347', '#DEDEDE'] * 2
+            inner_colors = ['#FF6347', '#1E90FF', '#DEDEDE'] * 2
             outer_colors = [self.profile_colors['RS'], self.profile_colors['FS']]
             pie_values = np.array([[count_dict['sign_suppressed_rs'], count_dict['sign_excited_rs'], count_dict['ns_rs']],
                                    [count_dict['sign_suppressed_fs'], count_dict['sign_excited_fs'], count_dict['ns_fs']]])
@@ -427,7 +427,7 @@ class PlotGroupResults:
                     # normalize each average by its peak
                     statistics_dict['plot_array'][cell_id, :] = averaged_trials / np.max(averaged_trials)
 
-                    statistics_dict[cell_id]['luminance_modulation_index'] = (averaged_trials[:40].mean() - averaged_trials[40:80].mean()) / \
+                    statistics_dict[cell_id]['luminance_modulation_index'] = (averaged_trials[40:80].mean() - averaged_trials[:40].mean()) / \
                                                                              (averaged_trials[:40].mean() + averaged_trials[40:80].mean())
 
                     trials_array = np.zeros((all_trials.shape[0], 2))
