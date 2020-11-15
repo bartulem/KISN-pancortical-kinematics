@@ -22,6 +22,7 @@ from scipy.stats import wilcoxon
 from scipy.stats import sem
 import decode_events
 from neural_activity import Spikes
+from neural_activity import gaussian_smoothing
 from select_clusters import ClusterFinder
 
 
@@ -59,7 +60,7 @@ class PlotGroupResults:
         Description
         ----------
         This method plots the sound stimulation effect for a group of cells (can be across
-        different animals). PETHs were smoothed with a Gaussian of 3 bins width.
+        different animals). PETHs were smoothed with a Gaussian of 1 bin width.
         ----------
 
         Parameters
@@ -222,6 +223,8 @@ class PlotGroupResults:
                 else:
                     count_dict['ns_fs'] += 1
 
+        print(count_dict)
+
         if False:
             with io.open(f'smi_significant_{self.relevant_areas[0]}.json', 'w', encoding='utf-8') as mi_file:
                 mi_file.write(json.dumps(significance_dict, ensure_ascii=False, indent=4))
@@ -250,14 +253,14 @@ class PlotGroupResults:
             ax1 = fig.add_subplot(121, label='1')
             ax1.imshow(plot_array_ordered_suppressed, aspect='auto', vmin=0, vmax=1, cmap='cividis')
             ax2 = fig.add_subplot(121, label='2', frame_on=False)
-            ax2.plot(range(plot_array_ordered_suppressed.shape[1]), plot_array_ordered_suppressed.mean(axis=0), ls='-', lw=3, c='#1E90FF')
+            ax2.plot(range(plot_array_ordered_suppressed.shape[1]), plot_array_ordered_suppressed.mean(axis=0), ls='-', lw=3, c='#00008B')
             ax2.set_xlim(0, 400)
             ax2.set_xticks([])
             ax2.set_yticks([])
             ax3 = fig.add_subplot(122, label='3')
             im = ax3.imshow(plot_array_ordered_excited, aspect='auto', vmin=0, vmax=1, cmap='cividis')
             ax4 = fig.add_subplot(122, label='4', frame_on=False)
-            ax4.plot(range(plot_array_ordered_excited.shape[1]), plot_array_ordered_excited.mean(axis=0), ls='-', lw=3, c='#FF6347')
+            ax4.plot(range(plot_array_ordered_excited.shape[1]), plot_array_ordered_excited.mean(axis=0), ls='-', lw=3, c='#EEC900')
             ax4.set_xlim(0, 400)
             ax4.set_xticks([])
             ax4.set_yticks([])
@@ -288,7 +291,7 @@ class PlotGroupResults:
             # make pie chart
             size = .3
             labels = ['RS', 'FS']
-            inner_colors = ['#FF6347', '#1E90FF', '#DEDEDE'] * 2
+            inner_colors = ['#00008B', '#EEC900', '#DEDEDE'] * 2
             outer_colors = [self.profile_colors['RS'], self.profile_colors['FS']]
             pie_values = np.array([[count_dict['sign_suppressed_rs'], count_dict['sign_excited_rs'], count_dict['ns_rs']],
                                    [count_dict['sign_suppressed_fs'], count_dict['sign_excited_fs'], count_dict['ns_fs']]])
@@ -317,8 +320,8 @@ class PlotGroupResults:
             bins = np.linspace(-1, 1, 20)
             ax6 = fig3.add_subplot(111, label='6')
             ax6.hist(smi, bins=bins, color='#DEDEDE', alpha=.6, edgecolor='#000000')
-            ax6.hist(smi_neg, bins=bins, color='#1E90FF', alpha=.6)
-            ax6.hist(smi_pos, bins=bins, color='#FF6347', alpha=.6)
+            ax6.hist(smi_neg, bins=bins, color='#00008B', alpha=.6)
+            ax6.hist(smi_pos, bins=bins, color='#EEC900', alpha=.6)
             ax6.set_xlabel('Sound modulation index')
             ax6.set_ylabel('Number of cells')
             for side in ['right', 'top']:
@@ -690,11 +693,11 @@ class PlotGroupResults:
         ax[0].errorbar(x=x_values, y=plot_data['A']['decoding_accuracy']['mean']['johnjohn'], yerr=plot_data['A']['decoding_accuracy']['sem']['johnjohn'] * z_value_sem,
                        color='#000000', fmt='-s', label=f"#{self.animal_ids['johnjohn']}")
         ax[0].fill_between(x=x_values, y1=plot_data['A']['shuffled'][:, 0], y2=plot_data['A']['shuffled'][:, 1], color='grey', alpha=.25)
-        ax[0].set_ylim(.5, 1)
+        ax[0].set_ylim(.45, 1)
         ax[0].set_xlim(0)
         ax[0].legend()
-        ax[0].set_title(f'Decoding of {decoding_event} by A cells')
-        ax[0].set_xlabel('Number of cells used for classifying')
+        ax[0].set_title('A units')
+        ax[0].set_xlabel('Number of units')
         ax[0].set_ylabel('Decoding accuracy')
 
         ax[1].errorbar(x=x_values, y=plot_data['V']['decoding_accuracy']['mean']['kavorka'], yerr=plot_data['V']['decoding_accuracy']['sem']['kavorka'] * z_value_sem,
@@ -704,11 +707,11 @@ class PlotGroupResults:
         ax[1].errorbar(x=x_values, y=plot_data['V']['decoding_accuracy']['mean']['johnjohn'], yerr=plot_data['V']['decoding_accuracy']['sem']['johnjohn'] * z_value_sem,
                        color='#000000', fmt='-s', label=f"#{self.animal_ids['johnjohn']}")
         ax[1].fill_between(x=x_values, y1=plot_data['V']['shuffled'][:, 0], y2=plot_data['V']['shuffled'][:, 1], color='#808080', alpha=.25)
-        ax[1].set_ylim(.5, 1)
+        ax[1].set_ylim(.45, 1)
         ax[1].set_xlim(0)
         ax[1].legend()
-        ax[1].set_title(f'Decoding of {decoding_event} by V cells')
-        ax[1].set_xlabel('Number of cells used for classifying')
+        ax[1].set_title('V units')
+        ax[1].set_xlabel('Number of units')
         ax[1].set_ylabel('Decoding accuracy')
         if self.save_fig:
             if os.path.exists(self.save_dir):
@@ -780,15 +783,28 @@ class PlotGroupResults:
                         col = 1
                     plot_modulation_arrays[f'{index_type}_probe_arr'][row, col] += 1
 
-            for arr_name in plot_modulation_arrays:
-                plot_modulation_arrays[arr_name] = plot_modulation_arrays[arr_name] / plot_modulation_arrays[arr_name].max()
+            reduction_factor = 2
 
-            fig = plt.figure(figsize=(1.5, 8))
-            ax = fig.add_subplot(111)
-            im = ax.imshow(plot_modulation_arrays['smi_probe_arr'], aspect='auto', vmin=0, vmax=1, cmap=cmap_smi, alpha=1, origin='lower')
-            im2 = ax.imshow(plot_modulation_arrays['lmi_probe_arr'], aspect='auto', vmin=0, vmax=1, cmap=cmap_lmi, alpha=.5, origin='lower')
-            cbar = fig.colorbar(im, orientation='vertical', shrink=.3)
-            cbar.ax.tick_params(size=0)
+            reduced_plot_modulation_arrays = {'smi_probe_arr': np.zeros((384 // reduction_factor, 1)),
+                                              'lmi_probe_arr': np.zeros((384 // reduction_factor, 1))}
+
+            for arr_name in plot_modulation_arrays:
+                for rr_idx, reduced_row in enumerate(range(0, 384, reduction_factor)):
+                    reduced_plot_modulation_arrays[arr_name][rr_idx, :] = plot_modulation_arrays[arr_name][reduced_row:reduced_row+reduction_factor, :].sum()
+
+            for arr_name in reduced_plot_modulation_arrays:
+                smoothed_arr = gaussian_smoothing(array=reduced_plot_modulation_arrays[arr_name],
+                                                  sigma=3,
+                                                  axis=0)
+                reduced_plot_modulation_arrays[arr_name] = smoothed_arr / smoothed_arr.max()
+
+            fig = plt.figure(figsize=(2, 8))
+            ax = fig.add_subplot(121)
+            im = ax.imshow(reduced_plot_modulation_arrays['smi_probe_arr'], aspect='auto', vmin=0, vmax=1, cmap=cmap_smi, alpha=1, origin='lower')
+            ax2 = fig.add_subplot(122)
+            im2 = ax2.imshow(reduced_plot_modulation_arrays['lmi_probe_arr'], aspect='auto', vmin=0, vmax=1, cmap=cmap_lmi, alpha=1, origin='lower')
+            """cbar = fig.colorbar(im, orientation='vertical', shrink=.3)
+            cbar.ax.tick_params(size=0)"""
             cbar2 = fig.colorbar(im2, orientation='vertical', shrink=.3)
             cbar2.ax.tick_params(size=0)
             if self.save_fig:

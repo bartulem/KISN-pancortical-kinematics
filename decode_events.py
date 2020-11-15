@@ -251,10 +251,10 @@ class Decoder:
 
                 # get all cell / shuffled data in their respective arrays
                 for sc_idx, selected_cluster in enumerate(selected_clusters):
-                    clusters_array[:, sc_idx] = activity_dictionary[selected_cluster]['activity'].todense().astype(np.float32)
+                    clusters_array[:, sc_idx] = activity_dictionary[selected_cluster]['activity'].todense().astype(np.float32).copy()
                     if decode_num == 0:
                         for shuffle_idx in range(self.shuffle_num):
-                            shuffled_clusters_array[shuffle_idx, :, sc_idx] = activity_dictionary[selected_cluster]['shuffled'][shuffle_idx].todense().astype(np.float32)
+                            shuffled_clusters_array[shuffle_idx, :, sc_idx] = activity_dictionary[selected_cluster]['shuffled'][shuffle_idx].todense().astype(np.float32).copy()
 
                 # smooth spike trains if desired
                 if self.to_smooth:
@@ -295,22 +295,23 @@ class Decoder:
         This method uses a nearest neighbor decoder to predict the luminance / weight condition
         of individual timepoints over two recording sessions (light / dark or no weight / weight).
         We take half of each recording and bin the spike train of every cluster common to both sessions
-        in 100 ms bins. Instead of using spike trains, since there's electrode drift and varying baseline
-        firing rates across sessions, we bin spike trains to 0 or 1, depending on whether the unit was
-        active or not, such that the decoder would informed by whether the cell was active or not,
-        rather than its session-fluctuating firing rates. Since our three animals have a varying number
-        of visual single units (K=410, JJ=404, F=193), for each one we choose a distinct combination of
-        units (either 5, 10, 20, 50 or 100) to decode the  luminance condition in each run (10 runs in total).
-        In each run, we divided the data in three folds where 1/3 of the data was the test set and 2/3 were
-        the training set. Each fold had the same amount of light and dark timepoints. For each test set
-        population vector we computed Pearson correlations to every population vector in the training set.
-        We obtained a predicted sound stimulus value for each test frame by assigning it the luminance status
-        of the most correlated training set population vector. Decoding accuracy was defined as the proportion
-        of correctly matched stimulus states across the entire recording session. Since the luminance condition
-        didn't change within a session, shuffling spike trains would not make sense because even time shifted activity,
-        if it's overall lower/higher relative to the other session, would still enable accurate decoding. Instead,
-        we randomly permuted the joint unit activity (half light / half dark) at each time point a 1000 times to
-        obtain the null-distribution of decoded accuracy.
+        in 100 ms bins (and smooth with a 3 bin Gaussian). Instead of using spike trains, since there's
+        electrode drift and varying baseline firing rates across sessions, we bin spike trains to 0 or 1,
+        depending on whether the unit was active or not, such that the decoder would informed by whether
+        the cell was active or not, rather than its session-fluctuating firing rates. Since our three
+        animals have a varying number of visual single units (K=410, JJ=404, F=193), for each one we choose
+        a distinct combination of units (either 5, 10, 20, 50 or 100) to decode the  luminance condition
+        in each run (10 runs in total). In each run, we divided the data in three folds where 1/3 of the
+        data was the test set and 2/3 were the training set. Each fold had the same amount of light and
+        dark timepoints. For each test set population vector we computed Pearson correlations to every
+        population vector in the training set. We obtained a predicted sound stimulus value for each test
+        frame by assigning it the luminance status of the most correlated training set population vector.
+        Decoding accuracy was defined as the proportion of correctly matched stimulus states across the
+        entire recording session. Since the luminance condition didn't change within a session, shuffling
+        spike trains would not make sense because even time shifted activity, if it's overall lower/higher
+        relative to the other session, would still enable accurate decoding. Instead, we randomly permuted
+        the joint unit activity (half light / half dark) at each time point a 1000 times to obtain the
+        null-distribution of decoded accuracy.
         ----------
 
         Parameters
@@ -372,9 +373,9 @@ class Decoder:
                                                                                                                                                         to_shuffle=False,
                                                                                                                                                         condense_arr=self.condense)
             else:
-                file_id, activity_dictionary, purged_spikes_dict= neural_activity.Spikes(input_file=one_file).convert_activity_to_frames_with_shuffles(get_clusters=chosen_clusters,
-                                                                                                                                                       to_shuffle=False,
-                                                                                                                                                       condense_arr=self.condense)
+                file_id, activity_dictionary, purged_spikes_dict = neural_activity.Spikes(input_file=one_file).convert_activity_to_frames_with_shuffles(get_clusters=chosen_clusters,
+                                                                                                                                                        to_shuffle=False,
+                                                                                                                                                        condense_arr=self.condense)
             zero_first_activity[file_idx] = activity_dictionary
 
         # get fold edges
@@ -410,7 +411,9 @@ class Decoder:
                     for condition_type in zero_first_activity.keys():
                         seq_len = half_durations[condition_type]
                         if selected_cluster in zero_first_activity[condition_type].keys():
-                            temp_cl_arr = zero_first_activity[condition_type][selected_cluster]['activity'][:seq_len].todense().astype(np.float32)
+                            temp_cl_arr = zero_first_activity[condition_type][selected_cluster]['activity'][:seq_len].todense().astype(np.float32).copy()
+                            if self.to_smooth:
+                                temp_cl_arr = neural_activity.gaussian_smoothing(array=temp_cl_arr, sigma=self.smooth_sd, axis=self.smooth_axis).astype(np.float32)
                             # set all non-zero values to 1
                             temp_cl_arr[temp_cl_arr > 0] = 1
                             if condition_type == 0:
@@ -419,9 +422,10 @@ class Decoder:
                                 clusters_array[change_point:, sc_idx] = temp_cl_arr
 
                 if decode_num == 0:
+                    copy_clu_arr = clusters_array.copy()
                     for shuffle_idx in range(self.shuffle_num):
-                        np.random.shuffle(clusters_array)
-                        shuffled_clusters_array[shuffle_idx, :, :] = clusters_array
+                        np.random.shuffle(copy_clu_arr)
+                        shuffled_clusters_array[shuffle_idx, :, :] = copy_clu_arr
 
                 # go through folds and predict sound
                 predicted_condition_events = predict_events(total_frame_num=total_frame_num, fold_num=self.fold_n, train_folds=train_indices_for_folds,
