@@ -35,11 +35,12 @@ def correlate_quickly(big_x, big_x_mean, big_y, big_y_mean):
 
 
 def predict_events(total_frame_num, fold_num, train_folds, test_folds,
-                   activity_arr, event_arr, fe, half_half=False, hd=[0, 0]):
-    if not half_half:
+                   activity_arr, event_arr, fe, thirds=False):
+    if not thirds:
         pred_events = np.zeros(total_frame_num).astype(np.float32)
     else:
-        pred_events = np.concatenate((np.zeros(hd[0]), np.ones(hd[1]))).astype(np.float32)
+        pred_events = np.zeros(total_frame_num // 3).astype(np.float32)
+
     for fold_idx in range(fold_num):
         training_frames = train_folds[fold_idx]
         test_frames = test_folds[fold_idx]
@@ -63,13 +64,10 @@ def predict_events(total_frame_num, fold_num, train_folds, test_folds,
         actual_train_frames = training_frames.take(max_corr_train_frames_raw)
 
         # get event values
-        if not half_half:
-            pred_events[fe[fold_idx]:fe[fold_idx+1]] = event_arr.take(actual_train_frames)
-        else:
-            all_pred_events = event_arr.take(actual_train_frames)
-            first_half_end = fe[fold_idx+1]-fe[fold_idx]
-            pred_events[fe[fold_idx]:fe[fold_idx+1]] = all_pred_events[:first_half_end]
-            pred_events[fe[fold_idx+3]:fe[fold_idx+3+1]] = all_pred_events[first_half_end:]
+        pred_events[fe[fold_idx]:fe[fold_idx+1]] = event_arr.take(actual_train_frames)
+
+        if thirds:
+            break
 
     return pred_events
 
@@ -352,22 +350,20 @@ class Decoder:
         # get total frame count in each session
         zero_ses_name, zero_extracted_frame_info = Session(session=self.input_012[0]).data_loader(extract_variables=['total_frame_num'])
         first_ses_name, first_extracted_frame_info = Session(session=self.input_012[1]).data_loader(extract_variables=['total_frame_num'])
+        second_ses_name, second_extracted_frame_info = Session(session=self.input_012[2]).data_loader(extract_variables=['total_frame_num'])
 
         # get total frame number in future array
         if self.condense:
-            total_frame_num = np.array([zero_extracted_frame_info['total_frame_num'], first_extracted_frame_info['total_frame_num']]).min() // int(120. * (condensed_bin_size / 1e3))
-            change_point = total_frame_num // 2
-            half_durations = [change_point, total_frame_num-change_point]
-            decoding_event_array = np.concatenate((np.ones(half_durations[0]), np.zeros(half_durations[1]))).astype(np.float32)
+            total_frame_num = zero_extracted_frame_info['total_frame_num'] // int(120. * (condensed_bin_size / 1e3))
         else:
-            total_frame_num = np.array([zero_extracted_frame_info['total_frame_num'], first_extracted_frame_info['total_frame_num']]).min()
-            change_point = total_frame_num // 2
-            half_durations = [change_point, total_frame_num-change_point]
-            decoding_event_array = np.concatenate((np.ones(half_durations[0]), np.zeros(half_durations[1]))).astype(np.float32)
+            total_frame_num = zero_extracted_frame_info['total_frame_num']
+        change_points = np.floor(np.linspace(0, total_frame_num, self.fold_n+1))[1:]
+        third_durations = np.concatenate((np.array([change_points[0]]), np.diff(change_points)))
+        decoding_event_array = np.concatenate((np.ones(third_durations[0]), np.zeros(third_durations[1]), np.ones(third_durations[2]))).astype(np.float32)
 
         # get activity dictionary
-        zero_first_activity = {0: {}, 1: {}}
-        for file_idx, one_file in enumerate(self.input_012[:2]):
+        zero_first_second_activity = {0: {}, 1: {}, 2: {}}
+        for file_idx, one_file in enumerate(self.input_012):
             if 'V' in self.cluster_areas and decode_what == 'luminance':
                 file_id, activity_dictionary, purged_spikes_dict = neural_activity.Spikes(input_file=one_file).convert_activity_to_frames_with_shuffles(get_clusters=chosen_clusters+extra_chosen_clusters[file_idx],
                                                                                                                                                         to_shuffle=False,
@@ -376,19 +372,18 @@ class Decoder:
                 file_id, activity_dictionary, purged_spikes_dict = neural_activity.Spikes(input_file=one_file).convert_activity_to_frames_with_shuffles(get_clusters=chosen_clusters,
                                                                                                                                                         to_shuffle=False,
                                                                                                                                                         condense_arr=self.condense)
-            zero_first_activity[file_idx] = activity_dictionary
+            zero_first_second_activity[file_idx] = activity_dictionary
 
         # get fold edges
         fold_edges = np.floor(np.linspace(0, total_frame_num, (self.fold_n*2)+1)).astype(np.int32)
 
-        # get train / test indices for each fold
+        # get train / test indices
         train_indices_for_folds = []
         test_indices_for_folds = []
-        for fold in range(self.fold_n):
-            all_frames = np.arange(0, total_frame_num)
-            one_fold_arr = np.concatenate((np.arange(fold_edges[fold], fold_edges[fold+1]), np.arange(fold_edges[fold+3], fold_edges[fold+3+1])))
-            test_indices_for_folds.append(one_fold_arr.astype(np.int32))
-            train_indices_for_folds.append(np.setdiff1d(all_frames, one_fold_arr).astype(np.int32))
+        all_frames = np.arange(0, total_frame_num)
+        one_fold_arr = np.arange(fold_edges[0], fold_edges[1])
+        test_indices_for_folds.append(one_fold_arr.astype(np.int32))
+        train_indices_for_folds.append(np.setdiff1d(all_frames, one_fold_arr).astype(np.int32))
 
         # conduct decoding
         decoding_accuracy = np.zeros((self.decoding_cell_number_array.shape[0], self.number_of_decoding_per_run))
@@ -408,18 +403,18 @@ class Decoder:
 
                 # get all cell / shuffled data in their respective arrays
                 for sc_idx, selected_cluster in enumerate(selected_clusters):
-                    for condition_type in zero_first_activity.keys():
-                        seq_len = half_durations[condition_type]
-                        if selected_cluster in zero_first_activity[condition_type].keys():
-                            temp_cl_arr = zero_first_activity[condition_type][selected_cluster]['activity'][:seq_len].todense().astype(np.float32).copy()
+                    for condition_type in zero_first_second_activity.keys():
+                        seq_len = third_durations[condition_type]
+                        if selected_cluster in zero_first_second_activity[condition_type].keys():
+                            temp_cl_arr = zero_first_second_activity[condition_type][selected_cluster]['activity'][:seq_len].todense().astype(np.float32).copy()
                             if self.to_smooth:
                                 temp_cl_arr = neural_activity.gaussian_smoothing(array=temp_cl_arr, sigma=self.smooth_sd, axis=self.smooth_axis).astype(np.float32)
-                            # set all non-zero values to 1
-                            temp_cl_arr[temp_cl_arr > 0] = 1
                             if condition_type == 0:
-                                clusters_array[:change_point, sc_idx] = temp_cl_arr
+                                clusters_array[:change_points[0], sc_idx] = temp_cl_arr
+                            elif condition_type == 1:
+                                clusters_array[change_points[0]:change_points[1], sc_idx] = temp_cl_arr
                             else:
-                                clusters_array[change_point:, sc_idx] = temp_cl_arr
+                                clusters_array[change_points[2]:, sc_idx] = temp_cl_arr
 
                 if decode_num == 0:
                     copy_clu_arr = clusters_array.copy()
@@ -430,20 +425,20 @@ class Decoder:
                 # go through folds and predict sound
                 predicted_condition_events = predict_events(total_frame_num=total_frame_num, fold_num=self.fold_n, train_folds=train_indices_for_folds,
                                                             test_folds=test_indices_for_folds, activity_arr=clusters_array, event_arr=decoding_event_array,
-                                                            fe=fold_edges, half_half=True, hd=half_durations)
+                                                            fe=fold_edges, thirds=True)
                 if decode_num == 0:
                     shuffle_predicted_condition_events = np.zeros((total_frame_num, self.shuffle_num))
                     for sh in range(self.shuffle_num):
                         shuffle_predicted_condition_events[:, sh] = predict_events(total_frame_num=total_frame_num, fold_num=self.fold_n, train_folds=train_indices_for_folds,
                                                                                    test_folds=test_indices_for_folds, activity_arr=shuffled_clusters_array[sh], event_arr=decoding_event_array,
-                                                                                   fe=fold_edges, half_half=True, hd=half_durations)
+                                                                                   fe=fold_edges, thirds=True)
 
                 # calculate accuracy and fill in the array
-                decoding_accuracy[ca_idx, decode_num] = ((predicted_condition_events-decoding_event_array) == 0).sum() / predicted_condition_events.shape[0]
+                decoding_accuracy[ca_idx, decode_num] = ((predicted_condition_events-decoding_event_array[:change_points[0]]) == 0).sum() / third_durations[0]
                 if decode_num == 0:
                     for sh_idx in range(self.shuffle_num):
-                        shuffled_decoding_accuracy[ca_idx, sh_idx] = ((shuffle_predicted_condition_events[:, sh_idx]-decoding_event_array) == 0).sum() \
-                                                                     / shuffle_predicted_condition_events.shape[0]
+                        shuffled_decoding_accuracy[ca_idx, sh_idx] = ((shuffle_predicted_condition_events[:, sh_idx]-decoding_event_array[:change_points[0]]) == 0).sum() \
+                                                                     / third_durations[0]
                 # free memory
                 gc.collect()
 
