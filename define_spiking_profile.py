@@ -21,6 +21,33 @@ from sklearn.cluster import KMeans
 from collections import Counter
 
 
+def get_cluster_spiking_profiles(cluster_list, recording_day, sp_profiles_csv):
+    """
+    Parameters
+    ----------
+    cluster_list : list
+        The list of all clusters whose profiles need to be determined.
+    recording_day : str
+        The recording day to search the profiles in.
+    sp_profiles_csv : str
+        The path to the sp_profiles.csv file.
+    ----------
+
+    Returns
+    ----------
+    profiles_dict : dict
+        The dictionary of all clusters' profile types.
+    ----------
+    """
+
+    profile_data = pd.read_csv(sp_profiles_csv)
+    profiles_dict = {}
+    for idx, row in profile_data.iterrows():
+        if row[0] == recording_day and row[1] in cluster_list:
+            profiles_dict[row[1]] = row[-1]
+    return profiles_dict
+
+
 class SpikingProfile:
 
     def __init__(self, cluster_quality_dir='', cluster_groups_dir=''):
