@@ -20,6 +20,7 @@ import pandas as pd
 from tqdm import tqdm
 from scipy.stats import wilcoxon
 from scipy.stats import sem
+from scipy.stats import pearsonr
 import decode_events
 from sessions2load import Session
 from neural_activity import Spikes
@@ -871,7 +872,12 @@ class PlotGroupResults:
                                         second_extracted_frame_info['total_frame_num']]).min() // int(120. * (100 / 1e3))
 
         # make spike count distributions figure
-        fig, ax = plt.subplots(nrows=np.floor(np.sqrt(len(all_common_clusters))).astype(np.int32), ncols=np.ceil(np.sqrt(len(all_common_clusters))).astype(np.int32), figsize=(15, 15))
+        activity_arrays = {0: np.zeros((min_total_frame_num, len(all_common_clusters))),
+                           1: np.zeros((min_total_frame_num, len(all_common_clusters))),
+                           2: np.zeros((min_total_frame_num, len(all_common_clusters)))}
+        row_num = np.floor(np.sqrt(len(all_common_clusters))).astype(np.int32)
+        col_num = np.ceil(np.sqrt(len(all_common_clusters))).astype(np.int32)
+        fig, ax = plt.subplots(nrows=row_num, ncols=col_num, figsize=(15, 15))
         bins = np.arange(0, 10, 1)
         bin_centers = np.array([0.5 * (bins[i] + bins[i + 1]) for i in range(len(bins) - 1)])
         for cl_idx, cl in enumerate(all_common_clusters):
@@ -880,10 +886,16 @@ class PlotGroupResults:
                 #     profile_color = '#698B69'
                 # else:
                 #     profile_color = '#9BCD9B'
-                data_entries_1, bins_1 = np.histogram(activity_across_sessions[0][cl]['activity'][:min_total_frame_num].todense().astype(np.float32), bins=bins)
-                data_entries_2, bins_2 = np.histogram(activity_across_sessions[2][cl]['activity'][:min_total_frame_num].todense().astype(np.float32), bins=bins)
-                data_entries_d, bins_d = np.histogram(activity_across_sessions[1][cl]['activity'][:min_total_frame_num].todense().astype(np.float32), bins=bins)
-                ax = plt.subplot(np.floor(np.sqrt(len(all_common_clusters))).astype(np.int32), np.ceil(np.sqrt(len(all_common_clusters))).astype(np.int32), cl_idx+1)
+                activity_0 = activity_across_sessions[0][cl]['activity'][:min_total_frame_num].todense().astype(np.float32)
+                activity_arrays[0][:, cl_idx] = activity_0
+                activity_1 = activity_across_sessions[2][cl]['activity'][:min_total_frame_num].todense().astype(np.float32)
+                activity_arrays[1][:, cl_idx] = activity_1
+                activity_2 = activity_across_sessions[1][cl]['activity'][:min_total_frame_num].todense().astype(np.float32)
+                activity_arrays[2][:, cl_idx] = activity_2
+                data_entries_1, bins_1 = np.histogram(activity_0, bins=bins)
+                data_entries_2, bins_2 = np.histogram(activity_1, bins=bins)
+                data_entries_d, bins_d = np.histogram(activity_2, bins=bins)
+                ax = plt.subplot(row_num, col_num, cl_idx+1)
                 ax.plot(bin_centers, data_entries_d, color='#00008B', linewidth=1.5, alpha=.75)
                 ax.plot(bin_centers, data_entries_1, color='#EEC900', linewidth=1.5, alpha=.75)
                 ax.plot(bin_centers, data_entries_2, color='#CD950C', linewidth=1.5, alpha=.75)
@@ -898,6 +910,29 @@ class PlotGroupResults:
         if self.save_fig:
             if os.path.exists(self.save_dir):
                 fig.savefig(f'{self.save_dir}{os.sep}spike_count_distributions_{file_animal}_{self.cluster_areas[0]}.{self.fig_format}', dpi=300)
+            else:
+                print("Specified save directory doesn't exist. Try again.")
+                sys.exit()
+        plt.show()
+
+        # make population vector correlation plot
+        correlations_0 = np.zeros(min_total_frame_num)
+        correlations_1 = np.zeros(min_total_frame_num)
+        for frame in tqdm(range(min_total_frame_num)):
+            correlations_0[frame] = pearsonr(activity_arrays[2][frame, :], activity_arrays[0].mean(axis=0))[0]
+            correlations_1[frame] = pearsonr(activity_arrays[2][frame, :], activity_arrays[1].mean(axis=0))[0]
+
+        bins2 = np.linspace(-0.1, 1, 100)
+        fig2 = plt.figure(figsize=(5, 5))
+        ax2 = fig2.add_subplot(111)
+        ax2.hist(correlations_1, bins2, density=True, alpha=0.5, label='Dark', color='#00008B')
+        ax2.hist(correlations_0, bins2, density=True, alpha=0.5, label='Light 1', color='#EEC900')
+        ax2.legend(loc='upper left')
+        ax2.set_xlabel('Correlation')
+        ax2.set_ylabel('Probability density')
+        if self.save_fig:
+            if os.path.exists(self.save_dir):
+                fig2.savefig(f'{self.save_dir}{os.sep}population_vector_correlations_{file_animal}_{self.cluster_areas[0]}.{self.fig_format}', dpi=300)
             else:
                 print("Specified save directory doesn't exist. Try again.")
                 sys.exit()
