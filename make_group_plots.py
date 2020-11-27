@@ -21,9 +21,11 @@ from tqdm import tqdm
 from scipy.stats import wilcoxon
 from scipy.stats import sem
 import decode_events
+from sessions2load import Session
 from neural_activity import Spikes
 from neural_activity import gaussian_smoothing
 from select_clusters import ClusterFinder
+from define_spiking_profile import get_cluster_spiking_profiles
 
 
 class PlotGroupResults:
@@ -33,7 +35,8 @@ class PlotGroupResults:
                  relevant_areas=['A'], relevant_cluster_types='good',
                  bin_size_ms=50, window_size=10, smooth=False, smooth_sd=1, to_plot=False,
                  input_012_list=[], pkl_load_dir='', critical_p_value=.01,
-                 profile_colors={'RS': '#698B69', 'FS': '#9BCD9B'}, modulation_indices_dir=''):
+                 profile_colors={'RS': '#698B69', 'FS': '#9BCD9B'}, modulation_indices_dir='',
+                 cluster_areas=['V'], cluster_type=True):
         self.session_list = session_list
         self.cluster_groups_dir = cluster_groups_dir
         self.sp_profiles_csv = sp_profiles_csv
@@ -54,6 +57,8 @@ class PlotGroupResults:
         self.critical_p_value = critical_p_value
         self.profile_colors = profile_colors
         self.modulation_indices_dir = modulation_indices_dir
+        self.cluster_areas = cluster_areas
+        self.cluster_type = cluster_type
 
     def sound_modulation_summary(self, **kwargs):
         """
@@ -634,7 +639,7 @@ class PlotGroupResults:
         ----------
         """
 
-        x_values_arr = kwargs['x_values_arr'] if 'x_values_arr' in kwargs.keys() and type(kwargs['x_values_arr']) == np.array else np.array([5, 10, 20, 50, 100])
+        x_values_arr = kwargs['x_values_arr'] if 'x_values_arr' in kwargs.keys() and type(kwargs['x_values_arr']) == np.ndarray else np.array([5, 10, 20, 50, 100])
         decoding_event = kwargs['decoding_event'] if 'decoding_event' in kwargs.keys() and type(kwargs['decoding_event']) == str else 'sound stimulation'
         z_value_sem = kwargs['z_value_sem'] if 'z_value_sem' in kwargs.keys() and type(kwargs['z_value_sem']) == float else 2.58
 
@@ -693,7 +698,7 @@ class PlotGroupResults:
         ax[0].errorbar(x=x_values, y=plot_data['A']['decoding_accuracy']['mean']['johnjohn'], yerr=plot_data['A']['decoding_accuracy']['sem']['johnjohn'] * z_value_sem,
                        color='#000000', fmt='-s', label=f"#{self.animal_ids['johnjohn']}")
         ax[0].fill_between(x=x_values, y1=plot_data['A']['shuffled'][:, 0], y2=plot_data['A']['shuffled'][:, 1], color='grey', alpha=.25)
-        ax[0].set_ylim(.45, 1)
+        ax[0].set_ylim(.35, 1)
         ax[0].set_xlim(0)
         ax[0].legend()
         ax[0].set_title('A units')
@@ -707,7 +712,7 @@ class PlotGroupResults:
         ax[1].errorbar(x=x_values, y=plot_data['V']['decoding_accuracy']['mean']['johnjohn'], yerr=plot_data['V']['decoding_accuracy']['sem']['johnjohn'] * z_value_sem,
                        color='#000000', fmt='-s', label=f"#{self.animal_ids['johnjohn']}")
         ax[1].fill_between(x=x_values, y1=plot_data['V']['shuffled'][:, 0], y2=plot_data['V']['shuffled'][:, 1], color='#808080', alpha=.25)
-        ax[1].set_ylim(.45, 1)
+        ax[1].set_ylim(.35, 1)
         ax[1].set_xlim(0)
         ax[1].legend()
         ax[1].set_title('V units')
@@ -814,4 +819,87 @@ class PlotGroupResults:
                     print("Specified save directory doesn't exist. Try again.")
                     sys.exit()
             plt.show()
+
+    def light_dark_fr_correlations(self, **kwargs):
+        """
+        Description
+        ----------
+        This method plots the firing rate distribution changes across three different
+        sessions and the correlation distribution of population vectors from session 3
+        to the population averages of session 1 and session 2.
+        ----------
+
+        Parameters
+        ----------
+        **kwargs (dictionary)
+        ----------
+
+        Returns
+        ----------
+        spike_count_distributions (fig)
+            A plot of spike count distributions for the specified 3 files.
+        ----------
+        """
+
+        clusters_across_sessions = {0: [], 1: [], 2: []}
+        for session_id, session in enumerate(self.input_012_list):
+            clusters_across_sessions[session_id] = ClusterFinder(session=session,
+                                                                 cluster_groups_dir=self.cluster_groups_dir,
+                                                                 sp_profiles_csv=self.sp_profiles_csv).get_desired_clusters(filter_by_cluster_type=self.cluster_type,
+                                                                                                                            filter_by_area=self.cluster_areas)
+
+        all_common_clusters = list(set(clusters_across_sessions[0]).intersection(clusters_across_sessions[1], clusters_across_sessions[2]))
+
+        activity_across_sessions = {0: {}, 1: {}, 2: {}}
+        for session_id, session in enumerate(self.input_012_list):
+            the_session, activity_dictionary, purged_spikes_dict = Spikes(input_file=session).convert_activity_to_frames_with_shuffles(get_clusters=all_common_clusters,
+                                                                                                                                       to_shuffle=False,
+                                                                                                                                       condense_arr=True)
+            activity_across_sessions[session_id] = activity_dictionary
+
+        file_animal = [animal for animal in ClusterFinder.probe_site_areas.keys() if animal in self.input_012_list[0]][0]
+        file_bank = [bank for bank in ['distal', 'intermediate'] if bank in self.input_012_list[0]][0]
+        get_date_idx = [date.start() for date in re.finditer('20', self.input_012_list[0])][-1]
+        file_date = self.input_012_list[0][get_date_idx-4:get_date_idx+2]
+        cluster_profiles = get_cluster_spiking_profiles(cluster_list=all_common_clusters, recording_day=f'{file_animal}_{file_date}_{file_bank}', sp_profiles_csv=self.sp_profiles_csv)
+
+        zero_ses_name, zero_extracted_frame_info = Session(session=self.input_012_list[0]).data_loader(extract_variables=['total_frame_num'])
+        first_ses_name, first_extracted_frame_info = Session(session=self.input_012_list[1]).data_loader(extract_variables=['total_frame_num'])
+        second_ses_name, second_extracted_frame_info = Session(session=self.input_012_list[2]).data_loader(extract_variables=['total_frame_num'])
+        min_total_frame_num = np.array([zero_extracted_frame_info['total_frame_num'],
+                                        first_extracted_frame_info['total_frame_num'],
+                                        second_extracted_frame_info['total_frame_num']]).min() // int(120. * (100 / 1e3))
+
+        # make spike count distributions figure
+        fig, ax = plt.subplots(nrows=np.floor(np.sqrt(len(all_common_clusters))).astype(np.int32), ncols=np.ceil(np.sqrt(len(all_common_clusters))).astype(np.int32), figsize=(15, 15))
+        bins = np.arange(0, 10, 1)
+        bin_centers = np.array([0.5 * (bins[i] + bins[i + 1]) for i in range(len(bins) - 1)])
+        for cl_idx, cl in enumerate(all_common_clusters):
+            if True:
+                # if cluster_profiles[cl] == 'RS':
+                #     profile_color = '#698B69'
+                # else:
+                #     profile_color = '#9BCD9B'
+                data_entries_1, bins_1 = np.histogram(activity_across_sessions[0][cl]['activity'][:min_total_frame_num].todense().astype(np.float32), bins=bins)
+                data_entries_2, bins_2 = np.histogram(activity_across_sessions[2][cl]['activity'][:min_total_frame_num].todense().astype(np.float32), bins=bins)
+                data_entries_d, bins_d = np.histogram(activity_across_sessions[1][cl]['activity'][:min_total_frame_num].todense().astype(np.float32), bins=bins)
+                ax = plt.subplot(np.floor(np.sqrt(len(all_common_clusters))).astype(np.int32), np.ceil(np.sqrt(len(all_common_clusters))).astype(np.int32), cl_idx+1)
+                ax.plot(bin_centers, data_entries_d, color='#00008B', linewidth=1.5, alpha=.75)
+                ax.plot(bin_centers, data_entries_1, color='#EEC900', linewidth=1.5, alpha=.75)
+                ax.plot(bin_centers, data_entries_2, color='#CD950C', linewidth=1.5, alpha=.75)
+                ax.set_xticks([])
+                ax.set_yticks([])
+                # if cluster_profiles[cl] == 'FS':
+                #     for side in ['bottom', 'top', 'right', 'left']:
+                #         ax.spines[side].set_linewidth(4)
+                #         ax.spines[side].set_color(profile_color)
+                ax.set_title(cl[6:12], fontdict={'fontweight': 'bold', 'fontsize': 8})
+        plt.tight_layout()
+        if self.save_fig:
+            if os.path.exists(self.save_dir):
+                fig.savefig(f'{self.save_dir}{os.sep}spike_count_distributions_{file_animal}_{self.cluster_areas[0]}.{self.fig_format}', dpi=300)
+            else:
+                print("Specified save directory doesn't exist. Try again.")
+                sys.exit()
+        plt.show()
 
