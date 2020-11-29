@@ -12,11 +12,12 @@ import os
 import gc
 import time
 import numpy as np
-from numba import njit
 import neural_activity
 from select_clusters import ClusterFinder
 from sessions2load import Session
 from sklearn import svm
+from tqdm import tqdm
+from numba import njit
 
 
 @njit(parallel=False)
@@ -300,17 +301,17 @@ class Decoder:
         correctly matched stimulus states across the test session. Since the luminance condition didn't
         change within a session, shuffling spike trains would not make sense because even time shifted
         activity, if it's overall lower/higher relative to the other session, would still enable accurate
-        decoding. Instead, we randomly permuted the joint unit activity (half light / half dark) at each
-        time point a 1000 times to obtain the null-distribution of decoded accuracy.
+        decoding. Instead, we randomly permuted the joint unit activity (quarter light / quarter dark) at each
+        training time point a 1000 times in the first run to obtain the null-distribution of decoded accuracy.
 
         NB: To run this we used the following parameters:
-            cluster_areas = ['V'] or ['A']
+            cluster_areas = ['V'] or ['A1']
             cluster_type = 'good'
             to_smooth = True
             smooth_sd = 3
             condense = True
             decoding_cell_number_array = np.array([5, 10, 20, 35, 50])
-            number_of_decoding_per_run = 100 (1000 for shuffling)
+            number_of_decoding_per_run = 100
             pop_vector_decoding = False
         ----------
 
@@ -396,10 +397,13 @@ class Decoder:
 
         # conduct decoding
         decoding_accuracy = np.zeros((self.decoding_cell_number_array.shape[0], self.number_of_decoding_per_run))
-        shuffled_decoding_accuracy = np.zeros((self.decoding_cell_number_array.shape[0], self.number_of_decoding_per_run))
-        for decode_num in range(self.number_of_decoding_per_run):
+        shuffled_decoding_accuracy = np.zeros((self.decoding_cell_number_array.shape[0], self.shuffle_num))
+        for decode_num in tqdm(range(self.number_of_decoding_per_run)):
             for ca_idx, cell_amount in enumerate(self.decoding_cell_number_array):
                 clusters_array = np.zeros((total_frame_num, cell_amount)).astype(np.float32)
+
+                if decode_num == 0:
+                    shuffled_clusters_array = np.zeros((self.shuffle_num, total_frame_num, cell_amount)).astype(np.float32)
 
                 # shuffle cluster names
                 np.random.shuffle(all_clusters)
@@ -421,8 +425,12 @@ class Decoder:
                             clusters_array[fold_edges[condition_type]: fold_edges[condition_type+1], sc_idx] = temp_cl_arr
 
                 # prepare array for shuffling
-                shuffled_clusters_array = clusters_array.copy()
-                np.random.shuffle(shuffled_clusters_array)
+                if decode_num == 0:
+                    copy_clu_train_arr = clusters_array[:middle_change_point, :].copy()
+                    copy_clu_test_arr = clusters_array[middle_change_point:, :].copy()
+                    for shuffle_idx in range(self.shuffle_num):
+                        np.random.shuffle(copy_clu_train_arr)
+                        shuffled_clusters_array[shuffle_idx, :, :] = np.concatenate((copy_clu_train_arr, copy_clu_test_arr))
 
                 if pop_vector_decoding:
                     # go through folds and predict sound
@@ -430,13 +438,20 @@ class Decoder:
                                                                 test_folds=test_indices_for_folds, activity_arr=clusters_array, event_arr=decoding_event_array.copy(),
                                                                 fe=fold_edges, three_sessions=True)
 
-                    shuffle_predicted_condition_events = predict_events(pred_arr_len=total_frame_num-third_durations[2], fold_num=1, train_folds=train_indices_for_folds,
-                                                                        test_folds=test_indices_for_folds, activity_arr=shuffled_clusters_array, event_arr=decoding_event_array.copy(),
-                                                                        fe=fold_edges, three_sessions=True)
+                    if decode_num == 0:
+                        shuffle_predicted_condition_events = np.zeros((total_frame_num, self.shuffle_num))
+                        for sh in range(self.shuffle_num):
+                            shuffle_predicted_condition_events = predict_events(pred_arr_len=total_frame_num-third_durations[2], fold_num=1, train_folds=train_indices_for_folds,
+                                                                                test_folds=test_indices_for_folds, activity_arr=shuffled_clusters_array[sh], event_arr=decoding_event_array.copy(),
+                                                                                fe=fold_edges, three_sessions=True)
 
                     # calculate accuracy and fill in the array
                     decoding_accuracy[ca_idx, decode_num] = ((predicted_condition_events-np.ones(total_frame_num-middle_change_point)) == 0).sum() / predicted_condition_events.shape[0]
-                    shuffled_decoding_accuracy[ca_idx, decode_num] = ((shuffle_predicted_condition_events-np.ones(total_frame_num-middle_change_point)) == 0).sum() / shuffle_predicted_condition_events.shape[0]
+
+                    if decode_num == 0:
+                        for sh_idx in range(self.shuffle_num):
+                            shuffled_decoding_accuracy[ca_idx, decode_num] = ((shuffle_predicted_condition_events[:, sh_idx]-np.ones(total_frame_num-middle_change_point)) == 0).sum() \
+                                                                             / shuffle_predicted_condition_events[:, sh_idx].shape[0]
 
                     # free memory
                     gc.collect()
@@ -456,17 +471,18 @@ class Decoder:
                     decoding_accuracy[ca_idx, decode_num] = ((generated_predictions-np.ones(total_frame_num-middle_change_point)) == 0).sum() / generated_predictions.shape[0]
 
                     # same for shuffling
-                    shuffled_test_arr = shuffled_clusters_array[middle_change_point:, :].copy()
-                    shuffled_train_arr = shuffled_clusters_array[:middle_change_point, :].copy()
-                    shuffled_decoding_event_array_reduced = decoding_event_array[:middle_change_point].copy()
+                    if decode_num == 0:
+                        for sh_idx in range(self.shuffle_num):
+                            shuffled_test_arr = shuffled_clusters_array[sh_idx, middle_change_point:, :].copy()
+                            shuffled_train_arr = shuffled_clusters_array[sh_idx, :middle_change_point, :].copy()
+                            shuffled_decoding_event_array_reduced = decoding_event_array[:middle_change_point].copy()
 
-                    shuffled_condition_model = svm.SVC()
-                    shuffled_condition_model.fit(X=shuffled_train_arr, y=shuffled_decoding_event_array_reduced)
-                    shuffled_generated_predictions = shuffled_condition_model.predict(shuffled_test_arr)
-                    dea_randomized = np.ones(shuffled_generated_predictions.shape[0])
-                    dea_randomized[::4] = 0
+                            shuffled_condition_model = svm.SVC()
+                            shuffled_condition_model.fit(X=shuffled_train_arr, y=shuffled_decoding_event_array_reduced)
+                            shuffled_generated_predictions = shuffled_condition_model.predict(shuffled_test_arr)
+                            dea_randomized = np.ones(shuffled_generated_predictions.shape[0])
 
-                    shuffled_decoding_accuracy[ca_idx, decode_num] = ((shuffled_generated_predictions-dea_randomized) == 0).sum() / shuffled_generated_predictions.shape[0]
+                            shuffled_decoding_accuracy[ca_idx, sh_idx] = ((shuffled_generated_predictions-dea_randomized) == 0).sum() / shuffled_generated_predictions.shape[0]
 
         # save results as .npy files
         np.save(f'{self.save_results_dir}{os.sep}{animal_name}_{decode_what}_decoding_accuracy_{self.cluster_areas[0]}_clusters', decoding_accuracy)
