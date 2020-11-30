@@ -450,8 +450,8 @@ class Decoder:
 
                     if decode_num == 0:
                         for sh_idx in range(self.shuffle_num):
-                            shuffled_decoding_accuracy[ca_idx, decode_num] = ((shuffle_predicted_condition_events[:, sh_idx]-np.ones(total_frame_num-middle_change_point)) == 0).sum() \
-                                                                             / shuffle_predicted_condition_events[:, sh_idx].shape[0]
+                            shuffled_decoding_accuracy[ca_idx, sh_idx] = ((shuffle_predicted_condition_events[:, sh_idx]-np.ones(total_frame_num-middle_change_point)) == 0).sum() \
+                                                                         / shuffle_predicted_condition_events[:, sh_idx].shape[0]
 
                     # free memory
                     gc.collect()

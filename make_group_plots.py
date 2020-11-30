@@ -37,7 +37,7 @@ class PlotGroupResults:
                  bin_size_ms=50, window_size=10, smooth=False, smooth_sd=1, to_plot=False,
                  input_012_list=[], pkl_load_dir='', critical_p_value=.01,
                  profile_colors={'RS': '#698B69', 'FS': '#9BCD9B'}, modulation_indices_dir='',
-                 cluster_areas=['V'], cluster_type=True):
+                 all_animals_012={}):
         self.session_list = session_list
         self.cluster_groups_dir = cluster_groups_dir
         self.sp_profiles_csv = sp_profiles_csv
@@ -58,8 +58,7 @@ class PlotGroupResults:
         self.critical_p_value = critical_p_value
         self.profile_colors = profile_colors
         self.modulation_indices_dir = modulation_indices_dir
-        self.cluster_areas = cluster_areas
-        self.cluster_type = cluster_type
+        self.all_animals_012 = all_animals_012
 
     def sound_modulation_summary(self, **kwargs):
         """
@@ -833,6 +832,10 @@ class PlotGroupResults:
         Parameters
         ----------
         **kwargs (dictionary)
+        get_cl_profiles (bool)
+            Get profiles (RS / FS) of clusters; defaults to False.
+        total_fr_correlations (int)
+            Total number of frames to correlate with; defaults to 1e4.
         ----------
 
         Returns
@@ -842,99 +845,117 @@ class PlotGroupResults:
         ----------
         """
 
-        clusters_across_sessions = {0: [], 1: [], 2: []}
-        for session_id, session in enumerate(self.input_012_list):
-            clusters_across_sessions[session_id] = ClusterFinder(session=session,
-                                                                 cluster_groups_dir=self.cluster_groups_dir,
-                                                                 sp_profiles_csv=self.sp_profiles_csv).get_desired_clusters(filter_by_cluster_type=self.cluster_type,
-                                                                                                                            filter_by_area=self.cluster_areas)
+        get_cl_profiles = kwargs['get_cl_profiles'] if 'get_cl_profiles' in kwargs.keys() and type(kwargs['get_cl_profiles']) == bool else False
+        total_fr_correlations = kwargs['total_fr_correlations'] if 'total_fr_correlations' in kwargs.keys() and type(kwargs['total_fr_correlations']) == int else 10000
 
-        all_common_clusters = list(set(clusters_across_sessions[0]).intersection(clusters_across_sessions[1], clusters_across_sessions[2]))
+        clusters_across_sessions = {}
+        all_common_clusters = {}
+        for animal in self.all_animals_012.keys():
+            clusters_across_sessions[animal] = {0: [], 1: [], 2: []}
+            for session_id, session in enumerate(self.all_animals_012[animal]):
+                clusters_across_sessions[animal][session_id] = ClusterFinder(session=session,
+                                                                             cluster_groups_dir=self.cluster_groups_dir,
+                                                                             sp_profiles_csv=self.sp_profiles_csv).get_desired_clusters(filter_by_cluster_type=self.relevant_cluster_types,
+                                                                                                                                        filter_by_area=self.relevant_areas)
 
-        activity_across_sessions = {0: {}, 1: {}, 2: {}}
-        for session_id, session in enumerate(self.input_012_list):
-            the_session, activity_dictionary, purged_spikes_dict = Spikes(input_file=session).convert_activity_to_frames_with_shuffles(get_clusters=all_common_clusters,
-                                                                                                                                       to_shuffle=False,
-                                                                                                                                       condense_arr=True)
-            activity_across_sessions[session_id] = activity_dictionary
+            all_common_clusters[animal] = list(set(clusters_across_sessions[animal][0]).intersection(clusters_across_sessions[animal][1], clusters_across_sessions[animal][2]))
 
-        file_animal = [animal for animal in ClusterFinder.probe_site_areas.keys() if animal in self.input_012_list[0]][0]
-        file_bank = [bank for bank in ['distal', 'intermediate'] if bank in self.input_012_list[0]][0]
-        get_date_idx = [date.start() for date in re.finditer('20', self.input_012_list[0])][-1]
-        file_date = self.input_012_list[0][get_date_idx-4:get_date_idx+2]
-        cluster_profiles = get_cluster_spiking_profiles(cluster_list=all_common_clusters, recording_day=f'{file_animal}_{file_date}_{file_bank}', sp_profiles_csv=self.sp_profiles_csv)
+        print(len(all_common_clusters['kavorka']), len(all_common_clusters['frank']), len(all_common_clusters['johnjohn']))
 
-        zero_ses_name, zero_extracted_frame_info = Session(session=self.input_012_list[0]).data_loader(extract_variables=['total_frame_num'])
-        first_ses_name, first_extracted_frame_info = Session(session=self.input_012_list[1]).data_loader(extract_variables=['total_frame_num'])
-        second_ses_name, second_extracted_frame_info = Session(session=self.input_012_list[2]).data_loader(extract_variables=['total_frame_num'])
-        min_total_frame_num = np.array([zero_extracted_frame_info['total_frame_num'],
-                                        first_extracted_frame_info['total_frame_num'],
-                                        second_extracted_frame_info['total_frame_num']]).min() // int(120. * (100 / 1e3))
+        activity_across_sessions = {}
+        for animal in self.all_animals_012.keys():
+            activity_across_sessions[animal] = {0: {}, 1: {}, 2: {}}
+            for session_id, session in enumerate(self.all_animals_012[animal]):
+                the_session, activity_dictionary, purged_spikes_dict = Spikes(input_file=session).convert_activity_to_frames_with_shuffles(get_clusters=all_common_clusters[animal],
+                                                                                                                                           to_shuffle=False,
+                                                                                                                                           condense_arr=True)
+                activity_across_sessions[animal][session_id] = activity_dictionary
 
-        # make spike count distributions figure
-        activity_arrays = {0: np.zeros((min_total_frame_num, len(all_common_clusters))),
-                           1: np.zeros((min_total_frame_num, len(all_common_clusters))),
-                           2: np.zeros((min_total_frame_num, len(all_common_clusters)))}
-        row_num = np.floor(np.sqrt(len(all_common_clusters))).astype(np.int32)
-        col_num = np.ceil(np.sqrt(len(all_common_clusters))).astype(np.int32)
-        fig, ax = plt.subplots(nrows=row_num, ncols=col_num, figsize=(15, 15))
-        bins = np.arange(0, 10, 1)
-        bin_centers = np.array([0.5 * (bins[i] + bins[i + 1]) for i in range(len(bins) - 1)])
-        for cl_idx, cl in enumerate(all_common_clusters):
-            if True:
-                # if cluster_profiles[cl] == 'RS':
-                #     profile_color = '#698B69'
-                # else:
-                #     profile_color = '#9BCD9B'
-                activity_0 = activity_across_sessions[0][cl]['activity'][:min_total_frame_num].todense().astype(np.float32)
-                activity_arrays[0][:, cl_idx] = activity_0
-                activity_1 = activity_across_sessions[2][cl]['activity'][:min_total_frame_num].todense().astype(np.float32)
-                activity_arrays[1][:, cl_idx] = activity_1
-                activity_2 = activity_across_sessions[1][cl]['activity'][:min_total_frame_num].todense().astype(np.float32)
-                activity_arrays[2][:, cl_idx] = activity_2
-                data_entries_1, bins_1 = np.histogram(activity_0, bins=bins)
-                data_entries_2, bins_2 = np.histogram(activity_1, bins=bins)
-                data_entries_d, bins_d = np.histogram(activity_2, bins=bins)
-                ax = plt.subplot(row_num, col_num, cl_idx+1)
-                ax.plot(bin_centers, data_entries_d, color='#00008B', linewidth=1.5, alpha=.75)
-                ax.plot(bin_centers, data_entries_1, color='#EEC900', linewidth=1.5, alpha=.75)
-                ax.plot(bin_centers, data_entries_2, color='#CD950C', linewidth=1.5, alpha=.75)
-                ax.set_xticks([])
-                ax.set_yticks([])
-                # if cluster_profiles[cl] == 'FS':
-                #     for side in ['bottom', 'top', 'right', 'left']:
-                #         ax.spines[side].set_linewidth(4)
-                #         ax.spines[side].set_color(profile_color)
-                ax.set_title(cl[6:12], fontdict={'fontweight': 'bold', 'fontsize': 8})
-        plt.tight_layout()
-        if self.save_fig:
-            if os.path.exists(self.save_dir):
-                fig.savefig(f'{self.save_dir}{os.sep}spike_count_distributions_{file_animal}_{self.cluster_areas[0]}.{self.fig_format}', dpi=300)
-            else:
-                print("Specified save directory doesn't exist. Try again.")
-                sys.exit()
-        plt.show()
+        if get_cl_profiles:
+            cluster_profiles = {}
+            for animal in self.all_animals_012.keys():
+                file_bank = [bank for bank in ['distal', 'intermediate'] if bank in self.all_animals_012[animal][0]][0]
+                get_date_idx = [date.start() for date in re.finditer('20', self.all_animals_012[animal][0])][-1]
+                file_date = self.all_animals_012[animal][0][get_date_idx-4:get_date_idx+2]
+                cluster_profiles[animal] = get_cluster_spiking_profiles(cluster_list=all_common_clusters[animal], recording_day=f'{animal}_{file_date}_{file_bank}', sp_profiles_csv=self.sp_profiles_csv)
+
+        activity_arrays = {}
+        for animal in self.all_animals_012.keys():
+            zero_ses_name, zero_extracted_frame_info = Session(session=self.all_animals_012[animal][0]).data_loader(extract_variables=['total_frame_num'])
+            first_ses_name, first_extracted_frame_info = Session(session=self.all_animals_012[animal][1]).data_loader(extract_variables=['total_frame_num'])
+            second_ses_name, second_extracted_frame_info = Session(session=self.all_animals_012[animal][2]).data_loader(extract_variables=['total_frame_num'])
+            min_total_frame_num = np.array([zero_extracted_frame_info['total_frame_num'],
+                                            first_extracted_frame_info['total_frame_num'],
+                                            second_extracted_frame_info['total_frame_num']]).min() // int(120. * (100 / 1e3))
+
+            # make spike count distributions figure
+            activity_arrays[animal] = {0: np.zeros((min_total_frame_num, len(all_common_clusters[animal]))),
+                                       1: np.zeros((min_total_frame_num, len(all_common_clusters[animal]))),
+                                       2: np.zeros((min_total_frame_num, len(all_common_clusters[animal])))}
+            row_num = np.ceil(np.sqrt(len(all_common_clusters[animal]))).astype(np.int32)
+            col_num = np.ceil(np.sqrt(len(all_common_clusters[animal]))).astype(np.int32)
+            fig, ax = plt.subplots(nrows=row_num, ncols=col_num, figsize=(15, 15))
+            bins = np.arange(0, 10, 1)
+            bin_centers = np.array([0.5 * (bins[i] + bins[i + 1]) for i in range(len(bins) - 1)])
+            for cl_idx, cl in enumerate(all_common_clusters[animal]):
+                if True:
+                    if get_cl_profiles:
+                        if cluster_profiles[cl] == 'RS':
+                            profile_color = '#698B69'
+                        else:
+                            profile_color = '#9BCD9B'
+                    activity_0 = activity_across_sessions[animal][0][cl]['activity'][:min_total_frame_num].todense().astype(np.float32)
+                    activity_arrays[animal][0][:, cl_idx] = activity_0
+                    activity_1 = activity_across_sessions[animal][1][cl]['activity'][:min_total_frame_num].todense().astype(np.float32)
+                    activity_arrays[animal][1][:, cl_idx] = activity_1
+                    activity_2 = activity_across_sessions[animal][2][cl]['activity'][:min_total_frame_num].todense().astype(np.float32)
+                    activity_arrays[animal][2][:, cl_idx] = activity_2
+                    data_entries_1, bins_1 = np.histogram(activity_0, bins=bins)
+                    data_entries_2, bins_2 = np.histogram(activity_2, bins=bins)
+                    data_entries_d, bins_d = np.histogram(activity_1, bins=bins)
+                    ax = plt.subplot(row_num, col_num, cl_idx+1)
+                    ax.plot(bin_centers, data_entries_d, color='#00008B', linewidth=1.5, alpha=.75)
+                    ax.plot(bin_centers, data_entries_1, color='#EEC900', linewidth=1.5, alpha=.75)
+                    ax.plot(bin_centers, data_entries_2, color='#CD950C', linewidth=1.5, alpha=.75)
+                    ax.set_xticks([])
+                    ax.set_yticks([])
+                    if get_cl_profiles:
+                        if cluster_profiles[cl] == 'FS':
+                            for side in ['bottom', 'top', 'right', 'left']:
+                                ax.spines[side].set_linewidth(4)
+                                ax.spines[side].set_color(profile_color)
+                    ax.set_title(cl[6:12], fontdict={'fontweight': 'bold', 'fontsize': 8})
+            plt.tight_layout()
+            if self.save_fig:
+                if os.path.exists(self.save_dir):
+                    fig.savefig(f'{self.save_dir}{os.sep}spike_count_distributions_{animal}_{self.relevant_areas[0]}.{self.fig_format}', dpi=300)
+                else:
+                    print("Specified save directory doesn't exist. Try again.")
+                    sys.exit()
+            plt.show()
 
         # make population vector correlation plot
-        correlations_0 = np.zeros(min_total_frame_num)
-        correlations_1 = np.zeros(min_total_frame_num)
-        for frame in tqdm(range(min_total_frame_num)):
-            correlations_0[frame] = pearsonr(activity_arrays[2][frame, :], activity_arrays[0].mean(axis=0))[0]
-            correlations_1[frame] = pearsonr(activity_arrays[2][frame, :], activity_arrays[1].mean(axis=0))[0]
+        for animal_idx, animal in enumerate(self.all_animals_012.keys()):
+            correlations_0 = np.zeros(total_fr_correlations)
+            correlations_1 = np.zeros(total_fr_correlations)
+            for frame in tqdm(range(total_fr_correlations)):
+                correlations_0[frame] = pearsonr(activity_arrays[animal][2][frame, :], activity_arrays[animal][0].mean(axis=0))[0]
+                correlations_1[frame] = pearsonr(activity_arrays[animal][2][frame, :], activity_arrays[animal][1].mean(axis=0))[0]
 
-        bins2 = np.linspace(-0.1, 1, 100)
-        fig2 = plt.figure(figsize=(5, 5))
-        ax2 = fig2.add_subplot(111)
-        ax2.hist(correlations_1, bins2, density=True, alpha=0.5, label='Dark', color='#00008B')
-        ax2.hist(correlations_0, bins2, density=True, alpha=0.5, label='Light 1', color='#EEC900')
-        ax2.legend(loc='upper left')
-        ax2.set_xlabel('Correlation')
-        ax2.set_ylabel('Probability density')
-        if self.save_fig:
-            if os.path.exists(self.save_dir):
-                fig2.savefig(f'{self.save_dir}{os.sep}population_vector_correlations_{file_animal}_{self.cluster_areas[0]}.{self.fig_format}', dpi=300)
-            else:
-                print("Specified save directory doesn't exist. Try again.")
-                sys.exit()
-        plt.show()
+            bins2 = np.linspace(-0.1, 1, 100)
+            fig2 = plt.figure(figsize=(5, 5))
+            ax2 = fig2.add_subplot(111)
+            ax2.hist(correlations_1, bins2, density=True, alpha=0.5, label='Dark', color='#00008B')
+            ax2.hist(correlations_0, bins2, density=True, alpha=0.5, label='Light 1', color='#EEC900')
+            ax2.legend(loc='upper left')
+            ax2.set_xlabel('Correlation')
+            ax2.set_ylabel('Probability density')
+            ax2.set_title(animal)
+            if self.save_fig:
+                if os.path.exists(self.save_dir):
+                    fig2.savefig(f'{self.save_dir}{os.sep}population_vector_correlations_{animal}_{self.relevant_areas[0]}.{self.fig_format}', dpi=300)
+                else:
+                    print("Specified save directory doesn't exist. Try again.")
+                    sys.exit()
+            plt.show()
 
