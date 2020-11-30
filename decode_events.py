@@ -312,7 +312,7 @@ class Decoder:
             condense = True
             decoding_cell_number_array = np.array([5, 10, 20, 35, 50])
             number_of_decoding_per_run = 100
-            pop_vector_decoding = False
+            pop_vector_decoding = True
         ----------
 
         Parameters
@@ -439,11 +439,11 @@ class Decoder:
                                                                 fe=fold_edges, three_sessions=True)
 
                     if decode_num == 0:
-                        shuffle_predicted_condition_events = np.zeros((total_frame_num, self.shuffle_num))
+                        shuffle_predicted_condition_events = np.zeros((total_frame_num-third_durations[2], self.shuffle_num))
                         for sh in range(self.shuffle_num):
-                            shuffle_predicted_condition_events = predict_events(pred_arr_len=total_frame_num-third_durations[2], fold_num=1, train_folds=train_indices_for_folds,
-                                                                                test_folds=test_indices_for_folds, activity_arr=shuffled_clusters_array[sh], event_arr=decoding_event_array.copy(),
-                                                                                fe=fold_edges, three_sessions=True)
+                            shuffle_predicted_condition_events[:, sh] = predict_events(pred_arr_len=total_frame_num-third_durations[2], fold_num=1, train_folds=train_indices_for_folds,
+                                                                                       test_folds=test_indices_for_folds, activity_arr=shuffled_clusters_array[sh], event_arr=decoding_event_array.copy(),
+                                                                                       fe=fold_edges, three_sessions=True)
 
                     # calculate accuracy and fill in the array
                     decoding_accuracy[ca_idx, decode_num] = ((predicted_condition_events-np.ones(total_frame_num-middle_change_point)) == 0).sum() / predicted_condition_events.shape[0]
