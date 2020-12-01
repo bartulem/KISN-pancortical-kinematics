@@ -439,7 +439,7 @@ class Decoder:
                                                                 fe=fold_edges, three_sessions=True)
 
                     if decode_num == 0:
-                        shuffle_predicted_condition_events = np.zeros((total_frame_num-third_durations[2], self.shuffle_num))
+                        shuffle_predicted_condition_events = np.zeros((total_frame_num-middle_change_point, self.shuffle_num))
                         for sh in range(self.shuffle_num):
                             shuffle_predicted_condition_events[:, sh] = predict_events(pred_arr_len=total_frame_num-third_durations[2], fold_num=1, train_folds=train_indices_for_folds,
                                                                                        test_folds=test_indices_for_folds, activity_arr=shuffled_clusters_array[sh], event_arr=decoding_event_array.copy(),
