@@ -698,10 +698,10 @@ class PlotGroupResults:
         ax[0].errorbar(x=x_values, y=plot_data['A']['decoding_accuracy']['mean']['johnjohn'], yerr=plot_data['A']['decoding_accuracy']['sem']['johnjohn'] * z_value_sem,
                        color='#000000', fmt='-s', label=f"#{self.animal_ids['johnjohn']}")
         ax[0].fill_between(x=x_values, y1=plot_data['A']['shuffled'][:, 0], y2=plot_data['A']['shuffled'][:, 1], color='grey', alpha=.25)
-        ax[0].set_ylim(.35, 1)
+        ax[0].set_ylim(.3, 1)
         ax[0].set_xlim(0)
         ax[0].legend()
-        ax[0].set_title('A units')
+        ax[0].set_title('A1 units')
         ax[0].set_xlabel('Number of units')
         ax[0].set_ylabel('Decoding accuracy')
 
@@ -712,7 +712,7 @@ class PlotGroupResults:
         ax[1].errorbar(x=x_values, y=plot_data['V']['decoding_accuracy']['mean']['johnjohn'], yerr=plot_data['V']['decoding_accuracy']['sem']['johnjohn'] * z_value_sem,
                        color='#000000', fmt='-s', label=f"#{self.animal_ids['johnjohn']}")
         ax[1].fill_between(x=x_values, y1=plot_data['V']['shuffled'][:, 0], y2=plot_data['V']['shuffled'][:, 1], color='#808080', alpha=.25)
-        ax[1].set_ylim(.35, 1)
+        ax[1].set_ylim(.3, 1)
         ax[1].set_xlim(0)
         ax[1].legend()
         ax[1].set_title('V units')
