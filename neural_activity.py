@@ -505,7 +505,7 @@ class Spikes:
         ----------
         This method converts cluster spiking activity into trains that match the tracking
         resolution, as spikes are allocated to appropriate frames. It returns such spike
-        trains both for ture and shuffled data.
+        trains both for true and shuffled data.
         ----------
 
         Parameters
