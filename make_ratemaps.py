@@ -82,11 +82,20 @@ class Ratemap:
             The minimum acceptable occupancy; defaults to 0.4 (ms).
         use_smoothed_rm (bool)
             Use smoothed firing rates to make ratemaps; defaults to False.
+        doctor (list / bool)
+            Doctor the figure to a specified range; defaults to False.
+
+        Returns
+        ----------
+        ratemap (fig)
+            A ratemap for a given cell/feature across all desired sessions.
+        ----------
         """
 
         use_smoothed_occ = 6 if 'use_smoothed_occ' in kwargs.keys() and kwargs['use_smoothed_occ'] is True else 2
         min_acceptable_occ = kwargs['min_acceptable_occ'] if 'min_acceptable_occ' in kwargs.keys() and type(kwargs['min_acceptable_occ']) == float else 0.4
         use_smoothed_rm = 3 if 'use_smoothed_rm' in kwargs.keys() and kwargs['use_smoothed_rm'] is True else 1
+        doctor = kwargs['doctor'] if 'doctor' in kwargs.keys() and type(kwargs['doctor']) == list else False
 
         file_names = []
         if os.path.exists(self.ratemap_mat_dir):
@@ -102,11 +111,14 @@ class Ratemap:
 
         # get ranges with sufficient occupancy
         good_ranges = {}
+        total_x_range = 0
         for file_idx, chosen_file in enumerate(sorted(file_names)):
             chosen_file_mat = sio.loadmat(f'{self.ratemap_mat_dir}{os.sep}{chosen_file}')
             for feature_key in chosen_file_mat.keys():
                 if self.feature_filter['feature'] in feature_key and 'data' in feature_key:
                     good_ranges[file_idx] = [idx for idx, occ in enumerate(chosen_file_mat[feature_key][use_smoothed_occ, :]) if occ > min_acceptable_occ]
+                    if type(total_x_range) != np.ndarray:
+                        total_x_range = chosen_file_mat[feature_key][0, :]
                     break
 
         # find overlap of good bins between sessions
@@ -118,6 +130,9 @@ class Ratemap:
             indices_intersection = sorted(list(set(good_ranges[0]) & set(good_ranges[1]) & set(good_ranges[2])), key=int)
         elif len(good_ranges.keys()) == 4:
             indices_intersection = sorted(list(set(good_ranges[0]) & set(good_ranges[1]) & set(good_ranges[2]) & set(good_ranges[3])), key=int)
+
+        if type(doctor) == list:
+            indices_intersection = np.where((total_x_range >= doctor[0]) & (total_x_range <= doctor[1]))[0]
 
         # get ratemap and shuffled low/high values for plotting
         rm_to_plot = {}
