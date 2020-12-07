@@ -154,6 +154,7 @@ class Ratemap:
         for one_feature in self.feature_colors.keys():
             if one_feature in self.feature_filter['feature']:
                 designated_color = self.feature_colors[one_feature]
+                break
 
         col_num = len(rm_to_plot.keys())
         fig, ax = plt.subplots(nrows=1, ncols=col_num, figsize=(4.3*col_num, 3.3))
