@@ -34,17 +34,23 @@ import matplotlib.pyplot as plt
 
 
 class Ratemap:
-    feature_colors = {'Allo_head_pitch-': '#C91517',
-                      'Allo_head_azimuth-': '#ED6C6D',
-                      'Allo_head_roll-': '#F1A6B1',
-                      'Back_pitch-': '#3052A0',
-                      'Back_azimuth-': '#77AEDF',
-                      'Neck_elevation-': '#F07F00'}
+    feature_colors = {'Allo_head_pitch': '#C91517',
+                      'Allo_head_azimuth': '#ED6C6D',
+                      'Allo_head_roll': '#F1A6B1',
+                      'Back_pitch': '#3052A0',
+                      'Back_azimuth': '#77AEDF',
+                      'Neck_elevation': '#F07F00'}
 
-    def __init__(self, ratemap_mat_dir='', animals=['bruno', 'johnjohn', 'roy', 'frank', 'jacopo', 'crazyjoe', 'kavorka'],
-                 session_type_labels=['light', 'dark', 'weight', 'sound'],
-                 session_num_labels=['s1', 's2', 's3', 's4', 's5', 's6'],
+    def __init__(self, ratemap_mat_dir='', animals=None,
+                 session_type_labels=None,
+                 session_num_labels=None,
                  save_fig=False, fig_format='png', save_dir='/home/bartulm/Downloads', feature_filter=None):
+        if session_num_labels is None:
+            session_num_labels = ['s1', 's2', 's3', 's4', 's5', 's6']
+        if session_type_labels is None:
+            session_type_labels = ['light', 'dark', 'weight', 'sound']
+        if animals is None:
+            animals = ['bruno', 'johnjohn', 'roy', 'frank', 'jacopo', 'crazyjoe', 'kavorka']
         if feature_filter is None:
             feature_filter = {'cell_id': '',
                               'animal_id': '',
@@ -143,11 +149,17 @@ class Ratemap:
         file_bank = [bank for bank in ['distal', 'intermediate'] if bank in file_names[0]][0]
         get_date_idx = [date.start() for date in re.finditer('20', file_names[0])][-1]
         file_date = file_names[0][get_date_idx-4:get_date_idx+2]
+
+        # determine ratemap color
+        for one_feature in self.feature_colors.keys():
+            if one_feature in self.feature_filter['feature']:
+                designated_color = self.feature_colors[one_feature]
+
         col_num = len(rm_to_plot.keys())
         fig, ax = plt.subplots(nrows=1, ncols=col_num, figsize=(4.3*col_num, 3.3))
         for data_idx, data in enumerate(rm_to_plot.keys()):
             ax = plt.subplot(1, col_num, data_idx+1)
-            ax.plot(rm_to_plot[data]['x'], rm_to_plot[data]['rm'], ls='-', color=self.feature_colors[self.feature_filter['feature']], lw=3)
+            ax.plot(rm_to_plot[data]['x'], rm_to_plot[data]['rm'], ls='-', color=designated_color, lw=3)
             ax.fill_between(rm_to_plot[data]['x'], rm_to_plot[data]['shuffled']['down'], rm_to_plot[data]['shuffled']['up'],
                             where=rm_to_plot[data]['shuffled']['up'] >= rm_to_plot[data]['shuffled']['down'], facecolor='#D3D3D3', interpolate=True)
             ax.set_yticks(np.arange(0, max(rm_to_plot[data]['rm']) + 2, max(rm_to_plot[data]['rm']) + 1, dtype='int'))
