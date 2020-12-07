@@ -163,7 +163,8 @@ class Ratemap:
             ax.plot(rm_to_plot[data]['x'], rm_to_plot[data]['rm'], ls='-', color=designated_color, lw=3)
             ax.fill_between(rm_to_plot[data]['x'], rm_to_plot[data]['shuffled']['down'], rm_to_plot[data]['shuffled']['up'],
                             where=rm_to_plot[data]['shuffled']['up'] >= rm_to_plot[data]['shuffled']['down'], facecolor='#D3D3D3', interpolate=True)
-            ax.set_yticks(np.arange(0, max(rm_to_plot[data]['rm']) + 2, max(rm_to_plot[data]['rm']) + 1, dtype='int'))
+            global_max = max([max(rm_to_plot[data]['rm']), max(rm_to_plot[data]['shuffled']['up'])])
+            ax.set_yticks(np.arange(0, global_max + 2, global_max + 1, dtype='int'))
             ax.yaxis.set_ticks_position('none')
             ax.set_xticks([min(rm_to_plot[data]['x']), max(rm_to_plot[data]['x'])])
             ax.set_title(data)
