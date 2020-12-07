@@ -117,15 +117,10 @@ class Ratemap:
         rm_to_plot = {}
         for file_idx, chosen_file in enumerate(sorted(file_names)):
             # get file id in order
-            file_animal = [animal for animal in self.animals if animal in chosen_file][0]
-            file_bank = [bank for bank in ['distal', 'intermediate'] if bank in chosen_file][0]
-            get_date_idx = [date.start() for date in re.finditer('20', chosen_file)][-1]
-            file_date = chosen_file[get_date_idx-4:get_date_idx+2]
             file_session_label = [label for label in self.session_type_labels if label in chosen_file][0]
             file_session_num = [num for num in self.session_num_labels if num in chosen_file][0]
-            cl_id = self.feature_filter['cell_id']
 
-            plot_id = f'{file_animal}_{file_date}_{file_bank}_{file_session_label}_{file_session_num}_{cl_id}'
+            plot_id = f'{file_session_label}_{file_session_num}'
 
             rm_to_plot[plot_id] = {'x': np.array([]), 'rm': np.array([]), 'shuffled': {'up': np.array([]), 'down': np.array([])}}
 
@@ -144,6 +139,10 @@ class Ratemap:
         # plot
         cl_name = self.feature_filter['cell_id']
         feature_name = self.feature_filter['feature']
+        file_animal = [animal for animal in self.animals if animal in file_names[0]][0]
+        file_bank = [bank for bank in ['distal', 'intermediate'] if bank in file_names[0]][0]
+        get_date_idx = [date.start() for date in re.finditer('20', file_names[0])][-1]
+        file_date = file_names[0][get_date_idx-4:get_date_idx+2]
         col_num = len(rm_to_plot.keys())
         fig, ax = plt.subplots(nrows=1, ncols=col_num, figsize=(4.3*col_num, 3.3))
         for data_idx, data in enumerate(rm_to_plot.keys()):
@@ -157,7 +156,7 @@ class Ratemap:
             ax.set_title(data)
         if self.save_fig:
             if os.path.exists(self.save_dir):
-                fig.savefig(f'{self.save_dir}{os.sep}{cl_name}_{feature_name}.{self.fig_format}', dpi=300)
+                fig.savefig(f'{self.save_dir}{os.sep}{file_animal}_{file_bank}_{file_date}_{cl_name}_{feature_name}.{self.fig_format}', dpi=300)
             else:
                 print("Specified save directory doesn't exist. Try again.")
                 sys.exit()
