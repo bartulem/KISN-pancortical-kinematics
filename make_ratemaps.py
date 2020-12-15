@@ -84,6 +84,11 @@ class Ratemap:
             Use smoothed firing rates to make ratemaps; defaults to False.
         doctor (list / bool)
             Doctor the figure to a specified range; defaults to False.
+        plot_halves (bool)
+            Instead of the whole session, plot both halves; defaults to False.
+        use_smoothed_halves (bool)
+            Use smoothed firing rates to make ratemaps for session halves; defaults to False.
+        ----------
 
         Returns
         ----------
@@ -96,6 +101,8 @@ class Ratemap:
         min_acceptable_occ = kwargs['min_acceptable_occ'] if 'min_acceptable_occ' in kwargs.keys() and type(kwargs['min_acceptable_occ']) == float else 0.4
         use_smoothed_rm = 3 if 'use_smoothed_rm' in kwargs.keys() and kwargs['use_smoothed_rm'] is True else 1
         doctor = kwargs['doctor'] if 'doctor' in kwargs.keys() and type(kwargs['doctor']) == list else False
+        plot_halves = kwargs['plot_halves'] if 'plot_halves' in kwargs.keys() and type(kwargs['plot_halves']) == bool else False
+        use_smoothed_halves = [8, 12] if 'use_smoothed_halves' in kwargs.keys() and kwargs['use_smoothed_halves'] is True else [7, 11]
 
         file_names = []
         if os.path.exists(self.ratemap_mat_dir):
@@ -130,6 +137,12 @@ class Ratemap:
             indices_intersection = sorted(list(set(good_ranges[0]) & set(good_ranges[1]) & set(good_ranges[2])), key=int)
         elif len(good_ranges.keys()) == 4:
             indices_intersection = sorted(list(set(good_ranges[0]) & set(good_ranges[1]) & set(good_ranges[2]) & set(good_ranges[3])), key=int)
+        elif len(good_ranges.keys()) == 5:
+            indices_intersection = sorted(list(set(good_ranges[0]) & set(good_ranges[1])
+                                               & set(good_ranges[2]) & set(good_ranges[3]) & set(good_ranges[4]) & set(good_ranges[5])), key=int)
+        elif len(good_ranges.keys()) == 6:
+            indices_intersection = sorted(list(set(good_ranges[0]) & set(good_ranges[1])
+                                               & set(good_ranges[2]) & set(good_ranges[3]) & set(good_ranges[4]) & set(good_ranges[5]) & set(good_ranges[6])), key=int)
 
         if type(doctor) == list:
             indices_intersection = np.where((total_x_range >= doctor[0]) & (total_x_range <= doctor[1]))[0]
@@ -143,7 +156,7 @@ class Ratemap:
 
             plot_id = f'{file_session_label}_{file_session_num}'
 
-            rm_to_plot[plot_id] = {'x': np.array([]), 'rm': np.array([]), 'shuffled': {'up': np.array([]), 'down': np.array([])}}
+            rm_to_plot[plot_id] = {'x': np.array([]), 'rm': np.array([]), '1h_rm': np.array([]), '2h_rm': np.array([]), 'shuffled': {'up': np.array([]), 'down': np.array([])}}
 
             # load the data
             chosen_file_mat = sio.loadmat(f'{self.ratemap_mat_dir}{os.sep}{chosen_file}')
@@ -151,6 +164,9 @@ class Ratemap:
                 if self.feature_filter['feature'] in feature_key and 'data' in feature_key:
                     rm_to_plot[plot_id]['x'] = chosen_file_mat[feature_key][0, :].take(indices=indices_intersection)
                     rm_to_plot[plot_id]['rm'] = chosen_file_mat[feature_key][use_smoothed_rm, :].take(indices=indices_intersection)
+
+                    rm_to_plot[plot_id]['1h_rm'] = chosen_file_mat[feature_key][use_smoothed_halves[0], :].take(indices=indices_intersection)
+                    rm_to_plot[plot_id]['2h_rm'] = chosen_file_mat[feature_key][use_smoothed_halves[1], :].take(indices=indices_intersection)
 
                     shuffled_key = feature_key.replace('data', 'rawacc_shuffles')
                     rm_to_plot[plot_id]['shuffled']['down'] = np.percentile(chosen_file_mat[shuffled_key].take(indices=indices_intersection, axis=0), q=.5, axis=1)
@@ -175,7 +191,11 @@ class Ratemap:
         fig, ax = plt.subplots(nrows=1, ncols=col_num, figsize=(4.3*col_num, 3.3))
         for data_idx, data in enumerate(rm_to_plot.keys()):
             ax = plt.subplot(1, col_num, data_idx+1)
-            ax.plot(rm_to_plot[data]['x'], rm_to_plot[data]['rm'], ls='-', color=designated_color, lw=3)
+            if plot_halves:
+                ax.plot(rm_to_plot[data]['x'], rm_to_plot[data]['1h_rm'], ls='--', lw=3, color=designated_color)
+                ax.plot(rm_to_plot[data]['x'], rm_to_plot[data]['2h_rm'], ls=':', lw=3, color=designated_color)
+            else:
+                ax.plot(rm_to_plot[data]['x'], rm_to_plot[data]['rm'], ls='-', color=designated_color, lw=3)
             ax.fill_between(rm_to_plot[data]['x'], rm_to_plot[data]['shuffled']['down'], rm_to_plot[data]['shuffled']['up'],
                             where=rm_to_plot[data]['shuffled']['up'] >= rm_to_plot[data]['shuffled']['down'], facecolor='#D3D3D3', interpolate=True)
             global_max = max([max(rm_to_plot[data]['rm']), max(rm_to_plot[data]['shuffled']['up'])])
