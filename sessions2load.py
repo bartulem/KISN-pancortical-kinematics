@@ -54,7 +54,7 @@ class Session:
                  'neck_2nd_der': {'type': 'np.ndarray (total frame number, )', 'description': 'Second derivative of neck elevation.'},
                  'allo_head_1st_der': {'type': 'np.ndarray (total frame number, 3)', 'description': 'First derivative of allocentric head angles: roll (X), pitch (Y) and azimuth (Z).'},
                  'allo_head_2nd_der': {'type': 'np.ndarray (total frame number, 3)', 'description': 'Second derivative of allocentric head angles: roll (X), pitch (Y) and azimuth (Z).'},
-                 'bodydir_1sr_der': {'type': 'np.ndarray (total frame number, )', 'description': 'Allocentric body direction first derivative.'},
+                 'bodydir_1st_der': {'type': 'np.ndarray (total frame number, )', 'description': 'Allocentric body direction first derivative.'},
                  'bodydir_2nd_der': {'type': 'np.ndarray (total frame number, )', 'description': 'Allocentric body direction second derivative.'},
                  'ego3_head_1st_der': {'type': 'np.ndarray (total frame number, 3)', 'description': 'First derivative of 3D egocentric head angles: roll (X), pitch (Y) and azimuth (Z).'},
                  'ego3_head_2nd_der': {'type': 'np.ndarray (total frame number, 3)', 'description': 'Second derivative of 3D egocentric head angles: roll (X), pitch (Y) and azimuth (Z).'},
