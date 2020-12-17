@@ -124,7 +124,10 @@ class ClusterFinder:
 
                     # get animal name, bank id and date of session
                     file_animal = [name for name in ClusterFinder.probe_site_areas.keys() if name in file_info][0]
-                    file_bank = [bank for bank in ['distal', 'intermediate'] if bank in file_info][0]
+                    if file_animal == 'bruno':
+                        file_bank = 'distal'
+                    else:
+                        file_bank = [bank for bank in ['distal', 'intermediate'] if bank in file_info][0]
                     get_date_idx = [date.start() for date in re.finditer('20', file_info)][-1]
                     file_date = file_info[get_date_idx-4:get_date_idx+2]
 

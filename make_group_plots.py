@@ -32,12 +32,18 @@ from define_spiking_profile import get_cluster_spiking_profiles
 class PlotGroupResults:
     def __init__(self, session_list=[], cluster_groups_dir='', sp_profiles_csv='',
                  save_fig=False, fig_format='png', save_dir='/home/bartulm/Downloads',
-                 decoding_dir='', animal_ids={'frank': '26473', 'johnjohn': '26471', 'kavorka': '26525'},
-                 relevant_areas=['A'], relevant_cluster_types='good',
+                 decoding_dir='', animal_ids=None,
+                 relevant_areas=None, relevant_cluster_types='good',
                  bin_size_ms=50, window_size=10, smooth=False, smooth_sd=1, to_plot=False,
                  input_012_list=[], pkl_load_dir='', critical_p_value=.01,
-                 profile_colors={'RS': '#698B69', 'FS': '#9BCD9B'}, modulation_indices_dir='',
+                 profile_colors=None, modulation_indices_dir='',
                  all_animals_012={}):
+        if relevant_areas is None:
+            relevant_areas = ['A']
+        if animal_ids is None:
+            animal_ids = {'frank': '26473', 'johnjohn': '26471', 'kavorka': '26525'}
+        if profile_colors is None:
+            profile_colors = {'RS': '#698B69', 'FS': '#9BCD9B'}
         self.session_list = session_list
         self.cluster_groups_dir = cluster_groups_dir
         self.sp_profiles_csv = sp_profiles_csv
