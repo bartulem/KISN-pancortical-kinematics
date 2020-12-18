@@ -13,7 +13,29 @@ import sys
 import numpy as np
 import scipy.io as sio
 from tqdm import tqdm
+from numba import njit
 from select_clusters import ClusterFinder
+
+# data[0, :] = xvals (bin centers)
+# data[1, :] = raw rate map (ratemap / no smoothing)
+# data[2, :] = occupancy (occupancy / no smoothing)
+# data[3, :] = smoothed rate map
+# data[4, :] = shuffled mean
+# data[5, :] = shuffled std
+# data[6, :] = smoothed occupancy
+# data[7, :] = rawrm_p1 (even minutes ratemap / no smoothing)
+# data[8, :] = smrm_p1 (even minutes ratemap / smoothed)
+# data[9, :] = occ_p1 (even minutes occupancy / no smoothing)
+# data[10, :] = smocc_p1 (even minutes occupancy / smoothed)
+# data[11, :] = rawrm_p2 (odd minutes ratemap / no smoothing)
+# data[12, :] = smrm_p2 (odd minutes ratemap / smoothed)
+# data[13, :] = occ_p2 (odd minutes occupancy / no smoothing)
+# data[14, :] = smocc_p2 (odd minutes occupancy / smoothed)
+
+
+@njit(parallel=False)
+def find_valid_rm_range(rm_occ, min_acceptable_occ):
+    return np.array([idx for idx, occ in enumerate(rm_occ) if occ > min_acceptable_occ])
 
 
 class RatemapCharacteristics:
@@ -162,8 +184,12 @@ class RatemapCharacteristics:
         Parameters
         ----------
         **kwargs (dictionary)
-        area_filter (str)
-            Area of interest; defaults to 'M'.
+        use_smoothed_occ (bool)
+            Use smoothed occupancies to make ratemaps; defaults to False.
+        min_acceptable_occ (float)
+            The minimum acceptable occupancy; defaults to 0.4 (ms).
+        use_smoothed_rm (bool)
+            Use smoothed firing rates to make ratemaps; defaults to False.
         ----------
 
         Returns
@@ -173,10 +199,25 @@ class RatemapCharacteristics:
         ----------
         """
 
+        use_smoothed_occ = 6 if 'use_smoothed_occ' in kwargs.keys() and kwargs['use_smoothed_occ'] is True else 2
+        min_acceptable_occ = kwargs['min_acceptable_occ'] if 'min_acceptable_occ' in kwargs.keys() and type(kwargs['min_acceptable_occ']) == float else 0.4
+        use_smoothed_rm = 3 if 'use_smoothed_rm' in kwargs.keys() and kwargs['use_smoothed_rm'] is True else 1
+
         essential_files = self.file_finder()
 
         # get tining peak locations
         tuning_peak_locations = {}
-        for file in essential_files:
+        for file in essential_files['chosen_session_1']:
             mat = sio.loadmat(f'{self.ratemap_mat_dir}{os.sep}{file}')
+            for key in mat.keys():
+                if 'imec' in key and 'data' in key and 'Back_azimuth-' in key:
+
+                    # find feature ID
+                    reduced_key = key[19:]
+                    feature_id = reduced_key[:reduced_key.index('-')]
+
+                    # find feature range with acceptable occupancies
+                    valid_rm_range = find_valid_rm_range(rm_occ=mat[key][use_smoothed_occ, :], min_acceptable_occ=min_acceptable_occ)
+                    print(valid_rm_range)
+
 
