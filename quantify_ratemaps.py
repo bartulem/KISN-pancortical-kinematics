@@ -11,6 +11,7 @@ Gets (1) tuning peak locations, (2) occupancies, (3) computes inter-session stab
 import os
 import sys
 import numpy as np
+import scipy.io as sio
 from tqdm import tqdm
 from select_clusters import ClusterFinder
 
@@ -173,5 +174,9 @@ class RatemapCharacteristics:
         """
 
         essential_files = self.file_finder()
-        print(essential_files)
+
+        # get tining peak locations
+        tuning_peak_locations = {}
+        for file in essential_files:
+            mat = sio.loadmat(f'{self.ratemap_mat_dir}{os.sep}{file}')
 
