@@ -57,10 +57,11 @@ class RatemapCharacteristics:
         self.cluster_groups_dir = cluster_groups_dir
         self.sp_profiles_csv = sp_profiles_csv
 
-    def tuning_peak_locations(self, **kwargs):
+    def file_finder(self, **kwargs):
         """
         Description
         ----------
+        This method finds files of interest in the ratemap .mat file directory.
         This method finds bin centers where the peak 1D tuning curve firing rate resides.
         ----------
 
@@ -80,15 +81,22 @@ class RatemapCharacteristics:
         session_type_filter (bool / str)
             The session type of interest; defaults to True.
         specific_date (dict)
-            The date of interest (for animals that had recordings across days); defaults to True for all animals.
+            The date of interest (for animals that had recordings across days); defaults to True for most animals.
+        seek_stability (bool)
+            If True, looks for ratemap files across two desired sessions; defaults to False.
+        session_2_type (str)
+            The type of the session you want to measure stability for; defaults to 'light'.
         ----------
 
         Returns
         ----------
-        file_info (str)
-            The shortened version of the file name.
+        essential_files (dict)
+            The dictionary of all relevant .mat ratemap files (for max two relevant session types) for further analyses.
         ----------
         """
+
+        seek_stability = kwargs['seek_stability'] if 'seek_stability' in kwargs.keys() and type(kwargs['seek_stability']) == bool else False
+        session_2_type = kwargs['session_2_type'] if 'session_2_type' in kwargs.keys() and type(kwargs['session_2_type']) == str else 'light'
 
         # get clusters of interest
         cluster_dict = {}
@@ -107,7 +115,7 @@ class RatemapCharacteristics:
                         break
 
         # collect relevant file names in a list
-        essential_files = []
+        essential_files = {'chosen_session_1': [], 'chosen_session_2': []}
         if os.path.exists(self.ratemap_mat_dir):
             for file_name in tqdm(os.listdir(self.ratemap_mat_dir), desc='Checking all ratemap files'):
                 if (self.animal_filter is True or any(one_animal in file_name for one_animal in self.animal_filter)) \
@@ -119,12 +127,24 @@ class RatemapCharacteristics:
                     else:
                         bank_id = [bank for bank in ['distal', 'intermediate'] if bank in file_name][0]
                     cluster_id = file_name[file_name.find('imec'):file_name.find('imec') + 18]
-                    if animal_id in cluster_dict.keys() and bank_id in cluster_dict[animal_id]:
+                    if (self.specific_date[animal_id] is True or any(one_date in file_name for one_date in self.specific_date[animal_id])) \
+                            and animal_id in cluster_dict.keys() and bank_id in cluster_dict[animal_id].keys():
                         if cluster_id in cluster_dict[animal_id][bank_id]:
-                            essential_files.append(file_name)
+                            if not seek_stability:
+                                essential_files['chosen_session_1'].append(file_name)
+                            else:
+                                for file_name_2 in os.listdir(self.ratemap_mat_dir):
+                                    if file_name != file_name_2 and animal_id in file_name_2 and bank_id in file_name_2 and cluster_id in file_name_2 \
+                                            and (self.specific_date[animal_id] is True or any(one_date in file_name_2 for one_date in self.specific_date[animal_id])) \
+                                            and session_2_type in file_name_2:
+                                        essential_files['chosen_session_1'].append(file_name)
+                                        essential_files['chosen_session_2'].append(file_name_2)
+                                        break
         else:
             print(f"Invalid location for ratemap directory {self.ratemap_mat_dir}. Please try again.")
             sys.exit()
+
+        print(f"Search complete. Found {len(essential_files['chosen_session_1'])} valid cluster(s) in area {self.area_filter}.")
 
         return essential_files
 
