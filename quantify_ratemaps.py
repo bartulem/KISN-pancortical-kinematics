@@ -61,8 +61,11 @@ class RatemapCharacteristics:
         """
         Description
         ----------
-        This method finds files of interest in the ratemap .mat file directory.
-        This method finds bin centers where the peak 1D tuning curve firing rate resides.
+        This method finds files of interest in the ratemap .mat file directory. There are
+        two options: you can look for all files with certain characteristics (i.e. lights
+        & s1) in only one recording session (seek_stability=False), or if you are further
+        interested in computing stability measures, you look for files across two specified
+        recording sessions (seek_stability=True).
         ----------
 
         Parameters
@@ -147,4 +150,28 @@ class RatemapCharacteristics:
         print(f"Search complete. Found {len(essential_files['chosen_session_1'])} valid cluster(s) in area {self.area_filter}.")
 
         return essential_files
+
+    def tuning_peak_locations(self, **kwargs):
+        """
+        Description
+        ----------
+        This method finds bin centers where the peak 1D tuning curve firing rate resides.
+        ----------
+
+        Parameters
+        ----------
+        **kwargs (dictionary)
+        area_filter (str)
+            Area of interest; defaults to 'M'.
+        ----------
+
+        Returns
+        ----------
+        essential_files (dict)
+            The dictionary of all relevant .mat ratemap files (for max two relevant session types) for further analyses.
+        ----------
+        """
+
+        essential_files = self.file_finder()
+        print(essential_files)
 
