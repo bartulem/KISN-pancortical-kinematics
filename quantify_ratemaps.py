@@ -38,6 +38,30 @@ def find_valid_rm_range(rm_occ, min_acceptable_occ):
     return np.array([idx for idx, occ in enumerate(rm_occ) if occ > min_acceptable_occ])
 
 
+@njit(parallel=False)
+def check_curve_exceeds_shuffled(curve1d, shuffled_mean, shuffled_std,  min_acc_rate=True, bin_radius_to_check=1):
+    if (min_acc_rate is True or curve1d.max() > min_acc_rate) and curve1d.max() > shuffled_mean[np.argmax(curve1d)] + shuffled_std[np.argmax(curve1d)]:
+        peak_position = np.argmax(curve1d)
+        if peak_position == 0:
+            if (curve1d[peak_position:bin_radius_to_check*3] > shuffled_mean[peak_position:bin_radius_to_check*3] + shuffled_std[peak_position:bin_radius_to_check*3]).all():
+                return True
+            else:
+                return False
+        elif peak_position == curve1d.shape[0]-1:
+            if (curve1d[peak_position-(bin_radius_to_check*2):] > shuffled_mean[peak_position-(bin_radius_to_check*2):] + shuffled_std[peak_position-(bin_radius_to_check*2):]).all():
+                return True
+            else:
+                return False
+        else:
+            if (curve1d[peak_position-bin_radius_to_check:peak_position] > shuffled_mean[peak_position-bin_radius_to_check:peak_position] + shuffled_std[peak_position-bin_radius_to_check:peak_position]).all() \
+                    and (curve1d[peak_position:peak_position+bin_radius_to_check] > shuffled_mean[peak_position:peak_position+bin_radius_to_check] + shuffled_std[peak_position:peak_position+bin_radius_to_check]).all():
+                return True
+            else:
+                return False
+    else:
+        return False
+
+
 class RatemapCharacteristics:
 
     areas_to_animals = {'CaPu': {'bruno': ['distal']},
