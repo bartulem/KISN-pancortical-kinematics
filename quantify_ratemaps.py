@@ -271,9 +271,21 @@ class RatemapCharacteristics:
                     # find feature ID
                     reduced_key = key[19:]
                     feature_id = reduced_key[:reduced_key.index('-')]
+                    if feature_id not in tuning_peak_locations.keys():
+                        tuning_peak_locations[feature_id] = []
 
                     # find feature range with acceptable occupancies
-                    valid_rm_range = find_valid_rm_range(rm_occ=mat[key][use_smoothed_occ, :], min_acceptable_occ=min_acceptable_occ)
-                    print(valid_rm_range)
+                    valid_rm_range = find_valid_rm_range(rm_occ=mat[key][use_smoothed_occ, :],
+                                                         min_acceptable_occ=min_acceptable_occ)
+
+                    valid_rm = mat[key][use_smoothed_rm, :].take(indices=valid_rm_range)
+                    if check_curve_exceeds_shuffled(curve1d=valid_rm,
+                                                    shuffled_mean=mat[key][4, :].take(indices=valid_rm_range),
+                                                    shuffled_std=mat[key][5, :].take(indices=valid_rm_range),
+                                                    min_acc_rate=True,
+                                                    bin_radius_to_check=1):
+                        tuning_peak_locations[feature_id].append(mat[key][0, :].take(indices=valid_rm_range)[np.argmax(valid_rm)])
+
+        print(tuning_peak_locations)
 
 
