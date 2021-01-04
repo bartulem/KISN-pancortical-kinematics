@@ -163,6 +163,10 @@ class RatemapCharacteristics:
             The type of the session you want to measure stability for; defaults to 'light'.
         return_clusters (bool)
             If True returns clusters for each animal, if False, returns .mat files; defaults to False.
+        seek_third_session (bool)
+            If True, looks for ratemap files across three desired sessions; defaults to False.
+        session_3_type (str)
+            The type of session you want to get the third session data for; defaults to 'light'.
         ----------
 
         Returns
@@ -176,6 +180,8 @@ class RatemapCharacteristics:
         seek_stability = kwargs['seek_stability'] if 'seek_stability' in kwargs.keys() and type(kwargs['seek_stability']) == bool else False
         session_2_type = kwargs['session_2_type'] if 'session_2_type' in kwargs.keys() and type(kwargs['session_2_type']) == str else 'light'
         return_clusters = kwargs['return_clusters'] if 'return_clusters' in kwargs.keys() and type(kwargs['return_clusters']) == bool else False
+        seek_third_session = kwargs['seek_third_session'] if 'seek_third_session' in kwargs.keys() and type(kwargs['seek_third_session']) == bool else False
+        session_3_type = kwargs['session_3_type'] if 'session_3_type' in kwargs.keys() and type(kwargs['session_3_type']) == str else 'light'
 
         # get clusters of interest
         cluster_dict = {}
@@ -201,8 +207,8 @@ class RatemapCharacteristics:
         if return_clusters:
             return cluster_dict
         else:
-            # collect relevant file names in a list
-            essential_files = {'chosen_session_1': [], 'chosen_session_2': [], 'unique': []}
+            # collect relevant file names in appropriate lists
+            essential_files = {'chosen_session_1': [], 'chosen_session_2': [], 'chosen_session_3': [], 'unique': []}
             if os.path.exists(self.ratemap_mat_dir):
                 for file_name in tqdm(os.listdir(self.ratemap_mat_dir), desc='Checking all ratemap files'):
                     if (self.animal_filter is True or any(one_animal in file_name for one_animal in self.animal_filter)) \
@@ -226,11 +232,24 @@ class RatemapCharacteristics:
                                     essential_files['chosen_session_1'].append(file_name)
                                 else:
                                     for file_name_2 in os.listdir(self.ratemap_mat_dir):
+                                        first_for_loop = False
                                         if file_name != file_name_2 and animal_id in file_name_2 and bank_id in file_name_2 and cluster_id in file_name_2 \
                                                 and (self.specific_date[animal_id] is True or any(one_date in file_name_2 for one_date in self.specific_date[animal_id])) \
                                                 and session_2_type in file_name_2:
-                                            essential_files['chosen_session_1'].append(file_name)
-                                            essential_files['chosen_session_2'].append(file_name_2)
+                                            if not seek_third_session:
+                                                essential_files['chosen_session_1'].append(file_name)
+                                                essential_files['chosen_session_2'].append(file_name_2)
+                                            else:
+                                                for file_name_3 in os.listdir(self.ratemap_mat_dir):
+                                                    if file_name != file_name_3 and file_name_2 != file_name_3 and animal_id in file_name_3 and bank_id in file_name_3 and cluster_id in file_name_3 \
+                                                            and (self.specific_date[animal_id] is True or any(one_date in file_name_3 for one_date in self.specific_date[animal_id])) \
+                                                            and session_3_type in file_name_3:
+                                                        essential_files['chosen_session_1'].append(file_name)
+                                                        essential_files['chosen_session_2'].append(file_name_2)
+                                                        essential_files['chosen_session_3'].append(file_name_3)
+                                                        first_for_loop = True
+                                                        break
+                                        if first_for_loop:
                                             break
             else:
                 print(f"Invalid location for ratemap directory {self.ratemap_mat_dir}. Please try again.")
