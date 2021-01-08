@@ -60,7 +60,7 @@ class SpikingProfile:
         ----------
         This method goes through all the "cluster quality measures" files and, for each
         cluster, picks out the "waveform duration", "FWHM" and "peak-to-through ratio",
-        which could aid in characterizing the spiking profile.
+        and "end_slope", which could aid in characterizing the spiking profile.
         ----------
 
         Parameters
