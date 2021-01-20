@@ -70,7 +70,7 @@ class ClusterFinder:
         Description
         ----------
         This method enables one to filter in/out desired clusters based on a variety of
-        properties: (1) animal name, (2) brain area if interest, (3) cluster type,
+        properties: (1) animal name, (2) brain area of interest, (3) cluster type,
         (4) recording session type, (5) recording bank on the probe (6) session
         number, and (7) spiking profile.
         ----------

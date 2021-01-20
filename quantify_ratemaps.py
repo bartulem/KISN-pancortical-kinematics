@@ -36,6 +36,46 @@ from select_clusters import ClusterFinder
 # data[14, :] = smocc_p2 (odd minutes occupancy / smoothed)
 
 
+def get_shuffled_stability(n_times=10, shuffled_data_1=np.zeros((36, 1000)),
+                           shuffled_data_2=np.zeros((36, 1000)), valid_sh_ind=None):
+    if valid_sh_ind is None:
+        valid_sh_ind = list(range(36))
+
+    """
+    Parameters
+    ----------
+    n_times : int
+        The number of times to compute shuffled stability; defaults to 10.
+    shuffled_data_1 : np.ndarray
+        The shuffled data from the first chosen session.
+    shuffled_data_2 : np.ndarray
+        The shuffled data from the second chosen session.
+    valid_sh_ind : (bool / int / float)
+        The default indices to compute the shuffled stability over.
+    ----------
+
+    Returns
+    ----------
+    shuffled_stability : np.ndarray
+        An array of length n_times with stability values for shuffled curves.
+    ----------
+    """
+
+    shuffled_stability = np.zeros(n_times)
+
+    for n in range(n_times):
+        ran_num_1 = np.random.choice(a=1000)
+        ran_num_2 = np.random.choice(a=1000)
+
+        shuffled_first = shuffled_data_1[:, ran_num_1].take(indices=valid_sh_ind)
+        shuffled_second = shuffled_data_2[:, ran_num_2].take(indices=valid_sh_ind)
+
+        shuffled_stability[n] = pearsonr(shuffled_first, shuffled_second)[0]
+
+    return shuffled_stability
+
+
+
 @njit(parallel=False)
 def find_valid_rm_range(rm_occ, min_acceptable_occ):
     return np.array([idx for idx, occ in enumerate(rm_occ) if occ > min_acceptable_occ])
@@ -103,6 +143,8 @@ class RatemapCharacteristics:
                         'A2D': {'frank': ['distal'], 'johnjohn': ['distal'], 'kavorka': ['distal']},
                         'V': {'frank': ['distal', 'intermediate'], 'johnjohn': ['distal', 'intermediate'], 'kavorka': ['distal', 'intermediate']},
                         'V1': {'frank': ['distal', 'intermediate'], 'johnjohn': ['distal', 'intermediate'], 'kavorka': ['distal', 'intermediate']},
+                        'V1d': {'frank': ['distal'], 'johnjohn': ['distal'], 'kavorka': ['distal', 'intermediate']},
+                        'V1s': {'frank': ['distal', 'intermediate'], 'johnjohn': ['distal', 'intermediate'], 'kavorka': ['intermediate']},
                         'V2M': {'frank': ['intermediate'], 'johnjohn': ['intermediate'], 'kavorka': ['intermediate']},
                         'V2L': {'frank': ['distal'], 'johnjohn': ['distal'], 'kavorka': ['distal']}}
 
@@ -258,7 +300,6 @@ class RatemapCharacteristics:
 
             print(f"File search complete. Found {len(essential_files['chosen_session_1'])} .mat file(s) for area {self.area_filter}.")
 
-            print(essential_files)
             return essential_files
 
     def tuning_peaks_stability(self, **kwargs):
@@ -325,7 +366,9 @@ class RatemapCharacteristics:
                     feature_id = reduced_key[:reduced_key.index('-')]
                     if get_stability:
                         if feature_id not in stability.keys():
-                            stability[feature_id] = []
+                            stability[feature_id] = {}
+                            stability[feature_id]['data'] = []
+                            stability[feature_id]['shuffled'] = []
                     else:
                         if feature_id not in tuning_peak_locations.keys():
                             tuning_peak_locations[feature_id] = []
@@ -354,7 +397,15 @@ class RatemapCharacteristics:
                             # calculate stability
                             valid_rm_revised = mat[key][use_smoothed_rm, :].take(indices=indices_intersection)
                             valid_rm2_revised = mat2[key][use_smoothed_rm, :].take(indices=indices_intersection)
-                            stability[feature_id].append(pearsonr(valid_rm_revised, valid_rm2_revised)[0])
+                            stability[feature_id]['data'].append(pearsonr(valid_rm_revised, valid_rm2_revised)[0])
+
+                            # get shuffled stability
+                            shuffled_key = f'{key[:19]}{feature_id}-rawacc_shuffles'
+                            sh_stability = get_shuffled_stability(shuffled_data_1=mat[shuffled_key],
+                                                                  shuffled_data_2=mat2[shuffled_key],
+                                                                  valid_sh_ind=indices_intersection)
+                            for sh in sh_stability:
+                                stability[feature_id]['shuffled'].append(sh)
 
 
         # save results to file

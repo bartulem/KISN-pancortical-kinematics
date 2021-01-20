@@ -70,7 +70,7 @@ class Ratemap:
         """
         Description
         ----------
-        This method enables plotting of clean ratemaps.
+        This method enables plotting of ratemaps.
         ----------
 
         Parameters
