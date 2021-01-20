@@ -468,3 +468,104 @@ class RatemapCharacteristics:
         with io.open(f'{self.save_dir}{os.sep}occupancies_{self.area_filter}.json', 'w', encoding='utf-8') as to_save_file:
             to_save_file.write(json.dumps(occupancies, ensure_ascii=False, indent=4))
 
+    def make_weight_comparisons(self, **kwargs):
+        """
+        Description
+        ----------
+        This method finds tuning-curve peak rate differences in weight/no-weight sessions.
+        ----------
+
+        Parameters
+        ----------
+        **kwargs (dictionary)
+        session_2_type (str)
+            The type of the session you want to compare against; defaults to 'weight'.
+        session_3_type (str)
+            The type of the session you want to compare against; defaults to 'light'.
+        use_smoothed_occ (bool)
+            Use smoothed occupancies to make ratemaps; defaults to False.
+        min_acceptable_occ (float)
+            The minimum acceptable occupancy; defaults to 0.4 (s).
+        use_smoothed_rm (bool)
+            Use smoothed firing rates to make ratemaps; defaults to False.
+        min_acc_rate (bool / int / float)
+            The minimum acceptable peak rate; defaults to True.
+        bin_radius_to_check (int)
+            The radius of bins around peak to check whether they exceed shuffled data.
+        ----------
+
+        Returns
+        ----------
+        weight_comparisons (.json file)
+            A file with weight comparisons for all 1-D variables.
+        ----------
+        """
+
+        session_2_type = kwargs['session_2_type'] if 'session_2_type' in kwargs.keys() and type(kwargs['session_2_type']) == str else 'weight'
+        session_3_type = kwargs['session_3_type'] if 'session_3_type' in kwargs.keys() and type(kwargs['session_3_type']) == str else 'light'
+        use_smoothed_occ = 6 if 'use_smoothed_occ' in kwargs.keys() and kwargs['use_smoothed_occ'] is True else 2
+        min_acceptable_occ = kwargs['min_acceptable_occ'] if 'min_acceptable_occ' in kwargs.keys() and type(kwargs['min_acceptable_occ']) == float else 0.4
+        use_smoothed_rm = 3 if 'use_smoothed_rm' in kwargs.keys() and kwargs['use_smoothed_rm'] is True else 1
+        min_acc_rate = kwargs['min_acc_rate'] if 'min_acc_rate' in kwargs.keys() and type(kwargs['min_acc_rate']) == float else True
+        bin_radius_to_check = kwargs['bin_radius_to_check'] if 'bin_radius_to_check' in kwargs.keys() and type(kwargs['bin_radius_to_check']) == int else 1
+
+        essential_files = self.file_finder(seek_stability=True,
+                                           session_2_type=session_2_type,
+                                           seek_third_session=True,
+                                           session_3_type=session_3_type)
+
+        # make weight comparisons
+        weight_comparison = {}
+        for file_idx, file in enumerate(tqdm(essential_files['chosen_session_1'], desc='Making weight comparisons')):
+            mat = sio.loadmat(f'{self.ratemap_mat_dir}{os.sep}{file}')
+            file2 = essential_files['chosen_session_2'][file_idx]
+            mat2 = sio.loadmat(f'{self.ratemap_mat_dir}{os.sep}{file2}')
+            file3 = essential_files['chosen_session_3'][file_idx]
+            mat3 = sio.loadmat(f'{self.ratemap_mat_dir}{os.sep}{file3}')
+
+            start_cl_idx = essential_files['chosen_session_1'][file_idx].find('imec')
+            cl_id = essential_files['chosen_session_1'][file_idx][start_cl_idx: start_cl_idx+18]
+            for key in mat.keys():
+                if 'imec' in key and 'data' in key:
+
+                    # find feature ID
+                    reduced_key = key[19:]
+                    feature_id = reduced_key[:reduced_key.index('-')]
+
+                    # find feature range with acceptable occupancies
+                    valid_rm_range = find_valid_rm_range(rm_occ=mat[key][use_smoothed_occ, :],
+                                                         min_acceptable_occ=min_acceptable_occ)
+
+                    valid_rm2_range = find_valid_rm_range(rm_occ=mat2[key][use_smoothed_occ, :],
+                                                          min_acceptable_occ=min_acceptable_occ)
+
+                    valid_rm3_range = find_valid_rm_range(rm_occ=mat3[key][use_smoothed_occ, :],
+                                                          min_acceptable_occ=min_acceptable_occ)
+
+                    # get valid indices intersection
+                    indices_intersection = sorted(list(set(valid_rm_range) & set(valid_rm2_range) & set(valid_rm3_range)), key=int)
+
+                    # get valid range in all three sessions
+                    valid_rm_revised = mat[key][use_smoothed_rm, :].take(indices=indices_intersection)
+                    valid_rm2_revised = mat2[key][use_smoothed_rm, :].take(indices=indices_intersection)
+                    valid_rm3_revised = mat3[key][use_smoothed_rm, :].take(indices=indices_intersection)
+
+                    # conduct the checking
+                    if check_curve_exceeds_shuffled(curve1d=valid_rm_revised,
+                                                    shuffled_mean=mat[key][4, :].take(indices=indices_intersection),
+                                                    shuffled_std=mat[key][5, :].take(indices=indices_intersection),
+                                                    min_acc_rate=min_acc_rate,
+                                                    bin_radius_to_check=bin_radius_to_check):
+
+                        if feature_id not in weight_comparison.keys():
+                            weight_comparison[feature_id] = {}
+
+                        if cl_id not in weight_comparison[feature_id].keys():
+                            weight_comparison[feature_id][cl_id] = {}
+
+                        weight_comparison[feature_id][cl_id]['light1-light2'] = valid_rm_revised.max() - valid_rm3_revised[np.argmax(valid_rm_revised)]
+                        weight_comparison[feature_id][cl_id]['light1-weight'] = valid_rm_revised.max() - valid_rm2_revised[np.argmax(valid_rm_revised)]
+
+        # save results to file
+        with io.open(f'{self.save_dir}{os.sep}weight_comparison_{self.area_filter}.json', 'w', encoding='utf-8') as to_save_file:
+            to_save_file.write(json.dumps(weight_comparison, ensure_ascii=False, indent=4))
