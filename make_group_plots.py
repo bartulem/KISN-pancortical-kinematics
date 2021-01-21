@@ -208,8 +208,14 @@ class PlotGroupResults:
                 significance_dict[file_animal] = {}
             for idx, row in profile_data.iterrows():
                 if row[0] == f'{file_animal}_{file_date}_{file_bank}' and row[1] == statistics_dict[cluster]['cell_id']:
-                    cl_profile = row[-1]
+                    cl_profile = row[7]
+                    cl_row = idx
                     break
+
+            # save to profile data .csv
+            profile_data.iloc[cl_row, 8] = statistics_dict[cluster]['sound_modulation_index']
+            profile_data.iloc[cl_row, 9] = statistics_dict[cluster]['p_value']
+
             if statistics_dict[cluster]['sound_modulation_index'] < 0 and statistics_dict[cluster]['p_value'] < self.critical_p_value:
                 modulated_clusters['suppressed'][cluster] = statistics_dict[cluster]
                 significance_dict[file_animal][statistics_dict[cluster]['cell_id']] = cl_profile
@@ -233,6 +239,9 @@ class PlotGroupResults:
                     count_dict['ns_rs'] += 1
                 else:
                     count_dict['ns_fs'] += 1
+
+        # save SMI-filled dataframe to .csv file
+        profile_data.to_csv(path_or_buf=f'{self.sp_profiles_csv}', sep=';', index=False)
 
         print(count_dict)
 
@@ -402,7 +411,8 @@ class PlotGroupResults:
                                                                                                                        sp_prof_csv=self.sp_profiles_csv,
                                                                                                                        cl_areas=self.relevant_areas,
                                                                                                                        cl_type=self.relevant_cluster_types,
-                                                                                                                       dec_type=decode_what)
+                                                                                                                       dec_type=decode_what,
+                                                                                                                       desired_profiles=True)
 
                 # get discontinuous PETHs
                 discontinuous_peths = Spikes(input_012=three_sessions,
@@ -493,8 +503,14 @@ class PlotGroupResults:
                 file_date = session_id[get_date_idx-4:get_date_idx+2]
                 for idx, row in profile_data.iterrows():
                     if row[0] == f'{file_animal}_{file_date}_{file_bank}' and row[1] == statistics_dict[cluster]['cell_id']:
-                        cl_profile = row[-1]
+                        cl_profile = row[7]
+                        cl_row = idx
                         break
+
+                # save to profile data .csv
+                profile_data.iloc[cl_row, 10] = statistics_dict[cluster]['luminance_modulation_index']
+                profile_data.iloc[cl_row, 11] = statistics_dict[cluster]['p_value']
+
                 if statistics_dict[cluster][f'{decode_what}_modulation_index'] < 0 and statistics_dict[cluster]['p_value'] < self.critical_p_value:
                     modulated_clusters['suppressed'][cluster] = statistics_dict[cluster]
                     significance_dict[file_animal][file_bank][statistics_dict[cluster]['cell_id']] = cl_profile
@@ -515,7 +531,10 @@ class PlotGroupResults:
                     else:
                         count_dict['ns_fs'] += 1
 
-            if True:
+            # save SMI-filled dataframe to .csv file
+            profile_data.to_csv(path_or_buf=f'{self.sp_profiles_csv}', sep=';', index=False)
+
+            if False:
                 with io.open(f'lmi_significant_{self.relevant_areas[0]}.json', 'w', encoding='utf-8') as mi_file:
                     mi_file.write(json.dumps(significance_dict, ensure_ascii=False, indent=4))
 

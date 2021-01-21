@@ -785,7 +785,8 @@ class Spikes:
                                                                                                                sp_prof_csv=self.sp_profiles_csv,
                                                                                                                cl_areas=cluster_areas,
                                                                                                                cl_type=cluster_type,
-                                                                                                               dec_type=decode_what)
+                                                                                                               dec_type=decode_what,
+                                                                                                               desired_profiles=True)
         # check if cluster(s) exist in the input sessions
         for cluster in get_clusters:
             if cluster not in all_clusters:
