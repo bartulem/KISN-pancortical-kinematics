@@ -34,12 +34,18 @@ import matplotlib.pyplot as plt
 
 
 class Ratemap:
-    feature_colors = {'Allo_head_pitch': '#C91517',
-                      'Allo_head_azimuth': '#ED6C6D',
-                      'Allo_head_roll': '#F1A6B1',
+    feature_colors = {'head_pitch': '#C91517',
+                      'Head_pitch': '#C91517',
+                      'head_azimuth': '#ED6C6D',
+                      'Head_azimuth': '#ED6C6D',
+                      'head_roll': '#F1A6B1',
+                      'Head_roll': '#F1A6B1',
                       'Back_pitch': '#3052A0',
                       'Back_azimuth': '#77AEDF',
-                      'Neck_elevation': '#F07F00'}
+                      'Neck_elevation': '#F07F00',
+                      'Speeds': '#228B22',
+                      'Body_direction': '#EEC900',
+                      'head_direction': '#8B7500'}
 
     def __init__(self, ratemap_mat_dir='', animals=None,
                  session_type_labels=None,

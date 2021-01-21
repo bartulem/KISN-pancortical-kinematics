@@ -10,6 +10,7 @@ Gets (1) tuning peak locations, (2) occupancies, (3) computes inter-session stab
 
 import io
 import os
+import re
 import sys
 import json
 import numpy as np
@@ -516,12 +517,23 @@ class RatemapCharacteristics:
 
         # make weight comparisons
         weight_comparison = {}
+        cl_num = 0
         for file_idx, file in enumerate(tqdm(essential_files['chosen_session_1'], desc='Making weight comparisons')):
             mat = sio.loadmat(f'{self.ratemap_mat_dir}{os.sep}{file}')
             file2 = essential_files['chosen_session_2'][file_idx]
             mat2 = sio.loadmat(f'{self.ratemap_mat_dir}{os.sep}{file2}')
             file3 = essential_files['chosen_session_3'][file_idx]
             mat3 = sio.loadmat(f'{self.ratemap_mat_dir}{os.sep}{file3}')
+
+            # get animal name, bank id and date of session
+            animal_name = [name for name in ClusterFinder.probe_site_areas.keys() if name in file][0]
+            if animal_name == 'bruno':
+                recording_bank = 'distal'
+            else:
+                recording_bank = [bank for bank in ['distal', 'intermediate'] if bank in file][0]
+            get_date_idx = [date.start() for date in re.finditer('20', file)][-1]
+            recording_date = file[get_date_idx-4:get_date_idx+2]
+            session_id = f'{animal_name}_{recording_date}_{recording_bank}'
 
             start_cl_idx = essential_files['chosen_session_1'][file_idx].find('imec')
             cl_id = essential_files['chosen_session_1'][file_idx][start_cl_idx: start_cl_idx+18]
@@ -557,14 +569,22 @@ class RatemapCharacteristics:
                                                     min_acc_rate=min_acc_rate,
                                                     bin_radius_to_check=bin_radius_to_check):
 
-                        if feature_id not in weight_comparison.keys():
-                            weight_comparison[feature_id] = {}
+                        if cl_num not in weight_comparison.keys():
+                            weight_comparison[cl_num] = {}
 
-                        if cl_id not in weight_comparison[feature_id].keys():
-                            weight_comparison[feature_id][cl_id] = {}
+                        if session_id not in weight_comparison[cl_num].keys():
+                            weight_comparison[cl_num]['session_id'] = session_id
 
-                        weight_comparison[feature_id][cl_id]['light1-light2'] = valid_rm_revised.max() - valid_rm3_revised[np.argmax(valid_rm_revised)]
-                        weight_comparison[feature_id][cl_id]['light1-weight'] = valid_rm_revised.max() - valid_rm2_revised[np.argmax(valid_rm_revised)]
+                        if cl_id not in weight_comparison[cl_num].keys():
+                            weight_comparison[cl_num]['cl_id'] = cl_id
+
+                        if feature_id not in weight_comparison[cl_num].keys():
+                            weight_comparison[cl_num][feature_id] = {}
+
+                        weight_comparison[cl_num][feature_id]['light1-light2'] = valid_rm_revised.max() - valid_rm3_revised[np.argmax(valid_rm_revised)]
+                        weight_comparison[cl_num][feature_id]['light1-weight'] = valid_rm_revised.max() - valid_rm2_revised[np.argmax(valid_rm_revised)]
+
+            cl_num += 1
 
         # save results to file
         with io.open(f'{self.save_dir}{os.sep}weight_comparison_{self.area_filter}.json', 'w', encoding='utf-8') as to_save_file:
