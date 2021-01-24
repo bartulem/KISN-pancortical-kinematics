@@ -37,6 +37,17 @@ from select_clusters import ClusterFinder
 # data[14, :] = smocc_p2 (odd minutes occupancy / smoothed)
 
 
+def uncover_file_specifics(file_name):
+    animal_name = [name for name in ClusterFinder.probe_site_areas.keys() if name in file_name][0]
+    get_date_idx = [date.start() for date in re.finditer('20', file_name)][-1]
+    recording_date = file_name[get_date_idx-4:get_date_idx+2]
+    if animal_name == 'bruno':
+        recording_bank = 'distal'
+    else:
+        recording_bank = [bank for bank in ['distal', 'intermediate'] if bank in file_name][0]
+    return f'{animal_name}_{recording_date}_{recording_bank}'
+
+
 def get_shuffled_stability(n_times=10, shuffled_data_1=np.zeros((36, 1000)),
                            shuffled_data_2=np.zeros((36, 1000)), valid_sh_ind=None):
     if valid_sh_ind is None:
@@ -354,25 +365,24 @@ class RatemapCharacteristics:
         # get tuning peak locations / stability
         tuning_peak_locations = {}
         stability = {}
+        cl_num = 0
         for file_idx, file in enumerate(tqdm(essential_files['chosen_session_1'], desc='Checking ratemap files for tuning peaks / stability')):
             mat = sio.loadmat(f'{self.ratemap_mat_dir}{os.sep}{file}')
             if get_stability:
                 file2 = essential_files['chosen_session_2'][file_idx]
                 mat2 = sio.loadmat(f'{self.ratemap_mat_dir}{os.sep}{file2}')
+
+            # get animal name, bank id and date of session
+            session_id = uncover_file_specifics(file)
+            start_cl_idx = essential_files['chosen_session_1'][file_idx].find('imec')
+            cl_id = essential_files['chosen_session_1'][file_idx][start_cl_idx: start_cl_idx+18]
+
             for key in mat.keys():
                 if 'imec' in key and 'data' in key:
 
                     # find feature ID
                     reduced_key = key[19:]
                     feature_id = reduced_key[:reduced_key.index('-')]
-                    if get_stability:
-                        if feature_id not in stability.keys():
-                            stability[feature_id] = {}
-                            stability[feature_id]['data'] = []
-                            stability[feature_id]['shuffled'] = []
-                    else:
-                        if feature_id not in tuning_peak_locations.keys():
-                            tuning_peak_locations[feature_id] = []
 
                     # find feature range with acceptable occupancies
                     valid_rm_range = find_valid_rm_range(rm_occ=mat[key][use_smoothed_occ, :],
@@ -386,8 +396,37 @@ class RatemapCharacteristics:
                                                     min_acc_rate=min_acc_rate,
                                                     bin_radius_to_check=bin_radius_to_check):
                         if not get_stability:
-                            tuning_peak_locations[feature_id].append(mat[key][0, :].take(indices=valid_rm_range)[np.argmax(valid_rm)])
+                            if cl_num not in tuning_peak_locations.keys():
+                                tuning_peak_locations[cl_num] = {}
+
+                            if session_id not in tuning_peak_locations[cl_num].keys():
+                                tuning_peak_locations[cl_num]['session_id'] = session_id
+
+                            if cl_id not in tuning_peak_locations[cl_num].keys():
+                                tuning_peak_locations[cl_num]['cl_id'] = cl_id
+
+                            if 'features' not in tuning_peak_locations[cl_num].keys():
+                                tuning_peak_locations[cl_num]['features'] = {}
+                            tuning_peak_locations[cl_num]['features'][feature_id] = mat[key][0, :].take(indices=valid_rm_range)[np.argmax(valid_rm)]
                         else:
+                            if cl_num not in stability.keys():
+                                stability[cl_num] = {}
+
+                            if session_id not in stability[cl_num].keys():
+                                stability[cl_num]['session_id'] = session_id
+
+                            if cl_id not in stability[cl_num].keys():
+                                stability[cl_num]['cl_id'] = cl_id
+
+                            if 'features' not in stability[cl_num].keys():
+                                stability[cl_num]['features'] = {}
+
+                            if 'shuffled' not in stability.keys():
+                                stability['shuffled'] = {}
+
+                            if feature_id not in stability['shuffled'].keys():
+                                stability['shuffled'][feature_id] = []
+
                             # find feature range with acceptable occupancies for second session
                             valid_rm2_range = find_valid_rm_range(rm_occ=mat2[key][use_smoothed_occ, :],
                                                                   min_acceptable_occ=min_acceptable_occ)
@@ -398,7 +437,7 @@ class RatemapCharacteristics:
                             # calculate stability
                             valid_rm_revised = mat[key][use_smoothed_rm, :].take(indices=indices_intersection)
                             valid_rm2_revised = mat2[key][use_smoothed_rm, :].take(indices=indices_intersection)
-                            stability[feature_id]['data'].append(pearsonr(valid_rm_revised, valid_rm2_revised)[0])
+                            stability[cl_num]['features'][feature_id] = pearsonr(valid_rm_revised, valid_rm2_revised)[0]
 
                             # get shuffled stability
                             shuffled_key = f'{key[:19]}{feature_id}-rawacc_shuffles'
@@ -406,15 +445,19 @@ class RatemapCharacteristics:
                                                                   shuffled_data_2=mat2[shuffled_key],
                                                                   valid_sh_ind=indices_intersection)
                             for sh in sh_stability:
-                                stability[feature_id]['shuffled'].append(sh)
-
+                                stability['shuffled'][feature_id].append(sh)
+            cl_num += 1
 
         # save results to file
+        if self.session_type_filter is True:
+            session_type_file_name = 'light'
+        else:
+            session_type_file_name = self.session_type_filter
         if not get_stability:
-            with io.open(f'{self.save_dir}{os.sep}tuning_peak_locations_{self.area_filter}.json', 'w', encoding='utf-8') as to_save_file:
+            with io.open(f'{self.save_dir}{os.sep}tuning_peak_locations_{self.area_filter}_{session_type_file_name}.json', 'w', encoding='utf-8') as to_save_file:
                 to_save_file.write(json.dumps(tuning_peak_locations, ensure_ascii=False, indent=4))
         else:
-            with io.open(f'{self.save_dir}{os.sep}stability_{self.area_filter}.json', 'w', encoding='utf-8') as to_save_file:
+            with io.open(f'{self.save_dir}{os.sep}stability_{self.area_filter}_{session_type_file_name}_{session_2_type}.json', 'w', encoding='utf-8') as to_save_file:
                 to_save_file.write(json.dumps(stability, ensure_ascii=False, indent=4))
 
     def occupancies(self, **kwargs):
@@ -526,17 +569,10 @@ class RatemapCharacteristics:
             mat3 = sio.loadmat(f'{self.ratemap_mat_dir}{os.sep}{file3}')
 
             # get animal name, bank id and date of session
-            animal_name = [name for name in ClusterFinder.probe_site_areas.keys() if name in file][0]
-            if animal_name == 'bruno':
-                recording_bank = 'distal'
-            else:
-                recording_bank = [bank for bank in ['distal', 'intermediate'] if bank in file][0]
-            get_date_idx = [date.start() for date in re.finditer('20', file)][-1]
-            recording_date = file[get_date_idx-4:get_date_idx+2]
-            session_id = f'{animal_name}_{recording_date}_{recording_bank}'
-
+            session_id = uncover_file_specifics(file)
             start_cl_idx = essential_files['chosen_session_1'][file_idx].find('imec')
             cl_id = essential_files['chosen_session_1'][file_idx][start_cl_idx: start_cl_idx+18]
+
             for key in mat.keys():
                 if 'imec' in key and 'data' in key:
 
@@ -583,6 +619,7 @@ class RatemapCharacteristics:
 
                         weight_comparison[cl_num][feature_id]['light1-light2'] = valid_rm_revised.max() - valid_rm3_revised[np.argmax(valid_rm_revised)]
                         weight_comparison[cl_num][feature_id]['light1-weight'] = valid_rm_revised.max() - valid_rm2_revised[np.argmax(valid_rm_revised)]
+                        weight_comparison[cl_num][feature_id]['light2-weight'] = valid_rm3_revised[np.argmax(valid_rm_revised)] - valid_rm2_revised[np.argmax(valid_rm_revised)]
 
             cl_num += 1
 
