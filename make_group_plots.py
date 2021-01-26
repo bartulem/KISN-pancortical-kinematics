@@ -398,7 +398,7 @@ class PlotGroupResults:
         if to_calculate:
             # get discontinuous PETH data for chosen clusters in designated sessions
             luminance_modulation_data = {}
-            for three_sessions in self.input_012_list:
+            for three_sessions in tqdm(self.input_012_list):
                 # get details of the three sessions
                 file_animal = [name for name in ClusterFinder.probe_site_areas.keys() if name in three_sessions[0]][0]
                 file_bank = [bank for bank in ['distal', 'intermediate'] if bank in three_sessions[0]][0]
@@ -455,9 +455,12 @@ class PlotGroupResults:
                                                                              (averaged_trials[:40].mean() + averaged_trials[40:80].mean())
 
                     trials_array = np.zeros((all_trials.shape[0], 2))
+                    pseudo_trials_array = np.zeros((all_trials.shape[0], 2))
                     for trial in range(all_trials.shape[0]):
-                        trials_array[trial, :] = [all_trials[trial, :40].mean()-all_trials[trial, 40:80].mean(),  all_trials[trial, :40].mean()-all_trials[trial, 80:].mean()]
+                        trials_array[trial, :] = [all_trials[trial, :40].mean(), all_trials[trial, 40:80].mean()]
+                        pseudo_trials_array[trial, :] = [all_trials[trial, :40].mean(), all_trials[trial, 80:].mean()]
                     statistics_dict[cell_id]['p_value'] = wilcoxon(x=trials_array[:, 0], y=trials_array[:, 1], zero_method='zsplit')[1]
+                    statistics_dict[cell_id]['p_value_check'] = wilcoxon(x=pseudo_trials_array[:, 0], y=pseudo_trials_array[:, 1], zero_method='zsplit')[1]
 
                     cell_id += 1
 
@@ -510,22 +513,24 @@ class PlotGroupResults:
                 # save to profile data .csv
                 profile_data.iloc[cl_row, 10] = statistics_dict[cluster]['luminance_modulation_index']
                 profile_data.iloc[cl_row, 11] = statistics_dict[cluster]['p_value']
+                profile_data.iloc[cl_row, 12] = statistics_dict[cluster]['p_value_check']
 
-                if statistics_dict[cluster][f'{decode_what}_modulation_index'] < 0 and statistics_dict[cluster]['p_value'] < self.critical_p_value:
+                if statistics_dict[cluster][f'{decode_what}_modulation_index'] < 0 and statistics_dict[cluster]['p_value'] < self.critical_p_value < statistics_dict[cluster]['p_value_check']:
                     modulated_clusters['suppressed'][cluster] = statistics_dict[cluster]
                     significance_dict[file_animal][file_bank][statistics_dict[cluster]['cell_id']] = cl_profile
                     if cl_profile == 'RS':
                         count_dict['sign_suppressed_rs'] += 1
                     else:
                         count_dict['sign_suppressed_fs'] += 1
-                elif statistics_dict[cluster][f'{decode_what}_modulation_index'] > 0 and statistics_dict[cluster]['p_value'] < self.critical_p_value:
+                elif statistics_dict[cluster][f'{decode_what}_modulation_index'] > 0 and statistics_dict[cluster]['p_value'] < self.critical_p_value < statistics_dict[cluster]['p_value_check']:
                     modulated_clusters['excited'][cluster] = statistics_dict[cluster]
                     significance_dict[file_animal][file_bank][statistics_dict[cluster]['cell_id']] = cl_profile
                     if cl_profile == 'RS':
                         count_dict['sign_excited_rs'] += 1
                     else:
                         count_dict['sign_excited_fs'] += 1
-                elif statistics_dict[cluster]['p_value'] >= self.critical_p_value:
+                elif statistics_dict[cluster]['p_value'] >= self.critical_p_value or \
+                        (statistics_dict[cluster]['p_value'] < self.critical_p_value and statistics_dict[cluster]['p_value_check'] < self.critical_p_value):
                     if cl_profile == 'RS':
                         count_dict['ns_rs'] += 1
                     else:
@@ -534,7 +539,7 @@ class PlotGroupResults:
             # save SMI-filled dataframe to .csv file
             profile_data.to_csv(path_or_buf=f'{self.sp_profiles_csv}', sep=';', index=False)
 
-            if False:
+            if True:
                 with io.open(f'lmi_significant_{self.relevant_areas[0]}.json', 'w', encoding='utf-8') as mi_file:
                     mi_file.write(json.dumps(significance_dict, ensure_ascii=False, indent=4))
 
@@ -790,7 +795,7 @@ class PlotGroupResults:
 
         for animal in ['frank', 'johnjohn', 'kavorka']:
             plot_modulation_data = {'smi': list(data['smi_A'][animal].keys()) + list(data['smi_V'][animal].keys()),
-                                    'lmi_distal': list(data['lmi_A'][animal].keys()) + list(data['lmi_V'][animal]['distal'].keys()),
+                                    'lmi_distal': list(data['lmi_A'][animal]['distal'].keys()) + list(data['lmi_V'][animal]['distal'].keys()),
                                     'lmi_intermediate': list(data['lmi_V'][animal]['intermediate'].keys())}
 
             plot_modulation_arrays = {'smi_probe_arr': np.zeros((384, 2)),
