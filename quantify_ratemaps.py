@@ -620,9 +620,9 @@ class RatemapCharacteristics:
                         if feature_id not in weight_comparison[cl_num]['features'].keys():
                             weight_comparison[cl_num]['features'][feature_id] = {}
 
-                        weight_comparison[cl_num]['features'][feature_id]['light1-light2'] = valid_rm_revised.max() - valid_rm3_revised[np.argmax(valid_rm_revised)]
-                        weight_comparison[cl_num]['features'][feature_id]['light1-weight'] = valid_rm_revised.max() - valid_rm2_revised[np.argmax(valid_rm_revised)]
-                        weight_comparison[cl_num]['features'][feature_id]['light2-weight'] = valid_rm3_revised[np.argmax(valid_rm_revised)] - valid_rm2_revised[np.argmax(valid_rm_revised)]
+                        weight_comparison[cl_num]['features'][feature_id]['light1'] = valid_rm_revised.max()
+                        weight_comparison[cl_num]['features'][feature_id]['weight'] = valid_rm2_revised[np.argmax(valid_rm_revised)]
+                        weight_comparison[cl_num]['features'][feature_id]['light2'] = valid_rm3_revised[np.argmax(valid_rm_revised)]
 
             cl_num += 1
 
