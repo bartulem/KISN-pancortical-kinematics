@@ -38,10 +38,8 @@ def correlate_quickly(big_x, big_x_mean, big_y, big_y_mean):
 
 def predict_events(pred_arr_len, fold_num, train_folds, test_folds,
                    activity_arr, event_arr, fe, three_sessions=False):
-    if not three_sessions:
-        pred_events = np.zeros(pred_arr_len).astype(np.float32)
-    else:
-        pred_events = np.zeros(pred_arr_len).astype(np.float32)
+
+    pred_events = np.zeros(pred_arr_len).astype(np.float32)
     for fold_idx in range(fold_num):
         training_frames = train_folds[fold_idx]
         test_frames = test_folds[fold_idx]
@@ -109,13 +107,19 @@ def choose_012_clusters(the_input_012, cl_gr_dir, sp_prof_csv, cl_areas, cl_type
 
 class Decoder:
 
-    def __init__(self, input_file='', save_results_dir='', input_012=['', '', ''],
+    def __init__(self, input_file='', save_results_dir='', input_012=None,
                  cluster_groups_dir='/home/bartulm/Insync/mimica.bartul@gmail.com/OneDrive/Work/data/posture_2020/cluster_groups_info',
                  sp_profiles_csv='/home/bartulm/Insync/mimica.bartul@gmail.com/OneDrive/Work/data/posture_2020/spiking_profiles/spiking_profiles.csv',
                  number_of_decoding_per_run=10, decoding_cell_number_array=np.array([5, 10, 20, 50, 100]), fold_n=3, shuffle_num=1000,
                  to_smooth=False, smooth_sd=1, smooth_axis=0, condense=True,
-                 cluster_areas=['A'], cluster_type=True, animal_names=['kavorka', 'frank', 'johnjohn'],
+                 cluster_areas=None, cluster_type=True, animal_names=None,
                  profiles_to_include=True):
+        if cluster_areas is None:
+            cluster_areas = ['A']
+        if input_012 is None:
+            input_012 = ['', '', '']
+        if animal_names is None:
+            animal_names = ['kavorka', 'frank', 'johnjohn', 'roy', 'jacopo', 'bruno', 'crazyjoe']
         self.input_file = input_file
         self.save_results_dir = save_results_dir
         self.input_012 = input_012
@@ -433,7 +437,7 @@ class Decoder:
                         shuffled_clusters_array[shuffle_idx, :, :] = np.concatenate((copy_clu_train_arr, copy_clu_test_arr))
 
                 if pop_vector_decoding:
-                    # go through folds and predict sound
+                    # go through folds and predict event
                     predicted_condition_events = predict_events(pred_arr_len=total_frame_num-third_durations[2], fold_num=1, train_folds=train_indices_for_folds,
                                                                 test_folds=test_indices_for_folds, activity_arr=clusters_array, event_arr=decoding_event_array.copy(),
                                                                 fe=fold_edges, three_sessions=True)
