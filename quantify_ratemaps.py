@@ -161,7 +161,7 @@ class RatemapCharacteristics:
                         'V2L': {'frank': ['distal'], 'johnjohn': ['distal'], 'kavorka': ['distal']}}
 
     def __init__(self, ratemap_mat_dir='', pkl_sessions_dir='', save_dir='', area_filter='M', animal_filter=True, profile_filter=True,
-                 session_id_filter='s1', session_type_filter=True, cluster_type_filter=True,
+                 session_id_filter='s1', session_non_filter=True, session_type_filter=True, cluster_type_filter=True,
                  cluster_groups_dir='', sp_profiles_csv='', specific_date=None):
         if specific_date is None:
             specific_date = {'bruno': ['020520', '030520'],
@@ -179,6 +179,7 @@ class RatemapCharacteristics:
         self.profile_filter = profile_filter
         self.animal_filter = animal_filter
         self.session_id_filter = session_id_filter
+        self.session_non_filter = session_non_filter
         self.session_type_filter = session_type_filter
         self.specific_date = specific_date
         self.cluster_groups_dir = cluster_groups_dir
@@ -246,6 +247,7 @@ class RatemapCharacteristics:
             for bank in self.areas_to_animals[self.area_filter][animal]:
                 for pkl_file in os.listdir(self.pkl_sessions_dir):
                     if animal in pkl_file and bank in pkl_file and (self.session_id_filter is True or self.session_id_filter in pkl_file) \
+                            and (self.session_non_filter is True or self.session_non_filter not in pkl_file) \
                             and (self.session_type_filter is True or self.session_type_filter in pkl_file) \
                             and (self.specific_date[animal] is True or any(one_date in pkl_file for one_date in self.specific_date[animal])):
                         cluster_list = ClusterFinder(session=f'{self.pkl_sessions_dir}{os.sep}{pkl_file}',
@@ -268,6 +270,7 @@ class RatemapCharacteristics:
                 for file_name in tqdm(os.listdir(self.ratemap_mat_dir), desc='Checking all ratemap files'):
                     if (self.animal_filter is True or any(one_animal in file_name for one_animal in self.animal_filter)) \
                             and (self.session_id_filter is True or self.session_id_filter in file_name) \
+                            and (self.session_non_filter is True or self.session_non_filter not in file_name) \
                             and (self.session_type_filter is True or self.session_type_filter in file_name):
                         animal_id = [name for name in ClusterFinder.probe_site_areas.keys() if name in file_name][0]
                         if animal_id == 'bruno':
