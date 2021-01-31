@@ -41,7 +41,8 @@ class PlotGroupResults:
         if relevant_areas is None:
             relevant_areas = ['A']
         if animal_ids is None:
-            animal_ids = {'frank': '26473', 'johnjohn': '26471', 'kavorka': '26525'}
+            animal_ids = {'frank': '26473', 'johnjohn': '26471', 'kavorka': '26525',
+                          'roy': '26472', 'bruno': '26148', 'jacopo': '26504', 'crazyjoe': '26507'}
         if profile_colors is None:
             profile_colors = {'RS': '#698B69', 'FS': '#9BCD9B'}
         self.session_list = session_list
@@ -660,6 +661,12 @@ class PlotGroupResults:
             Decoding event for figure title; defaults to 'sound stimulation'.
         z_value_sem (float)
             The z-value for the SEM calculation; defaults to 2.58 (3 SD).
+        areas (list)
+            The brain areas decoding was performed on; defaults to ['A', 'V'].
+        animals_1 (list)
+            Animals for the first brain area; defaults to ['kavorka', 'frank', 'johnjohn']
+        animals_2 (list)
+            Animals for the first brain area; defaults to ['kavorka', 'frank', 'johnjohn']
         ----------
 
         Returns
@@ -672,23 +679,26 @@ class PlotGroupResults:
         x_values_arr = kwargs['x_values_arr'] if 'x_values_arr' in kwargs.keys() and type(kwargs['x_values_arr']) == np.ndarray else np.array([5, 10, 20, 50, 100])
         decoding_event = kwargs['decoding_event'] if 'decoding_event' in kwargs.keys() and type(kwargs['decoding_event']) == str else 'sound stimulation'
         z_value_sem = kwargs['z_value_sem'] if 'z_value_sem' in kwargs.keys() and type(kwargs['z_value_sem']) == float else 2.58
+        areas = kwargs['areas'] if 'areas' in kwargs.keys() and type(kwargs['areas']) == list else ['A', 'V']
+        animals_1 = kwargs['animals_1'] if 'animals_1' in kwargs.keys() and type(kwargs['animals_1']) == list else ['kavorka', 'frank', 'johnjohn']
+        animals_2 = kwargs['animals_2'] if 'animals_2' in kwargs.keys() and type(kwargs['animals_2']) == list else ['kavorka', 'frank', 'johnjohn']
 
-        file_dict = {'data': {'A': [], 'V': []}, 'shuffled': {'A': [], 'V': []}}
+        file_dict = {'data': {areas[0]: [], areas[1]: []}, 'shuffled': {areas[0]: [], areas[1]: []}}
         if not os.path.exists(self.decoding_dir):
             print(f"Invalid location for directory {self.decoding_dir}. Please try again.")
             sys.exit()
         else:
             for decoding_file_name in os.listdir(self.decoding_dir):
                 if 'shuffled' in decoding_file_name:
-                    if 'A' in decoding_file_name:
-                        file_dict['shuffled']['A'].append(decoding_file_name)
+                    if areas[0] in decoding_file_name:
+                        file_dict['shuffled'][areas[0]].append(decoding_file_name)
                     else:
-                        file_dict['shuffled']['V'].append(decoding_file_name)
+                        file_dict['shuffled'][areas[1]].append(decoding_file_name)
                 else:
-                    if 'A' in decoding_file_name:
-                        file_dict['data']['A'].append(decoding_file_name)
+                    if areas[0] in decoding_file_name:
+                        file_dict['data'][areas[0]].append(decoding_file_name)
                     else:
-                        file_dict['data']['V'].append(decoding_file_name)
+                        file_dict['data'][areas[1]].append(decoding_file_name)
 
         # sort dict by file name
         for data_type in file_dict.keys():
@@ -696,15 +706,16 @@ class PlotGroupResults:
                 file_dict[data_type][data_area].sort()
 
         # load the data
-        decoding_data = {'data': {'A': {}, 'V': {}}, 'shuffled': {'A': {}, 'V': {}}}
+        decoding_data = {'data': {areas[0]: {}, areas[1]: {}}, 'shuffled': {areas[1]: {}, areas[1]: {}}}
         for data_type in decoding_data.keys():
             for data_area in decoding_data[data_type].keys():
                 for file_idx, one_file in enumerate(file_dict[data_type][data_area]):
-                    decoding_data[data_type][data_area][list(self.animal_ids.keys())[file_idx]] = np.load(f'{self.decoding_dir}{os.sep}{one_file}')
+                    animal_name = [animal for animal in self.animal_ids.keys() if animal in one_file[0]][0]
+                    decoding_data[data_type][data_area][animal_name] = np.load(f'{self.decoding_dir}{os.sep}{one_file}')
 
         # get data to plot
-        plot_data = {'A': {'decoding_accuracy': {'mean': {}, 'sem': {}}, 'shuffled': np.array([[1000., 0.]] * 5)},
-                     'V': {'decoding_accuracy': {'mean': {}, 'sem': {}}, 'shuffled': np.array([[1000., 0.]] * 5)}}
+        plot_data = {areas[0]: {'decoding_accuracy': {'mean': {}, 'sem': {}}, 'shuffled': np.array([[1000., 0.]] * 5)},
+                     areas[1]: {'decoding_accuracy': {'mean': {}, 'sem': {}}, 'shuffled': np.array([[1000., 0.]] * 5)}}
         for area in decoding_data['data']:
             for animal in decoding_data['data'][area].keys():
                 plot_data[area]['decoding_accuracy']['mean'][animal] = decoding_data['data'][area][animal].mean(axis=1)
@@ -721,31 +732,31 @@ class PlotGroupResults:
         # plot
         x_values = x_values_arr
         fig, ax = plt.subplots(nrows=1, ncols=2, figsize=(8, 5), dpi=300, tight_layout=True)
-        ax[0].errorbar(x=x_values, y=plot_data['A']['decoding_accuracy']['mean']['kavorka'], yerr=plot_data['A']['decoding_accuracy']['sem']['kavorka'] * z_value_sem,
-                       color='#000000', fmt='-o', label=f"#{self.animal_ids['kavorka']}")
-        ax[0].errorbar(x=x_values, y=plot_data['A']['decoding_accuracy']['mean']['frank'], yerr=plot_data['A']['decoding_accuracy']['sem']['frank'] * z_value_sem,
-                       color='#000000', fmt='-^', label=f"#{self.animal_ids['frank']}")
-        ax[0].errorbar(x=x_values, y=plot_data['A']['decoding_accuracy']['mean']['johnjohn'], yerr=plot_data['A']['decoding_accuracy']['sem']['johnjohn'] * z_value_sem,
-                       color='#000000', fmt='-s', label=f"#{self.animal_ids['johnjohn']}")
-        ax[0].fill_between(x=x_values, y1=plot_data['A']['shuffled'][:, 0], y2=plot_data['A']['shuffled'][:, 1], color='grey', alpha=.25)
+        ax[0].errorbar(x=x_values, y=plot_data[areas[0]]['decoding_accuracy']['mean'][animals_1[0]], yerr=plot_data[areas[0]]['decoding_accuracy']['sem'][animals_1[0]] * z_value_sem,
+                       color='#000000', fmt='-o', label=f"#{self.animal_ids[animals_1[0]]}")
+        ax[0].errorbar(x=x_values, y=plot_data[areas[0]]['decoding_accuracy']['mean'][animals_1[1]], yerr=plot_data[areas[0]]['decoding_accuracy']['sem'][animals_1[1]] * z_value_sem,
+                       color='#000000', fmt='-^', label=f"#{self.animal_ids[animals_1[1]]}")
+        ax[0].errorbar(x=x_values, y=plot_data[areas[0]]['decoding_accuracy']['mean'][animals_1[2]], yerr=plot_data[areas[0]]['decoding_accuracy']['sem'][animals_1[2]] * z_value_sem,
+                       color='#000000', fmt='-s', label=f"#{self.animal_ids[animals_1[2]]}")
+        ax[0].fill_between(x=x_values, y1=plot_data[areas[0]]['shuffled'][:, 0], y2=plot_data[areas[0]]['shuffled'][:, 1], color='grey', alpha=.25)
         ax[0].set_ylim(.3, 1)
         ax[0].set_xlim(0)
         ax[0].legend()
-        ax[0].set_title('A1 units')
+        ax[0].set_title(f'{areas[0]} units')
         ax[0].set_xlabel('Number of units')
         ax[0].set_ylabel('Decoding accuracy')
 
-        ax[1].errorbar(x=x_values, y=plot_data['V']['decoding_accuracy']['mean']['kavorka'], yerr=plot_data['V']['decoding_accuracy']['sem']['kavorka'] * z_value_sem,
-                       color='#000000', fmt='-o', label=f"#{self.animal_ids['kavorka']}")
-        ax[1].errorbar(x=x_values, y=plot_data['V']['decoding_accuracy']['mean']['frank'], yerr=plot_data['V']['decoding_accuracy']['sem']['frank'] * z_value_sem,
-                       color='#000000', fmt='-^', label=f"#{self.animal_ids['frank']}")
-        ax[1].errorbar(x=x_values, y=plot_data['V']['decoding_accuracy']['mean']['johnjohn'], yerr=plot_data['V']['decoding_accuracy']['sem']['johnjohn'] * z_value_sem,
-                       color='#000000', fmt='-s', label=f"#{self.animal_ids['johnjohn']}")
-        ax[1].fill_between(x=x_values, y1=plot_data['V']['shuffled'][:, 0], y2=plot_data['V']['shuffled'][:, 1], color='#808080', alpha=.25)
+        ax[1].errorbar(x=x_values, y=plot_data[areas[1]]['decoding_accuracy']['mean'][animals_2[0]], yerr=plot_data[areas[1]]['decoding_accuracy']['sem'][animals_2[0]] * z_value_sem,
+                       color='#000000', fmt='-o', label=f"#{self.animal_ids[animals_2[0]]}")
+        ax[1].errorbar(x=x_values, y=plot_data[areas[1]]['decoding_accuracy']['mean'][animals_2[1]], yerr=plot_data[areas[1]]['decoding_accuracy']['sem'][animals_2[1]] * z_value_sem,
+                       color='#000000', fmt='-^', label=f"#{self.animal_ids[animals_2[1]]}")
+        ax[1].errorbar(x=x_values, y=plot_data[areas[1]]['decoding_accuracy']['mean'][animals_2[2]], yerr=plot_data[areas[1]]['decoding_accuracy']['sem'][animals_2[2]] * z_value_sem,
+                       color='#000000', fmt='-s', label=f"#{self.animal_ids[animals_2[2]]}")
+        ax[1].fill_between(x=x_values, y1=plot_data[areas[1]]['shuffled'][:, 0], y2=plot_data[areas[1]]['shuffled'][:, 1], color='#808080', alpha=.25)
         ax[1].set_ylim(.3, 1)
         ax[1].set_xlim(0)
         ax[1].legend()
-        ax[1].set_title('V units')
+        ax[1].set_title(f'{areas[1]} units')
         ax[1].set_xlabel('Number of units')
         ax[1].set_ylabel('Decoding accuracy')
         if self.save_fig:
