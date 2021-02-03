@@ -22,7 +22,7 @@ from mpl_toolkits.axes_grid1.inset_locator import inset_axes
 from make_ratemaps import Ratemap
 
 def extract_json_data(json_file='', weight=False, features=None,
-                      light1_peak_min=True, rate_stability_bound=True):
+                      peak_min=True, der='1st'):
     """
     Description
     ----------
@@ -39,10 +39,10 @@ def extract_json_data(json_file='', weight=False, features=None,
         Yey or ney on the 'weight' data; defaults to False.
     features (list)
         List of features you're interested in (der not necessary!); defaults to ['Speeds'].
-    light1_peak_min (int / bool)
+    peak_min (int / bool)
         The minimum rate for light1 to even be considered; defaults to True.
-    rate_stability_bound (int / bool)
-        How much is the OF2 peak rate allowed to deviate from OF1 (in terms of percent OF1 rate); defaults to True.
+    der (str)
+        Derivative of choice; defaults to '1st'.
     ----------
 
     Returns
@@ -62,16 +62,22 @@ def extract_json_data(json_file='', weight=False, features=None,
         weight_dict = {}
         for feature in features:
             weight_dict[feature] = {'light1': [], 'weight': [], 'light2': []}
-            weight_dict[f'{feature}_1st_der'] = {'light1': [], 'weight': [], 'light2': []}
+            if der == '2nd' and feature == 'Speeds':
+                continue
+            else:
+                weight_dict[f'{feature}_{der}_der'] = {'light1': [], 'weight': [], 'light2': []}
 
     for cl_num in json_data.keys():
         if weight:
             for key in json_data[cl_num]['features'].keys():
                 if key in weight_dict.keys():
-                    if (light1_peak_min is True or json_data[cl_num]['features'][key]['light1'] > light1_peak_min) \
-                            and (rate_stability_bound is True or abs(json_data[cl_num]['features'][key]['light1'] -
-                                                                     json_data[cl_num]['features'][key]['light2'])
-                                 <= json_data[cl_num]['features'][key]['light1'] * (rate_stability_bound / 100.)):
+                    if (peak_min is True or json_data[cl_num]['features'][key]['light1'] > peak_min) \
+                            and (peak_min is True or json_data[cl_num]['features'][key]['weight'] > peak_min) \
+                            and (peak_min is True or json_data[cl_num]['features'][key]['light2'] > peak_min) \
+                            and abs(json_data[cl_num]['features'][key]['light1']
+                                    - json_data[cl_num]['features'][key]['weight']) \
+                            > abs(json_data[cl_num]['features'][key]['light1']
+                                  - json_data[cl_num]['features'][key]['light2']):
                         weight_dict[key]['light1'].append(json_data[cl_num]['features'][key]['light1'])
                         weight_dict[key]['weight'].append(json_data[cl_num]['features'][key]['weight'])
                         weight_dict[key]['light2'].append(json_data[cl_num]['features'][key]['light2'])
@@ -84,13 +90,13 @@ def make_shuffled_distributions(weight_dict, n_shuffles=1000):
     shuffled_dict = {}
     for feature in tqdm(weight_dict.keys()):
         shuffled_dict[feature] = {'null_differences': np.zeros(n_shuffles), 'true_difference': 0, 'z-value': 1, 'p-value': 1}
-        true_difference = np.median(weight_dict[feature]['light1']) - np.median(weight_dict[feature]['weight'])
+        true_difference = np.median(np.diff(np.array([weight_dict[feature]['weight'], weight_dict[feature]['light1']]), axis=0))
         shuffled_dict[feature]['true_difference'] = true_difference
         for sh in range(n_shuffles):
             joint_arr = np.array([weight_dict[feature]['weight'], weight_dict[feature]['light1']])
             for col in range(joint_arr.shape[1]):
                 np.random.shuffle(joint_arr[:, col])
-                shuffled_dict[feature]['null_differences'][sh] = np.diff(np.median(joint_arr, axis=1))[0]
+                shuffled_dict[feature]['null_differences'][sh] = np.median(np.diff(joint_arr, axis=0))
         shuffled_dict[feature]['z-value'] = (true_difference - shuffled_dict[feature]['null_differences'].mean()) \
                                             / shuffled_dict[feature]['null_differences'].std()
         shuffled_dict[feature]['p-value'] = 1 - scipy.stats.norm.cdf(shuffled_dict[feature]['z-value'])
@@ -105,7 +111,8 @@ class WeightComparer:
 
     def __init__(self, weight_json_file='', chosen_features=None,
                  rate_stability_bound=True, light1_peak_min=True,
-                 save_dir='', save_fig=False, fig_format='png'):
+                 save_dir='', save_fig=False, fig_format='png',
+                 light_session=1, der='1st'):
         if chosen_features is None:
             chosen_features = ['Speeds']
         self.weight_json_file = weight_json_file
@@ -115,6 +122,8 @@ class WeightComparer:
         self.save_dir=save_dir
         self.save_fig=save_fig
         self.fig_format=fig_format
+        self.light_session = light_session
+        self.der = der
 
     def plot_weight_features(self, **kwargs):
         """
@@ -128,7 +137,7 @@ class WeightComparer:
         Parameters
         ----------
         **kwargs (dictionary)
-        light1_peak_min (int / bool)
+        peak_min (int / bool)
             The minimum rate for light1 to even be considered; defaults to True.
         rate_stability_bound (int / float / bool)
             How much is the OF2 peak rate allowed to deviate from OF1 (in terms of percent OF1 rate); defaults to True.
@@ -148,8 +157,8 @@ class WeightComparer:
         weight_dict = extract_json_data(json_file=self.weight_json_file,
                                         weight=True,
                                         features=self.chosen_features,
-                                        light1_peak_min=self.light1_peak_min,
-                                        rate_stability_bound=self.rate_stability_bound)
+                                        peak_min=self.light1_peak_min,
+                                        der=self.der)
 
         shuffled_dict = make_shuffled_distributions(weight_dict=weight_dict)
         for feature in shuffled_dict.keys():
@@ -166,9 +175,7 @@ class WeightComparer:
                 max_joint=100
 
             feature_color = [val for key, val in Ratemap.feature_colors.items() if key in chosen_feature][0]
-            hist_bins = np.linspace(0, int(np.ceil(np.max(weight_dict[chosen_feature]['light1'] + weight_dict[chosen_feature]['weight']) / 10.0)) * 10 + 1, 20)
-            feature_der = f'{chosen_feature}_1st_der'
-            hist_bins_der = np.linspace(0, int(np.ceil(np.max(weight_dict[feature_der]['light1'] + weight_dict[feature_der]['weight']) / 10.0)) * 10 + 1, 20)
+            feature_der = f'{chosen_feature}_{self.der}_der'
 
             fig = plt.figure()
             gs1 = fig.add_gridspec(nrows=3, ncols=2, left=.075, right=.505,
@@ -199,8 +206,8 @@ class WeightComparer:
             ax1.set_ylim(min_joint, max_joint)
             ax1.set_yscale('log')
             ax1.tick_params(axis='both', which='major', length=0, labelsize=8, pad=.5)
-            ax1.set_xlabel('L1 peak rate (spikes/s)', labelpad=.1)
-            ax1.set_ylabel('W rate at L1 peak (spikes/s)', labelpad=.1)
+            ax1.set_xlabel(f'L{self.light_session} peak rate (spikes/s)', labelpad=.1)
+            ax1.set_ylabel(f'W rate at L{self.light_session} peak (spikes/s)', labelpad=.1)
 
             ax2 = fig.add_subplot(gs1[-1, :-1])
             ax2.hist(shuffled_dict[chosen_feature]['null_differences'], bins=10, histtype='stepfilled',
@@ -208,7 +215,7 @@ class WeightComparer:
             ax2.axvline(x=np.nanpercentile(shuffled_dict[chosen_feature]['null_differences'], 99), color='#FF6347', linestyle='dashdot', linewidth=.5)
             y_min_2, y_max_2 = ax2.get_ylim()
             ax2.plot(shuffled_dict[chosen_feature]['true_difference'], 0+.05*y_max_2, marker='o', color=feature_color, markersize=5)
-            ax2.set_xlabel('Light1 - Weight difference (spikes/s)', labelpad=.5, fontsize=6)
+            ax2.set_xlabel(f'L{self.light_session} - W difference (spikes/s)', labelpad=.5, fontsize=6)
             ax2.set_ylabel('Number of cells', labelpad=.1, fontsize=6)
             ax2.tick_params(axis='both', which='both', labelsize=5)
 
@@ -228,7 +235,7 @@ class WeightComparer:
             ax3.set_yscale('log')
             ax3.set_yticks([.1, 1, 10, 100])
             # ax3.set_yticklabels(['-1', '0', '1', '2'], fontsize=6)
-            ax3.set_ylim(.05, 150)
+            ax3.set_ylim(.1, 150)
             ax3.set_yticklabels([])
             ax3.tick_params(axis='y', which='both', length=0)
             # ax3.set_ylabel('log$_{10}$ peak rate (spikes/s)', labelpad=.3, fontsize=6)
@@ -261,7 +268,7 @@ class WeightComparer:
             ax4.set_ylim(min_joint, max_joint)
             ax4.set_yscale('log')
             ax4.tick_params(axis='both', which='major', length=0, labelsize=8, pad=.5)
-            ax4.set_xlabel('L1 peak rate (spikes/s)', labelpad=.1)
+            ax4.set_xlabel(f'L{self.light_session} peak rate (spikes/s)', labelpad=.1)
 
             ax5 = fig.add_subplot(gs2[-1, :-1])
             ax5.hist(shuffled_dict[feature_der]['null_differences'], bins=10, histtype='stepfilled',
@@ -269,7 +276,7 @@ class WeightComparer:
             ax5.axvline(x=np.nanpercentile(shuffled_dict[feature_der]['null_differences'], 99), color='#FF6347', linestyle='dashdot', linewidth=.5)
             y_min_5, y_max_5 = ax5.get_ylim()
             ax5.plot(shuffled_dict[feature_der]['true_difference'], 0+.05*y_max_5, marker='o', color=feature_color, markersize=5)
-            ax5.set_xlabel('Light1 - Weight difference (spikes/s)', labelpad=.5, fontsize=6)
+            ax5.set_xlabel(f'L{self.light_session} - W difference (spikes/s)', labelpad=.5, fontsize=6)
             ax5.tick_params(axis='both', which='both', labelsize=5, pad=.5)
 
             ax6 = fig.add_subplot(gs2[-1, -1])
@@ -289,7 +296,7 @@ class WeightComparer:
             ax6.set_yticks([.1, 1, 10, 100])
             ax6.set_yticklabels([])
             ax6.tick_params(axis='y', which='both', length=0)
-            ax6.set_ylim(.05, 150)
+            ax6.set_ylim(.1, 150)
             ax6.get_yaxis().get_major_formatter().labelOnlyBase = False
             if self.save_fig:
                 if os.path.exists(self.save_dir):
@@ -331,8 +338,8 @@ class WeightComparer:
         weight_dict = extract_json_data(json_file=self.weight_json_file,
                                         weight=True,
                                         features=self.chosen_features,
-                                        light1_peak_min=self.light1_peak_min,
-                                        rate_stability_bound=self.rate_stability_bound)
+                                        peak_min=self.light1_peak_min,
+                                        der=self.der)
 
         shuffled_dict = make_shuffled_distributions(weight_dict=weight_dict)
 
@@ -371,16 +378,16 @@ class WeightComparer:
 
         fig, ax = plt.subplots(nrows=1, ncols=2, figsize=(12, 4))
         ax1 = plt.subplot(121)
-        ax1.scatter(weight_stats_dict['features']['light1'], weight_stats_dict['features']['weight'],
-                    label=None, c=np.log10(weight_stats_dict['features']['p-values']), cmap='seismic_r',
-                    s=np.array(weight_stats_dict['features']['cl_n'])*2, alpha=.85,
-                    edgecolors=weight_stats_dict['features']['feature_colors'], lw=2)
+        sca1 = ax1.scatter(weight_stats_dict['features']['light1'], weight_stats_dict['features']['weight'],
+                           label=None, c=np.log10(weight_stats_dict['features']['p-values']), cmap='seismic_r',
+                           s=np.array(weight_stats_dict['features']['cl_n'])*2, alpha=.85,
+                           edgecolors=weight_stats_dict['features']['feature_colors'], lw=2)
 
         ax1.set_title('Features')
         ax1.set_xlim(min_rate, max_rate)
         ax1.set_ylim(min_rate, max_rate)
-        ax1.set_xlabel('L1 median peak (spikes/s)')
-        ax1.set_ylabel('W median at L1 peak (spikes/s)')
+        ax1.set_xlabel(f'L{self.light_session} median peak (spikes/s)')
+        ax1.set_ylabel(f'W median at L{self.light_session} peak (spikes/s)')
         for area in np.array([50, 100, 200]):
             ax1.scatter([], [], c='#000000', alpha=.3, s=area*2,
                         label=str(area) + ' units')
@@ -396,11 +403,12 @@ class WeightComparer:
         ax2.set_title('Derivatives')
         ax2.set_xlim(min_rate_der, max_rate_der)
         ax2.set_ylim(min_rate_der, max_rate_der)
-        ax2.set_xlabel('L1 median peak (spikes/s)')
+        ax2.set_xlabel(f'L{self.light_session} median peak (spikes/s)')
         ax2.plot([min_rate_der, max_rate_der], [min_rate_der, max_rate_der], ls='-.', lw=.5, color='#000000')
         cb_ax = fig.add_axes([.91,.124,.01,.754])
         cbar = fig.colorbar(sca2, orientation='vertical', cax=cb_ax)
         cbar.set_label('log$_{10}$(p-value)')
+        sca1.set_clim(vmin=-4, vmax=0)
         sca2.set_clim(vmin=-4, vmax=0)
         if plot_feature_legend:
             y_start = max_rate_der - .5
