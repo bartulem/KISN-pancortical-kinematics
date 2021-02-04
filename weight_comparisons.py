@@ -11,18 +11,16 @@ Compare tuning-curve rate differences in weight/no-weight sessions.
 import os
 import sys
 import json
-import matplotlib
+import scipy.stats
 import numpy as np
 import matplotlib.pyplot as plt
 from tqdm import tqdm
-import scipy.stats
-from scipy.optimize import curve_fit
 from random import gauss
 from mpl_toolkits.axes_grid1.inset_locator import inset_axes
 from make_ratemaps import Ratemap
 
 def extract_json_data(json_file='', weight=False, features=None,
-                      peak_min=True, der='1st'):
+                      peak_min=True, der='1st', rate_stability_bound=True):
     """
     Description
     ----------
@@ -41,6 +39,8 @@ def extract_json_data(json_file='', weight=False, features=None,
         List of features you're interested in (der not necessary!); defaults to ['Speeds'].
     peak_min (int / bool)
         The minimum rate for light1 to even be considered; defaults to True.
+    rate_stability_bound (int / bool)
+        How much is the OF2 peak rate allowed to deviate from OF1 (in terms of percent OF1 rate); defaults to True.
     der (str)
         Derivative of choice; defaults to '1st'.
     ----------
@@ -77,7 +77,9 @@ def extract_json_data(json_file='', weight=False, features=None,
                             and abs(json_data[cl_num]['features'][key]['light1']
                                     - json_data[cl_num]['features'][key]['weight']) \
                             > abs(json_data[cl_num]['features'][key]['light1']
-                                  - json_data[cl_num]['features'][key]['light2']):
+                                  - json_data[cl_num]['features'][key]['light2']) \
+                            and rate_stability_bound is True or abs(json_data[cl_num]['features'][key]['light1'] - json_data[cl_num]['features'][key]['light2']) \
+                            < (json_data[cl_num]['features'][key]['light1'] * (rate_stability_bound / 100)):
                         weight_dict[key]['light1'].append(json_data[cl_num]['features'][key]['light1'])
                         weight_dict[key]['weight'].append(json_data[cl_num]['features'][key]['weight'])
                         weight_dict[key]['light2'].append(json_data[cl_num]['features'][key]['light2'])
@@ -158,11 +160,12 @@ class WeightComparer:
                                         weight=True,
                                         features=self.chosen_features,
                                         peak_min=self.light1_peak_min,
+                                        rate_stability_bound=self.rate_stability_bound,
                                         der=self.der)
 
         shuffled_dict = make_shuffled_distributions(weight_dict=weight_dict)
         for feature in shuffled_dict.keys():
-            print(feature, np.median(weight_dict[feature]['light1']), np.median(weight_dict[feature]['weight']),
+            print(feature, len(weight_dict[feature]['light1']), np.median(weight_dict[feature]['light1']), np.median(weight_dict[feature]['weight']),
                   shuffled_dict[feature]['null_differences'].mean(), shuffled_dict[feature]['true_difference'],
                   shuffled_dict[feature]['z-value'], shuffled_dict[feature]['p-value'])
 
@@ -339,6 +342,7 @@ class WeightComparer:
                                         weight=True,
                                         features=self.chosen_features,
                                         peak_min=self.light1_peak_min,
+                                        rate_stability_bound=self.rate_stability_bound,
                                         der=self.der)
 
         shuffled_dict = make_shuffled_distributions(weight_dict=weight_dict)
