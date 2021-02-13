@@ -19,6 +19,7 @@ from tqdm import tqdm
 from numba import njit
 from scipy.stats import pearsonr
 from select_clusters import ClusterFinder
+from neural_activity import Spikes
 
 # data[0, :] = xvals (bin centers)
 # data[1, :] = raw rate map (ratemap / no smoothing)
@@ -607,11 +608,6 @@ class RatemapCharacteristics:
                                                     shuffled_std=mat[key][5, :].take(indices=indices_intersection),
                                                     min_acc_rate=min_acc_rate,
                                                     bin_radius_to_check=bin_radius_to_check) \
-                            and check_curve_exceeds_shuffled(curve1d=valid_rm2_revised,
-                                                             shuffled_mean=mat2[key][4, :].take(indices=indices_intersection),
-                                                             shuffled_std=mat2[key][5, :].take(indices=indices_intersection),
-                                                             min_acc_rate=min_acc_rate,
-                                                             bin_radius_to_check=bin_radius_to_check) \
                             and check_curve_exceeds_shuffled(curve1d=valid_rm3_revised,
                                                              shuffled_mean=mat3[key][4, :].take(indices=indices_intersection),
                                                              shuffled_std=mat3[key][5, :].take(indices=indices_intersection),
@@ -633,9 +629,29 @@ class RatemapCharacteristics:
                         if feature_id not in weight_comparison[cl_num]['features'].keys():
                             weight_comparison[cl_num]['features'][feature_id] = {}
 
-                        weight_comparison[cl_num]['features'][feature_id]['light1'] = valid_rm_revised.max()
-                        weight_comparison[cl_num]['features'][feature_id]['weight'] = valid_rm2_revised[np.argmax(valid_rm_revised)]
-                        weight_comparison[cl_num]['features'][feature_id]['light2'] = valid_rm3_revised[np.argmax(valid_rm_revised)]
+                        if 'baseline_firing_rates' not in weight_comparison[cl_num].keys():
+                            if self.session_non_filter is True:
+                                first_session_id = 's1'
+                            else:
+                                first_session_id = self.session_non_filter
+                            weight_comparison[cl_num]['baseline_firing_rates'] = {}
+                            for pkl_file in os.listdir(self.pkl_sessions_dir):
+                                if all(one_item in pkl_file for one_item in session_id.split('_')) and 'light' in pkl_file and first_session_id in pkl_file:
+                                    file_id, baseline_activity_dictionary = Spikes(input_file=f'{self.pkl_sessions_dir}{os.sep}{pkl_file}').get_baseline_firing_rates(get_clusters=[cl_id])
+                                    weight_comparison[cl_num]['baseline_firing_rates']['light1'] = baseline_activity_dictionary[cl_id]
+                                elif all(one_item in pkl_file for one_item in session_id.split('_')) and 'weight' in pkl_file:
+                                    file_id_2, baseline_activity_dictionary_2 = Spikes(input_file=f'{self.pkl_sessions_dir}{os.sep}{pkl_file}').get_baseline_firing_rates(get_clusters=[cl_id])
+                                    weight_comparison[cl_num]['baseline_firing_rates']['weight'] = baseline_activity_dictionary_2[cl_id]
+                                elif all(one_item in pkl_file for one_item in session_id.split('_')) and 'light' in pkl_file and first_session_id not in pkl_file:
+                                    file_id_3, baseline_activity_dictionary_3 = Spikes(input_file=f'{self.pkl_sessions_dir}{os.sep}{pkl_file}').get_baseline_firing_rates(get_clusters=[cl_id])
+                                    weight_comparison[cl_num]['baseline_firing_rates']['light2'] = baseline_activity_dictionary_3[cl_id]
+
+                        weight_comparison[cl_num]['features'][feature_id]['light1'] = list(valid_rm_revised)
+                        weight_comparison[cl_num]['features'][feature_id]['weight'] = list(valid_rm2_revised)
+                        weight_comparison[cl_num]['features'][feature_id]['light2'] = list(valid_rm3_revised)
+                        weight_comparison[cl_num]['features'][feature_id]['ICr-light1'] = mat[key.replace('data', 'ICr')].ravel()[0]
+                        weight_comparison[cl_num]['features'][feature_id]['ICr-weight'] = mat2[key.replace('data', 'ICr')].ravel()[0]
+                        weight_comparison[cl_num]['features'][feature_id]['ICr-light2'] = mat3[key.replace('data', 'ICr')].ravel()[0]
 
             cl_num += 1
 

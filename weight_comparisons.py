@@ -105,21 +105,17 @@ def make_shuffled_distributions(weight_dict, n_shuffles=1000):
     return shuffled_dict
 
 
-def gaussian(x, mean, amplitude, standard_deviation):
-    return amplitude * np.exp(- ((x - mean) / standard_deviation) ** 2)
-
-
 class WeightComparer:
 
     def __init__(self, weight_json_file='', chosen_features=None,
-                 rate_stability_bound=True, light1_peak_min=True,
+                 rate_stability_bound=True, peak_min=True,
                  save_dir='', save_fig=False, fig_format='png',
                  light_session=1, der='1st'):
         if chosen_features is None:
             chosen_features = ['Speeds']
         self.weight_json_file = weight_json_file
         self.chosen_features = chosen_features
-        self.light1_peak_min = light1_peak_min
+        self.peak_min = peak_min
         self.rate_stability_bound = rate_stability_bound
         self.save_dir=save_dir
         self.save_fig=save_fig
@@ -159,7 +155,7 @@ class WeightComparer:
         weight_dict = extract_json_data(json_file=self.weight_json_file,
                                         weight=True,
                                         features=self.chosen_features,
-                                        peak_min=self.light1_peak_min,
+                                        peak_min=self.peak_min,
                                         rate_stability_bound=self.rate_stability_bound,
                                         der=self.der)
 
@@ -341,7 +337,7 @@ class WeightComparer:
         weight_dict = extract_json_data(json_file=self.weight_json_file,
                                         weight=True,
                                         features=self.chosen_features,
-                                        peak_min=self.light1_peak_min,
+                                        peak_min=self.peak_min,
                                         rate_stability_bound=self.rate_stability_bound,
                                         der=self.der)
 

@@ -499,6 +499,52 @@ class Spikes:
         self.cluster_groups_dir = cluster_groups_dir
         self.sp_profiles_csv = sp_profiles_csv
 
+    def get_baseline_firing_rates(self, **kwargs):
+        """
+        Description
+        ----------
+        This method calculates the baseline firing rates for all selected clusters, where
+        the baseline rate is defined as the number of spikes divided by the length of
+        the tracking period.
+        ----------
+
+        Parameters
+        ----------
+        **kwargs (dictionary)
+        get_clusters (str / int / list)
+            Cluster IDs to extract (if int, takes first n clusters; if 'all', takes all); defaults to 'all'.
+        ----------
+
+        Returns
+        ----------
+        file_info (str)
+            The shortened version of the file name.
+        baseline_activity_dictionary (dict)
+            A dictionary with the baseline firing rates for all desired clusters.
+        ----------
+        """
+
+        get_clusters = kwargs['get_clusters'] if 'get_clusters' in kwargs.keys() \
+                                                 and (kwargs['get_clusters'] == 'all' or type(kwargs['get_clusters']) == int or type(kwargs['get_clusters']) == list) else 'all'
+
+        # get spike data in seconds and tracking start and end time
+        file_id, extracted_data = Session(session=self.input_file).data_loader(extract_clusters=get_clusters, extract_variables=['tracking_ts'])
+
+        # get baseline rates
+        baseline_activity_dictionary = {}
+        track_ts = extracted_data['tracking_ts']
+        recording_len = track_ts[1] - track_ts[0]
+        extracted_activity = extracted_data['cluster_spikes']
+
+        for cl_id, spikes in extracted_activity.items():
+
+            # eliminate spikes that happen prior to and post tracking
+            purged_spikes_sec = purge_spikes_beyond_tracking(spike_train=spikes, tracking_ts=track_ts)
+
+            baseline_activity_dictionary[cl_id] = round(purged_spikes_sec.shape[0] / recording_len, 2)
+
+        return file_id, baseline_activity_dictionary
+
     def convert_activity_to_frames_with_shuffles(self, **kwargs):
         """
         Description
