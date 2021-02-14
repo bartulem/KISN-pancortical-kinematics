@@ -40,7 +40,7 @@ from neural_activity import Spikes
 
 def uncover_file_specifics(file_name):
     animal_name = [name for name in ClusterFinder.probe_site_areas.keys() if name in file_name][0]
-    get_date_idx = [date.start() for date in re.finditer('20', file_name)][-1]
+    get_date_idx = [date.start() for date in re.finditer('20_s', file_name)][-1]
     recording_date = file_name[get_date_idx-4:get_date_idx+2]
     if animal_name == 'bruno':
         recording_bank = 'distal'
