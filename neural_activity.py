@@ -578,6 +578,7 @@ class Spikes:
                                                  and (kwargs['get_clusters'] == 'all' or type(kwargs['get_clusters']) == int or type(kwargs['get_clusters']) == list) else 'all'
         to_shuffle = kwargs['to_shuffle'] if 'to_shuffle' in kwargs.keys() and type(kwargs['to_shuffle']) == bool else False
         condense_arr = kwargs['condense_arr'] if 'condense_arr' in kwargs.keys() and type(kwargs['condense_arr']) == bool else False
+        condense_bin_ms = kwargs['condense_bin_ms'] if 'condense_bin_ms' in kwargs.keys() and type(kwargs['condense_bin_ms']) == int else 100
 
         # get spike data in seconds and tracking start and end time
         file_id, extracted_data = Session(session=self.input_file).data_loader(extract_clusters=get_clusters, extract_variables=['tracking_ts', 'framerate', 'total_frame_num'])
@@ -605,7 +606,8 @@ class Spikes:
             if not condense_arr:
                 activity_dictionary[cell_id]['activity'] = sparse.COO(cell_id_activity).astype(np.int16)
             else:
-                activity_dictionary[cell_id]['activity'] = sparse.COO(condense_frame_arrays(frame_array=cell_id_activity)).astype(np.int16)
+                activity_dictionary[cell_id]['activity'] = sparse.COO(condense_frame_arrays(frame_array=cell_id_activity,
+                                                                                            bin_size_ms=condense_bin_ms)).astype(np.int16)
 
             if to_shuffle:
                 activity_dictionary[cell_id]['shuffled'] = {}

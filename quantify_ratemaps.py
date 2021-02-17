@@ -17,7 +17,7 @@ import numpy as np
 import scipy.io as sio
 from tqdm import tqdm
 from numba import njit
-from scipy.stats import pearsonr
+from scipy.stats import spearmanr
 from select_clusters import ClusterFinder
 from neural_activity import Spikes
 
@@ -83,7 +83,7 @@ def get_shuffled_stability(n_times=10, shuffled_data_1=np.zeros((36, 1000)),
         shuffled_first = shuffled_data_1[:, ran_num_1].take(indices=valid_sh_ind)
         shuffled_second = shuffled_data_2[:, ran_num_2].take(indices=valid_sh_ind)
 
-        shuffled_stability[n] = pearsonr(shuffled_first, shuffled_second)[0]
+        shuffled_stability[n] = spearmanr(shuffled_first, shuffled_second)[0]
 
     return shuffled_stability
 
@@ -441,7 +441,7 @@ class RatemapCharacteristics:
                             # calculate stability
                             valid_rm_revised = mat[key][use_smoothed_rm, :].take(indices=indices_intersection)
                             valid_rm2_revised = mat2[key][use_smoothed_rm, :].take(indices=indices_intersection)
-                            stability[cl_num]['features'][feature_id] = pearsonr(valid_rm_revised, valid_rm2_revised)[0]
+                            stability[cl_num]['features'][feature_id] = spearmanr(valid_rm_revised, valid_rm2_revised)[0]
 
                             # get shuffled stability
                             shuffled_key = f'{key[:19]}{feature_id}-rawacc_shuffles'
