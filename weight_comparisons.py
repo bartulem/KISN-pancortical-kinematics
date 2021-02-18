@@ -13,6 +13,8 @@ import sys
 import json
 import scipy.stats
 import numpy as np
+import matplotlib.patches as patches
+import matplotlib.colorbar as cbar
 import matplotlib.pyplot as plt
 from scipy.ndimage.filters import gaussian_filter1d, uniform_filter1d
 from tqdm import tqdm
@@ -406,6 +408,7 @@ class WeightComparer:
 
             feature_color = [val for key, val in Ratemap.feature_colors.items() if key in chosen_feature][0]
             feature_der = f'{chosen_feature}_{self.der}_der'
+            # chosen_feature = feature_der
 
             fig = plt.figure()
             gs1 = fig.add_gridspec(nrows=3, ncols=2, left=.075, right=.505,
@@ -467,7 +470,7 @@ class WeightComparer:
             ax3.set_xlim(-1.1, 1.1)
             ax3.set_ylim(-1.1, 1.1)
             ax3.set_yticks([-1, -.5, 0, .5, 1])
-            ax3.tick_params(axis='both', which='major', length=.25, labelsize=8, pad=.75)
+            ax3.tick_params(axis='both', which='major', length=1, labelsize=8, pad=.75)
             ax3.set_xlabel('L1-L2 correlation', labelpad=.1)
             ax3.set_ylabel('W-L2 correlation', labelpad=.1)
             ax3.set_title('Stability')
@@ -504,10 +507,6 @@ class WeightComparer:
         Parameters
         ----------
         **kwargs (dictionary)
-        min_max_rate (list / bool)
-            Min and max rate on the plot; defaults to True.
-        plot_feature_legend (bool)
-            Yey or ney on the feature legend plot; defaults to False.
         ----------
 
         Returns
@@ -517,100 +516,85 @@ class WeightComparer:
         ----------
         """
 
-        min_max_rate = kwargs['min_max_rate'] if 'min_max_rate' in kwargs.keys() \
-                                                 and type(kwargs['min_max_rate']) == list and len(kwargs['min_max_rate']) == 2 else True
-        plot_feature_legend = kwargs['plot_feature_legend'] if 'plot_feature_legend' in kwargs.keys() and type(kwargs['plot_feature_legend']) == bool else False
-
         weight_dict = extract_json_data(json_file=self.weight_json_file,
                                         weight=True,
                                         features=self.chosen_features,
                                         peak_min=self.peak_min,
                                         rate_stability_bound=self.rate_stability_bound,
-                                        der=self.der)
+                                        der=self.der,
+                                        ref_dict=self.ref_dict)
 
-        shuffled_dict = make_shuffled_distributions(weight_dict=weight_dict)
+        shuffled_dict = make_shuffled_distributions(weight_dict=weight_dict, ref_dict=self.ref_dict)
 
-        weight_stats_dict={'features': {'light1': [], 'weight': [], 'p-values': [], 'cl_n': [], 'names': [], 'feature_colors': []},
-                           'features_der': {'light1': [], 'weight': [], 'p-values': [], 'cl_n': [], 'names': [], 'feature_colors': []}}
+        weight_stats_dict={'features': {'peaks': [], 'correlations': [], 'cl_n': [], 'names': [], 'feature_colors': []},
+                           'features_der': {'peaks': [], 'correlations': [], 'cl_n': [], 'names': [], 'feature_colors': []}}
 
         for feature in weight_dict.keys():
             if 'der' not in feature:
-                weight_stats_dict['features']['light1'].append(np.median(weight_dict[feature]['light1']))
-                weight_stats_dict['features']['weight'].append(np.median(weight_dict[feature]['weight']))
-                weight_stats_dict['features']['p-values'].append(shuffled_dict[feature]['p-value'])
-                weight_stats_dict['features']['cl_n'].append(len(weight_dict[feature]['light1']))
+                weight_stats_dict['features']['peaks'].append(shuffled_dict[feature]['peaks']['p-value'])
+                weight_stats_dict['features']['correlations'].append(shuffled_dict[feature]['correlations']['p-value'])
+                weight_stats_dict['features']['cl_n'].append(len(weight_dict[feature]['peaks']['weight']))
                 weight_stats_dict['features']['names'].append(feature)
                 weight_stats_dict['features']['feature_colors'].append([val for key, val in Ratemap.feature_colors.items() if key in feature][0])
             else:
-                weight_stats_dict['features_der']['light1'].append(np.median(weight_dict[feature]['light1']))
-                weight_stats_dict['features_der']['weight'].append(np.median(weight_dict[feature]['weight']))
-                weight_stats_dict['features_der']['p-values'].append(shuffled_dict[feature]['p-value'])
-                weight_stats_dict['features_der']['cl_n'].append(len(weight_dict[feature]['light1']))
+                weight_stats_dict['features_der']['peaks'].append(shuffled_dict[feature]['peaks']['p-value'])
+                weight_stats_dict['features_der']['correlations'].append(shuffled_dict[feature]['correlations']['p-value'])
+                weight_stats_dict['features_der']['cl_n'].append(len(weight_dict[feature]['peaks']['weight']))
                 weight_stats_dict['features_der']['names'].append(feature)
                 weight_stats_dict['features_der']['feature_colors'].append([val for key, val in Ratemap.feature_colors.items() if key in feature][0])
 
         print(weight_stats_dict)
 
-        if type(min_max_rate) == bool:
-            min_rate = int(np.floor(np.min(weight_stats_dict['features']['light1'] + weight_stats_dict['features']['weight'])))
-            max_rate = int(np.ceil(np.max(weight_stats_dict['features']['light1'] + weight_stats_dict['features']['weight'])))
-            min_rate_der = int(np.floor(np.min(weight_stats_dict['features_der']['light1'] + weight_stats_dict['features_der']['weight'])))
-            max_rate_der = int(np.ceil(np.max(weight_stats_dict['features_der']['light1'] + weight_stats_dict['features_der']['weight'])))
-        else:
-            min_rate = min_max_rate[0]
-            max_rate = min_max_rate[1]
-            min_rate_der = min_max_rate[0]
-            max_rate_der = min_max_rate[1]
-
-
-        fig, ax = plt.subplots(nrows=1, ncols=2, figsize=(12, 4))
-        ax1 = plt.subplot(121)
-        sca1 = ax1.scatter(weight_stats_dict['features']['light1'], weight_stats_dict['features']['weight'],
-                           label=None, c=np.log10(weight_stats_dict['features']['p-values']), cmap='seismic_r',
-                           s=np.array(weight_stats_dict['features']['cl_n'])*2, alpha=.85,
-                           edgecolors=weight_stats_dict['features']['feature_colors'], lw=2)
-
-        ax1.set_title('Features')
-        ax1.set_xlim(min_rate, max_rate)
-        ax1.set_ylim(min_rate, max_rate)
-        ax1.set_xlabel(f'L{self.light_session} median peak (spikes/s)')
-        ax1.set_ylabel(f'W median at L{self.light_session} peak (spikes/s)')
-        for area in np.array([50, 100, 200]):
-            ax1.scatter([], [], c='#000000', alpha=.3, s=area*2,
-                        label=str(area) + ' units')
-            ax1.legend(scatterpoints=1, frameon=False,
-                       labelspacing=1.5, title='Number of clusters')
-        ax1.plot([min_rate, max_rate], [min_rate, max_rate], ls='-.', lw=.5, color='#000000')
-        ax2 = plt.subplot(122)
-        sca2 = ax2.scatter(weight_stats_dict['features_der']['light1'], weight_stats_dict['features_der']['weight'],
-                           label=None, c=np.log10(weight_stats_dict['features_der']['p-values']), cmap='seismic_r',
-                           s=np.array(weight_stats_dict['features_der']['cl_n'])*2, alpha=.85,
-                           edgecolors=weight_stats_dict['features_der']['feature_colors'], lw=3)
-
-        ax2.set_title('Derivatives')
-        ax2.set_xlim(min_rate_der, max_rate_der)
-        ax2.set_ylim(min_rate_der, max_rate_der)
-        ax2.set_xlabel(f'L{self.light_session} median peak (spikes/s)')
-        ax2.plot([min_rate_der, max_rate_der], [min_rate_der, max_rate_der], ls='-.', lw=.5, color='#000000')
-        cb_ax = fig.add_axes([.91,.124,.01,.754])
-        cbar = fig.colorbar(sca2, orientation='vertical', cax=cb_ax)
-        cbar.set_label('log$_{10}$(p-value)')
-        sca1.set_clim(vmin=-4, vmax=0)
-        sca2.set_clim(vmin=-4, vmax=0)
-        if plot_feature_legend:
-            y_start = max_rate_der - .5
-            for idx, (key, val) in enumerate(Ratemap.feature_colors.items()):
-                if (idx < 6 and idx % 2 == 0) or idx >= 6:
-                    ax2.axhline(xmin=.05, xmax=.15, y=y_start, ls='-', lw=2.5, color=val)
-                    ax2.text(x=min_rate_der + (max_rate_der-min_rate_der)*.175, y=y_start-.05,
-                             s=key.lower().replace('_', ' '), fontsize=7)
-                    y_start -= .5
-        if self.save_fig:
-            if os.path.exists(self.save_dir):
-                fig.savefig(f'{self.save_dir}{os.sep}_weight_statistics.{self.fig_format}', dpi=300)
-            else:
-                print("Specified save directory doesn't exist. Try again.")
-                sys.exit()
+        x1, x2 = 1, 3
+        fig, ax = plt.subplots(nrows=1, ncols=1, figsize=(20, 4))
+        ax1 = plt.subplot(111)
+        cmap=plt.cm.seismic_r
+        normal_range = plt.Normalize(vmin=-4, vmax=0)
+        for idx, feature in enumerate(weight_stats_dict['features']['names']):
+            probabilities=np.log10([weight_stats_dict['features']['peaks'][idx],
+                                    weight_stats_dict['features']['correlations'][idx],
+                                    weight_stats_dict['features_der']['peaks'][idx],
+                                    weight_stats_dict['features_der']['correlations'][idx]])
+            colors = plt.cm.seismic_r(normal_range(probabilities))
+            p = patches.Polygon(xy=np.array([[x1, 4], [x1, 6], [x2, 4]]),
+                                closed=False,
+                                ec='#000000',
+                                fc=colors[0])
+            p2 = patches.Polygon(xy=np.array([[x2, 6], [x1, 6], [x2, 4]]),
+                                 closed=False,
+                                 ec='#000000',
+                                 fc=colors[1])
+            p3 = patches.Polygon(xy=np.array([[x1, 1], [x1, 3], [x2, 1]]),
+                                 closed=False,
+                                 ec='#000000',
+                                 fc=colors[2])
+            p4 = patches.Polygon(xy=np.array([[x2, 3], [x1, 3], [x2, 1]]),
+                                 closed=False,
+                                 ec='#000000',
+                                 fc=colors[3])
+            ax1.add_patch(p)
+            ax1.add_patch(p2)
+            ax1.add_patch(p3)
+            ax1.add_patch(p4)
+            ax1.text(x=x1-.2, y=7, s=feature.replace('_', ' '), fontsize=8)
+            ax1.text(x=x1, y=6.5, s='n_clusters={}'.format(weight_stats_dict['features']['cl_n'][idx]), fontsize=8)
+            ax1.text(x=x1, y=3.5, s='n_clusters={}'.format(weight_stats_dict['features_der']['cl_n'][idx]), fontsize=8)
+            x1 += 3
+            x2 += 3
+        ax1.text(x=-1, y=5, s='Feature', fontsize=8)
+        ax1.text(x=-1, y=2, s='Derivative', fontsize=8)
+        ax1.set_xlim(-1.5, 33)
+        ax1.set_ylim(-1.5, 8)
+        ax1.spines['bottom'].set_visible(False)
+        ax1.spines['left'].set_visible(False)
+        ax1.spines['top'].set_visible(False)
+        ax1.spines['right'].set_visible(False)
+        ax1.set_xticks([])
+        ax1.set_yticks([])
+        cax, _ = cbar.make_axes(ax1)
+        color_bar = cbar.ColorbarBase(cax, cmap=cmap, norm=normal_range)
+        color_bar.set_label('log$_{10}$(p-value)')
+        color_bar.ax.tick_params(size=0)
         plt.show()
 
 

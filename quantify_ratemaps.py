@@ -639,7 +639,7 @@ class RatemapCharacteristics:
                                 if all(one_item in pkl_file for one_item in session_id.split('_')) and 'light' in pkl_file and first_session_id in pkl_file:
                                     file_id, baseline_activity_dictionary = Spikes(input_file=f'{self.pkl_sessions_dir}{os.sep}{pkl_file}').get_baseline_firing_rates(get_clusters=[cl_id])
                                     weight_comparison[cl_num]['baseline_firing_rates']['light1'] = baseline_activity_dictionary[cl_id]
-                                elif all(one_item in pkl_file for one_item in session_id.split('_')) and 'weight' in pkl_file:
+                                elif all(one_item in pkl_file for one_item in session_id.split('_')) and session_2_type in pkl_file:
                                     file_id_2, baseline_activity_dictionary_2 = Spikes(input_file=f'{self.pkl_sessions_dir}{os.sep}{pkl_file}').get_baseline_firing_rates(get_clusters=[cl_id])
                                     weight_comparison[cl_num]['baseline_firing_rates']['weight'] = baseline_activity_dictionary_2[cl_id]
                                 elif all(one_item in pkl_file for one_item in session_id.split('_')) and 'light' in pkl_file and first_session_id not in pkl_file:
@@ -647,10 +647,10 @@ class RatemapCharacteristics:
                                     weight_comparison[cl_num]['baseline_firing_rates']['light2'] = baseline_activity_dictionary_3[cl_id]
 
                         weight_comparison[cl_num]['features'][feature_id]['light1'] = list(valid_rm_revised)
-                        weight_comparison[cl_num]['features'][feature_id]['weight'] = list(valid_rm2_revised)
+                        weight_comparison[cl_num]['features'][feature_id][session_2_type] = list(valid_rm2_revised)
                         weight_comparison[cl_num]['features'][feature_id]['light2'] = list(valid_rm3_revised)
                         weight_comparison[cl_num]['features'][feature_id]['ICr-light1'] = mat[key.replace('data', 'ICr')].ravel()[0]
-                        weight_comparison[cl_num]['features'][feature_id]['ICr-weight'] = mat2[key.replace('data', 'ICr')].ravel()[0]
+                        weight_comparison[cl_num]['features'][feature_id][f'ICr-{session_2_type}'] = mat2[key.replace('data', 'ICr')].ravel()[0]
                         weight_comparison[cl_num]['features'][feature_id]['ICr-light2'] = mat3[key.replace('data', 'ICr')].ravel()[0]
 
             cl_num += 1
