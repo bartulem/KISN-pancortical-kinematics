@@ -25,7 +25,7 @@ from neural_activity import Spikes
 
 def extract_json_data(json_file='', weight=False, features=None,
                       peak_min=True, der='1st', rate_stability_bound=True,
-                      ref_dict=None):
+                      ref_dict=None, middle_session='weight'):
     """
     Description
     ----------
@@ -50,6 +50,8 @@ def extract_json_data(json_file='', weight=False, features=None,
         Derivative of choice; defaults to '1st'.
     ref_dict (dict)
         The reference and second light session: defaults to {'ref_session': 'light1', 'other_session': 'light2'}
+    middle_session (str)
+        The middle session of interest; defaults to 'weight'.
     ----------
 
     Returns
@@ -70,20 +72,22 @@ def extract_json_data(json_file='', weight=False, features=None,
     if weight:
         weight_dict = {}
         for feature in features:
-            weight_dict[feature] = {'peaks': {'light1': [], 'weight': [], 'light2': []},
-                                    'correlations': {'light1-weight': [], 'light2-weight': [], 'lights': []}}
+            weight_dict[feature] = {'peaks': {'light1': [], middle_session: [], 'light2': []},
+                                    'information_rates': {'light1': [], middle_session: [], 'light2': []},
+                                    'correlations': {f'light1-{middle_session}': [], f'light2-{middle_session}': [], 'lights': []}}
             if der == '2nd' and feature == 'Speeds':
                 continue
             else:
-                weight_dict[f'{feature}_{der}_der'] = {'peaks': {'light1': [], 'weight': [], 'light2': []},
-                                                       'correlations': {'light1-weight': [], 'light2-weight': [], 'lights': []}}
+                weight_dict[f'{feature}_{der}_der'] = {'peaks': {'light1': [], middle_session: [], 'light2': []},
+                                                       'information_rates': {'light1': [], middle_session: [], 'light2': []},
+                                                       'correlations': {f'light1-{middle_session}': [], f'light2-{middle_session}': [], 'lights': []}}
 
     for cl_num in json_data.keys():
         if weight:
             for key in json_data[cl_num]['features'].keys():
                 if key in weight_dict.keys() and len(json_data[cl_num]['features'][key][ref_dict['ref_session']]) > 5:
                     ref_session = json_data[cl_num]['features'][key][ref_dict['ref_session']]
-                    weight_session = json_data[cl_num]['features'][key]['weight']
+                    weight_session = json_data[cl_num]['features'][key][middle_session]
                     other_session = json_data[cl_num]['features'][key][ref_dict['other_session']]
                     ref_session_peak = np.max(ref_session)
                     weight_at_peak = weight_session[np.argmax(ref_session_peak)]
@@ -92,43 +96,55 @@ def extract_json_data(json_file='', weight=False, features=None,
                             and (peak_min is True or np.max(weight_session) > peak_min) \
                             and (peak_min is True or np.max(other_session) > peak_min) \
                             and rate_stability_bound is True or abs(json_data[cl_num]['baseline_firing_rates'][ref_dict['ref_session']]
-                                                                    - json_data[cl_num]['baseline_firing_rates']['weight']) \
+                                                                    - json_data[cl_num]['baseline_firing_rates'][middle_session]) \
                             < (json_data[cl_num]['baseline_firing_rates'][ref_dict['ref_session']] * (rate_stability_bound / 100)):
                         weight_dict[key]['peaks'][ref_dict['ref_session']].append(ref_session_peak)
-                        weight_dict[key]['peaks']['weight'].append(weight_at_peak)
+                        weight_dict[key]['peaks'][middle_session].append(weight_at_peak)
                         weight_dict[key]['peaks'][ref_dict['other_session']].append(other_session_at_peak)
-                        weight_dict[key]['correlations']['{}-weight'.format(ref_dict['ref_session'])].append(scipy.stats.spearmanr(ref_session, weight_session)[0])
-                        weight_dict[key]['correlations']['{}-weight'.format(ref_dict['other_session'])].append(scipy.stats.spearmanr(other_session, weight_session)[0])
+
+                        weight_dict[key]['information_rates'][ref_dict['ref_session']].append(json_data[cl_num]['features'][key]['ICr-{}'.format(ref_dict['ref_session'])])
+                        weight_dict[key]['information_rates'][middle_session].append(json_data[cl_num]['features'][key]['ICr-{}'.format(middle_session)])
+                        weight_dict[key]['information_rates'][ref_dict['other_session']].append(json_data[cl_num]['features'][key]['ICr-{}'.format(ref_dict['other_session'])])
+
+                        weight_dict[key]['correlations']['{}-{}'.format(ref_dict['ref_session'], middle_session)].append(scipy.stats.spearmanr(ref_session, weight_session)[0])
+                        weight_dict[key]['correlations']['{}-{}'.format(ref_dict['other_session'], middle_session)].append(scipy.stats.spearmanr(other_session, weight_session)[0])
                         weight_dict[key]['correlations']['lights'].append(scipy.stats.spearmanr(ref_session, other_session)[0])
 
     if weight:
         return weight_dict
 
 
-def make_shuffled_distributions(weight_dict, ref_dict, n_shuffles=1000):
+def make_shuffled_distributions(weight_dict, ref_dict, middle_session, n_shuffles=1000):
     shuffled_dict = {}
     for feature in tqdm(weight_dict.keys()):
         shuffled_dict[feature] = {'peaks': {'null_differences': np.zeros(n_shuffles), 'true_difference': 0, 'z-value': 1, 'p-value': 1},
-                                  'correlations': {'null_differences': np.zeros(n_shuffles), 'true_difference': 0, 'z-value': 1, 'p-value': 1}}
-        true_difference_peaks = np.mean(np.diff(np.array([weight_dict[feature]['peaks']['weight'],
-                                                          weight_dict[feature]['peaks'][ref_dict['ref_session']]]), axis=0))
-        shuffled_dict[feature]['peaks']['true_difference'] = true_difference_peaks
-        corr_arr = np.array([weight_dict[feature]['correlations']['{}-weight'.format(ref_dict['ref_session'])],
+                                  'correlations': {'null_differences': np.zeros(n_shuffles), 'true_difference': 0, 'z-value': 1, 'p-value': 1},
+                                  'information_rates': {'null_differences': np.zeros(n_shuffles), 'true_difference': 0, 'z-value': 1, 'p-value': 1}}
+        for attribute in ['peaks', 'information_rates']:
+            true_difference_attribute = np.mean(np.diff(np.array([weight_dict[feature][attribute][middle_session],
+                                                              weight_dict[feature][attribute][ref_dict['ref_session']]]), axis=0))
+            shuffled_dict[feature][attribute]['true_difference'] = true_difference_attribute
+        corr_arr = np.array([weight_dict[feature]['correlations']['{}-{}'.format(ref_dict['ref_session'], middle_session)],
                              weight_dict[feature]['correlations']['lights']])
         corr_arr[corr_arr > .99] = .99
         true_difference_corr = np.mean(np.diff(np.arctanh(corr_arr), axis=0))
         for sh in range(n_shuffles):
-            joint_arr = np.array([weight_dict[feature]['peaks']['weight'],
+            joint_arr = np.array([weight_dict[feature]['peaks'][middle_session],
                                   weight_dict[feature]['peaks'][ref_dict['ref_session']]])
+            joint_arr_ir = np.array([weight_dict[feature]['information_rates'][middle_session],
+                                     weight_dict[feature]['information_rates'][ref_dict['ref_session']]])
             joint_arr_corr = np.arctanh(corr_arr.copy())
             for col in range(joint_arr.shape[1]):
                 np.random.shuffle(joint_arr[:, col])
                 shuffled_dict[feature]['peaks']['null_differences'][sh] = np.mean(np.diff(joint_arr, axis=0))
+                np.random.shuffle(joint_arr_ir[:, col])
+                shuffled_dict[feature]['information_rates']['null_differences'][sh] = np.mean(np.diff(joint_arr_ir, axis=0))
                 np.random.shuffle(joint_arr_corr[:, col])
                 shuffled_dict[feature]['correlations']['null_differences'][sh] = np.mean(np.diff(joint_arr_corr, axis=0))
-        shuffled_dict[feature]['peaks']['z-value'] = (true_difference_peaks - shuffled_dict[feature]['peaks']['null_differences'].mean()) \
-                                                     / shuffled_dict[feature]['peaks']['null_differences'].std()
-        shuffled_dict[feature]['peaks']['p-value'] = 1 - scipy.stats.norm.cdf(shuffled_dict[feature]['peaks']['z-value'])
+        for attribute in ['peaks', 'information_rates']:
+            shuffled_dict[feature][attribute]['z-value'] = (shuffled_dict[feature][attribute]['true_difference'] - shuffled_dict[feature][attribute]['null_differences'].mean()) \
+                                                         / shuffled_dict[feature][attribute]['null_differences'].std()
+            shuffled_dict[feature][attribute]['p-value'] = 1 - scipy.stats.norm.cdf(shuffled_dict[feature][attribute]['z-value'])
         shuffled_dict[feature]['correlations']['z-value'] = (true_difference_corr - shuffled_dict[feature]['correlations']['null_differences'].mean()) \
                                                             / shuffled_dict[feature]['correlations']['null_differences'].std()
         shuffled_dict[feature]['correlations']['p-value'] = 1 - scipy.stats.norm.cdf(shuffled_dict[feature]['correlations']['z-value'])
@@ -269,44 +285,65 @@ class WeightComparer:
         with open(self.weight_json_file, 'r') as json_file:
             data = json.load(json_file)
 
-        baseline_rates = {'light1': [], 'weight': [], 'light2': []}
+        baseline_rates = {'light1': [], self.middle_session_type: [], 'light2': []}
         for cl_num in data.keys():
             baseline_rates['light1'].append(data[cl_num]['baseline_firing_rates']['light1'])
             baseline_rates['light2'].append(data[cl_num]['baseline_firing_rates']['light2'])
-            baseline_rates['weight'].append(data[cl_num]['baseline_firing_rates']['weight'])
+            baseline_rates[self.middle_session_type].append(data[cl_num]['baseline_firing_rates'][self.middle_session_type])
 
-        fig2, ax2 = plt.subplots(nrows=1, ncols=1)
-        ax2 = plt.subplot(1, 1, 1)
-        ax2.scatter(x=[gauss(.2, .025) for x in range(len(baseline_rates['light1']))], y=baseline_rates['light1'],
-                    color='#000000', alpha=.15, s=10)
-        ax2.boxplot(x=baseline_rates['light1'], positions=[.35], notch=True, sym='', widths=.1)
-        ax2.scatter(x=[gauss(.6, .025) for x in range(len(baseline_rates['weight']))], y=baseline_rates['weight'],
-                    color='#000000', alpha=.75, s=10)
-        ax2.boxplot(x=baseline_rates['weight'], positions=[.75], notch=True, sym='', widths=.1)
-        ax2.scatter(x=[gauss(1., .025) for x in range(len(baseline_rates['light2']))], y=baseline_rates['light2'],
-                    color='#000000', alpha=.15, s=10)
-        ax2.boxplot(x=baseline_rates['light2'], positions=[1.15], notch=True, sym='', widths=.1)
-        ax2.set_xticks([.275, .675, 1.075])
-        ax2.set_xticklabels(['Light1', 'Weight', 'Light2'])
-        ax2.set_ylabel('Firing rate (spikes/s)')
-        ax2.set_yscale('log')
-        ax2.spines['top'].set_visible(False)
-        ax2.spines['right'].set_visible(False)
-        if self.save_fig:
-            if os.path.exists(self.save_dir):
-                fig2.savefig(f'{self.save_dir}{os.sep}baseline_change_statistics1.{self.fig_format}', dpi=300)
-            else:
-                print("Specified save directory doesn't exist. Try again.")
-                sys.exit()
-        plt.show()
+        # fig2, ax2 = plt.subplots(nrows=1, ncols=1)
+        # ax2 = plt.subplot(1, 1, 1)
+        # hist_l1, edges = np.histogram(a=baseline_rates['light1'], bins=np.linspace(0, 40, 50))
+        # hist_l2, edges2 = np.histogram(a=baseline_rates['light2'], bins=np.linspace(0, 40, 50))
+        # middle_session, edges2 = np.histogram(a=baseline_rates[self.middle_session_type], bins=np.linspace(0, 40, 50))
+        # bin_centers = 0.5*(edges[1:]+edges[:-1])
+        # plt.plot(bin_centers, hist_l1, c='#000000', alpha=.35, label='light1')
+        # plt.plot(bin_centers, hist_l2, c='#000000', alpha=.45, label='light2')
+        # plt.plot(bin_centers, middle_session, c='#000000', alpha=1, label=self.middle_session_type)
+        # plt.legend()
+        # plt.title('Baseline firing rate distributions')
+        # plt.xlabel('Baseline firing rate (spikes/s)')
+        # plt.ylabel('Unit count')
+        # if self.save_fig:
+        #     if os.path.exists(self.save_dir):
+        #         fig2.savefig(f'{self.save_dir}{os.sep}firing_rate_distributions.{self.fig_format}', dpi=300)
+        #     else:
+        #         print("Specified save directory doesn't exist. Try again.")
+        #         sys.exit()
+        # plt.show()
 
-        diff_light1_weight = np.diff(np.array([baseline_rates['weight'], baseline_rates['light1']]), axis=0).ravel()
-        diff_weight_light2 = np.diff(np.array([baseline_rates['light2'], baseline_rates['weight']]), axis=0).ravel()
+        # fig2, ax2 = plt.subplots(nrows=1, ncols=1)
+        # ax2 = plt.subplot(1, 1, 1)
+        # ax2.scatter(x=[gauss(.2, .025) for x in range(len(baseline_rates['light1']))], y=baseline_rates['light1'],
+        #             color='#000000', alpha=.15, s=10)
+        # ax2.boxplot(x=baseline_rates['light1'], positions=[.35], notch=True, sym='', widths=.1)
+        # ax2.scatter(x=[gauss(.6, .025) for x in range(len(baseline_rates[self.middle_session_type]))], y=baseline_rates[self.middle_session_type],
+        #             color='#000000', alpha=.75, s=10)
+        # ax2.boxplot(x=baseline_rates[self.middle_session_type], positions=[.75], notch=True, sym='', widths=.1)
+        # ax2.scatter(x=[gauss(1., .025) for x in range(len(baseline_rates['light2']))], y=baseline_rates['light2'],
+        #             color='#000000', alpha=.15, s=10)
+        # ax2.boxplot(x=baseline_rates['light2'], positions=[1.15], notch=True, sym='', widths=.1)
+        # ax2.set_xticks([.275, .675, 1.075])
+        # ax2.set_xticklabels(['light1', self.middle_session_type, 'light2'])
+        # ax2.set_ylabel('Firing rate (spikes/s)')
+        # ax2.set_yscale('log')
+        # ax2.spines['top'].set_visible(False)
+        # ax2.spines['right'].set_visible(False)
+        # if self.save_fig:
+        #     if os.path.exists(self.save_dir):
+        #         fig2.savefig(f'{self.save_dir}{os.sep}baseline_change_statistics1.{self.fig_format}', dpi=300)
+        #     else:
+        #         print("Specified save directory doesn't exist. Try again.")
+        #         sys.exit()
+        # plt.show()
+
+        diff_light1_weight = np.diff(np.array([baseline_rates[self.middle_session_type], baseline_rates['light1']]), axis=0).ravel()
+        diff_weight_light2 = np.diff(np.array([baseline_rates['light2'], baseline_rates[self.middle_session_type]]), axis=0).ravel()
         diff_light1_light2 = np.diff(np.array([baseline_rates['light2'], baseline_rates['light1']]), axis=0).ravel()
 
         shuffled = np.zeros((3, 1000))
         for sh in tqdm(range(1000)):
-            for idx, n in enumerate([('weight', 'light1'), ('light2', 'weight'), ('light2', 'light1')]):
+            for idx, n in enumerate([(self.middle_session_type, 'light1'), ('light2', self.middle_session_type), ('light2', 'light1')]):
                 joint_arr = np.array([baseline_rates[n[0]], baseline_rates[n[1]]])
                 for col in range(joint_arr.shape[1]):
                     np.random.shuffle(joint_arr[:, col])
@@ -317,7 +354,7 @@ class WeightComparer:
         hist_n, hist_bins, hist_patches = ax31.hist(diff_light1_weight, bins=np.linspace(-7.5, 7.5, 50), histtype='stepfilled', color='#FFFFFF', edgecolor='#000000')
         ax31.axvline(x=0, ls='-.', color='#000000', alpha=.25)
         ax31.plot(diff_light1_weight.mean(), 12, marker='o', color='#000000')
-        ax31.set_xlabel('Light1 - Weight (spikes/s)')
+        ax31.set_xlabel(f'light1 - {self.middle_session_type} (spikes/s)')
         ax31.set_ylabel('Number of units')
         p_value = 1 - scipy.stats.norm.cdf((diff_light1_weight.mean() - shuffled[0, :].mean()) / shuffled[0, :].std())
         ax31.text(x=4, y=480, s=f'p={p_value:.2e}')
@@ -331,7 +368,7 @@ class WeightComparer:
         ax32.hist(diff_weight_light2, bins=hist_bins, histtype='stepfilled', color='#FFFFFF', edgecolor='#000000')
         ax32.axvline(x=0, ls='-.', color='#000000', alpha=.25)
         ax32.plot(diff_weight_light2.mean(), 12, marker='o', color='#000000')
-        ax32.set_xlabel('Weight - Light2 (spikes/s)')
+        ax32.set_xlabel(f'{self.middle_session_type} - light2 (spikes/s)')
         p_value_2 = 1 - scipy.stats.norm.cdf((diff_weight_light2.mean() - shuffled[1, :].mean()) / shuffled[1, :].std())
         ax32.text(x=6, y=490, s=f'p={p_value_2:.2f}')
         axins2 = inset_axes(ax32, width='40%', height='30%', loc=2)
@@ -343,7 +380,7 @@ class WeightComparer:
         ax33.hist(diff_light1_light2, bins=hist_bins, histtype='stepfilled', color='#FFFFFF', edgecolor='#000000')
         ax33.axvline(x=0, ls='-.', color='#000000', alpha=.25)
         ax33.plot(diff_light1_light2.mean(), 10, marker='o', color='#000000')
-        ax33.set_xlabel('Light1 - Light2 (spikes/s)')
+        ax33.set_xlabel('light1 - light2 (spikes/s)')
         p_value_3 = 1 - scipy.stats.norm.cdf((diff_light1_light2.mean() - shuffled[2, :].mean()) / shuffled[2, :].std())
         ax33.text(x=4, y=420, s=f'p={p_value_3:.2e}')
         axins3 = inset_axes(ax33, width='40%', height='30%', loc=2)
@@ -395,106 +432,124 @@ class WeightComparer:
                                         peak_min=self.peak_min,
                                         rate_stability_bound=self.rate_stability_bound,
                                         der=self.der,
-                                        ref_dict=self.ref_dict)
+                                        ref_dict=self.ref_dict,
+                                        middle_session=self.middle_session_type)
 
-        shuffled_dict = make_shuffled_distributions(weight_dict=weight_dict, ref_dict=self.ref_dict)
+        shuffled_dict = make_shuffled_distributions(weight_dict=weight_dict, ref_dict=self.ref_dict,
+                                                    middle_session=self.middle_session_type)
 
-        for chosen_feature in self.chosen_features:
-            if min_max_range:
-                min_joint = np.min(weight_dict[chosen_feature]['peaks'][self.ref_dict['ref_session']] + weight_dict[chosen_feature]['peaks']['weight'])
-                max_joint = int(np.ceil(np.max(weight_dict[chosen_feature]['peaks'][self.ref_dict['ref_session']] + weight_dict[chosen_feature]['peaks']['weight']) / 10.0)) * 10
-            else:
-                min_joint=.1
-                max_joint=100
-
-            feature_color = [val for key, val in Ratemap.feature_colors.items() if key in chosen_feature][0]
-            feature_der = f'{chosen_feature}_{self.der}_der'
-            # chosen_feature = feature_der
-
-            fig = plt.figure()
-            gs1 = fig.add_gridspec(nrows=3, ncols=2, left=.075, right=.505,
-                                   wspace=0.1, hspace=0.5)
-            ax1 = fig.add_subplot(gs1[:-1, :])
-            light_larger = np.array(weight_dict[chosen_feature]['peaks'][self.ref_dict['ref_session']]) \
-                           > np.array(weight_dict[chosen_feature]['peaks']['weight'])
-            weight_larger = ~light_larger
-            ax1.scatter(x=np.array(weight_dict[chosen_feature]['peaks'][self.ref_dict['ref_session']])[light_larger],
-                        y=np.array(weight_dict[chosen_feature]['peaks']['weight'])[light_larger],
-                        color=feature_color, alpha=.25, s=10)
-            ax1.scatter(x=np.array(weight_dict[chosen_feature]['peaks'][self.ref_dict['ref_session']])[weight_larger],
-                        y=np.array(weight_dict[chosen_feature]['peaks']['weight'])[weight_larger],
-                        color=feature_color, alpha=.75, s=10)
-            ax1.plot([min_joint, max_joint], [min_joint, max_joint], ls='-.', lw=.5, color='#000000')
-            axins1 = inset_axes(ax1, width='40%', height='30%', loc=2)
-            k = scipy.stats.kde.gaussian_kde([np.log10(weight_dict[chosen_feature]['peaks'][self.ref_dict['ref_session']]),
-                                              np.log10(weight_dict[chosen_feature]['peaks']['weight'])])
-            xi, yi = np.mgrid[np.log10(min_joint):np.log10(max_joint):10*1j, np.log10(min_joint):np.log10(max_joint):10*1j]
-            zi = k(np.vstack([xi.flatten(), yi.flatten()]))
-            axins1.pcolormesh(xi, yi, zi.reshape(xi.shape), shading='gouraud', cmap='cividis')
-            axins1.plot([0, 1], [0, 1], ls='-.', lw=.5, color='#FFFFFF', transform=axins1.transAxes)
-            axins1.set_xticks([])
-            axins1.set_yticks([])
-            axins1.set_xlim(np.log10(min_joint), np.log10(max_joint))
-            axins1.set_ylim(np.log10(min_joint), np.log10(max_joint))
-            ax1.set_title('Tuning peaks')
-            ax1.set_xlim(min_joint, max_joint)
-            ax1.set_xscale('log')
-            ax1.set_ylim(min_joint, max_joint)
-            ax1.set_yscale('log')
-            ax1.tick_params(axis='both', which='major', length=0, labelsize=8, pad=.5)
-            ax1.set_xlabel(f'L{self.light_session} peak rate (spikes/s)', labelpad=.1)
-            ax1.set_ylabel(f'W rate at L{self.light_session} peak (spikes/s)', labelpad=.1)
-
-            ax2 = fig.add_subplot(gs1[-1, :-1])
-            ax2.hist(shuffled_dict[chosen_feature]['peaks']['null_differences'], bins=10, histtype='stepfilled',
-                     color='#808080', edgecolor='#000000', alpha=.5)
-            ax2.axvline(x=np.nanpercentile(shuffled_dict[chosen_feature]['peaks']['null_differences'], 99), color='#000000', ls='-.', lw=.5)
-            y_min_2, y_max_2 = ax2.get_ylim()
-            ax2.plot(shuffled_dict[chosen_feature]['peaks']['true_difference'], 0+.05*y_max_2, marker='o', color=feature_color, markersize=5)
-            ax2.set_xlabel(f'L{self.light_session} - W difference (spikes/s)', labelpad=.5, fontsize=6)
-            ax2.set_ylabel('Shuffled count', labelpad=.1, fontsize=6)
-            ax2.tick_params(axis='both', which='both', labelsize=5)
-
-            gs2 = fig.add_gridspec(nrows=3, ncols=2, left=0.55, right=0.98,
-                                   wspace=0.1, hspace=0.5)
-            ax3 = fig.add_subplot(gs2[:-1, :])
-            light_larger = np.array(weight_dict[chosen_feature]['correlations']['lights']) \
-                           > np.array(weight_dict[chosen_feature]['correlations']['{}-weight'.format(self.ref_dict['ref_session'])])
-            weight_larger = ~light_larger
-            ax3.scatter(x=np.array(weight_dict[chosen_feature]['correlations']['lights'])[light_larger],
-                        y=np.array(weight_dict[chosen_feature]['correlations']['{}-weight'.format(self.ref_dict['ref_session'])])[light_larger],
-                        color=feature_color, alpha=.25, s=10)
-            ax3.scatter(x=np.array(weight_dict[chosen_feature]['correlations']['lights'])[weight_larger],
-                        y=np.array(weight_dict[chosen_feature]['correlations']['{}-weight'.format(self.ref_dict['ref_session'])])[weight_larger],
-                        color=feature_color, alpha=.75, s=10)
-            ax3.plot([-1.1, 1.1], [-1.1, 1.1], ls='-.', lw=.5, color='#000000')
-            ax3.set_xlim(-1.1, 1.1)
-            ax3.set_ylim(-1.1, 1.1)
-            ax3.set_yticks([-1, -.5, 0, .5, 1])
-            ax3.tick_params(axis='both', which='major', length=1, labelsize=8, pad=.75)
-            ax3.set_xlabel('L1-L2 correlation', labelpad=.1)
-            ax3.set_ylabel('W-L2 correlation', labelpad=.1)
-            ax3.set_title('Stability')
-
-            ax4 = fig.add_subplot(gs2[-1, :-1])
-            ax4.hist(shuffled_dict[chosen_feature]['correlations']['null_differences'], bins=10,
-                     histtype='stepfilled', color='#808080', edgecolor='#000000', alpha=.5)
-            ax4.axvline(x=np.nanpercentile(shuffled_dict[chosen_feature]['correlations']['null_differences'], 99),
-                        color='#000000', ls='-.', lw=.5)
-            y_min_2, y_max_2 = ax4.get_ylim()
-            ax4.plot(shuffled_dict[chosen_feature]['correlations']['true_difference'],
-                     0+.05*y_max_2, marker='o', color=feature_color, markersize=5)
-            ax4.set_xlabel(f'L1-L2 vs. L2-W difference (Spearman\'s Rho)', labelpad=.5, fontsize=6)
-            ax4.set_ylabel('Shuffled count', labelpad=.1, fontsize=6)
-            ax4.tick_params(axis='both', which='both', labelsize=5)
-
-            if self.save_fig:
-                if os.path.exists(self.save_dir):
-                    fig.savefig(f'{self.save_dir}{os.sep}_weight_feature_distributions_{chosen_feature}.{self.fig_format}', dpi=300)
+        fig = plt.figure(figsize=(12, 20))
+        gs_left = [.075, .405, .735]
+        gs_right = [.33, .66, .98]
+        for gs_idx, gs in enumerate(['peaks', 'information_rates', 'correlations']):
+            gs1 = fig.add_gridspec(nrows=12, ncols=3, left=gs_left[gs_idx],
+                                   right=gs_right[gs_idx], wspace=.1, hspace=.5)
+            ax1 = fig.add_subplot(gs1[:2, :])
+            ax2 = fig.add_subplot(gs1[6:8, :])
+            ax3 = fig.add_subplot(gs1[3:5, :])
+            ax4 = fig.add_subplot(gs1[9:11, :])
+            for chosen_feature in self.chosen_features:
+                if 'head' in chosen_feature or 'Head' in chosen_feature:
+                    axes_list = [ax1, ax2]
                 else:
-                    print("Specified save directory doesn't exist. Try again.")
-                    sys.exit()
-            plt.show()
+                    axes_list = [ax3, ax4]
+                chosen_feature_der = f'{chosen_feature}_{self.der}_der'
+                feature_color = [val for key, val in Ratemap.feature_colors.items() if key in chosen_feature][0]
+                for ax, specific_feature in zip(axes_list, [chosen_feature, chosen_feature_der]):
+                    if gs != 'correlations':
+                        light_larger = np.array(weight_dict[specific_feature][gs][self.ref_dict['ref_session']]) \
+                                               > np.array(weight_dict[specific_feature][gs][self.middle_session_type])
+                        weight_larger = ~light_larger
+                        ax.scatter(x=np.array(weight_dict[specific_feature][gs][self.ref_dict['ref_session']])[light_larger],
+                                   y=np.array(weight_dict[specific_feature][gs][self.middle_session_type])[light_larger],
+                                   color=feature_color, alpha=.15, s=10)
+                        ax.scatter(x=np.array(weight_dict[specific_feature][gs][self.ref_dict['ref_session']])[weight_larger],
+                                   y=np.array(weight_dict[specific_feature][gs][self.middle_session_type])[weight_larger],
+                                   color=feature_color, alpha=.85, s=10)
+                    else:
+                        light_larger = np.array(weight_dict[chosen_feature][gs]['lights']) \
+                                               > np.array(weight_dict[chosen_feature][gs]['{}-{}'.format(self.ref_dict['ref_session'], self.middle_session_type)])
+                        weight_larger = ~light_larger
+                        ax.scatter(x=np.array(weight_dict[chosen_feature][gs]['lights'])[light_larger],
+                                   y=np.array(weight_dict[chosen_feature][gs]['{}-{}'.format(self.ref_dict['ref_session'], self.middle_session_type)])[light_larger],
+                                   color=feature_color, alpha=.15, s=10)
+                        ax.scatter(x=np.array(weight_dict[chosen_feature][gs]['lights'])[weight_larger],
+                                   y=np.array(weight_dict[chosen_feature][gs]['{}-{}'.format(self.ref_dict['ref_session'], self.middle_session_type)])[weight_larger],
+                                   color=feature_color, alpha=.85, s=10)
+            for ax_idx, ax in enumerate([ax1, ax2, ax3, ax4]):
+                if ax_idx == 0:
+                    ax.set_title(gs.replace('_', ' '))
+                if gs == 'peaks':
+                    ax.plot([.1, 100], [.1, 100], ls='-.', lw=.5, color='#000000')
+                    ax.set_xlim(.1, 100)
+                    ax.set_xscale('log')
+                    ax.set_ylim(.1, 100)
+                    ax.set_yscale('log')
+                    ax.tick_params(axis='both', which='major', length=0, labelsize=8, pad=.5)
+                    ax.set_xlabel(f'L{self.light_session} peak rate (spikes/s)', labelpad=.1)
+                    ax.set_ylabel(f'{self.middle_session_type} rate at L{self.light_session} peak (spikes/s)', labelpad=.1)
+                elif gs == 'information_rates':
+                    ax.plot([.001, 1], [.001, 1], ls='-.', lw=.5, color='#000000')
+                    ax.tick_params(axis='both', which='major', length=0, labelsize=8, pad=.75)
+                    ax.set_xlim(.001, 1)
+                    ax.set_xscale('log')
+                    ax.set_ylim(.001, 1)
+                    ax.set_yscale('log')
+                    ax.set_xlabel(f'L{self.light_session} info rate (bits/spike)', labelpad=.1)
+                    ax.set_ylabel(f'{self.middle_session_type} info rate (bits/spike)', labelpad=.1)
+                else:
+                    ax.plot([-1.1, 1.1], [-1.1, 1.1], ls='-.', lw=.5, color='#000000')
+                    ax.set_xlim(-1.1, 1.1)
+                    ax.set_ylim(-1.1, 1.1)
+                    ax.set_yticks([-1, -.5, 0, .5, 1])
+                    ax.tick_params(axis='both', which='major', length=1, labelsize=8, pad=.75)
+                    ax.set_xlabel('L1-L2 correlation', labelpad=.1)
+                    ax.set_ylabel(f'{self.middle_session_type}-L2 correlation', labelpad=.1)
+
+            head_col = 0
+            back_col = 0
+            for chosen_feature in self.chosen_features:
+                if 'head' in chosen_feature or 'Head' in chosen_feature:
+                    row_list = [2, 8]
+                    col = head_col
+                else:
+                    row_list = [5, 11]
+                    col = back_col
+                chosen_feature_der = f'{chosen_feature}_{self.der}_der'
+                feature_color = [val for key, val in Ratemap.feature_colors.items() if key in chosen_feature][0]
+                for row, specific_feature in zip(row_list, [chosen_feature, chosen_feature_der]):
+                    ax = fig.add_subplot(gs1[row, col])
+                    ax.hist(shuffled_dict[specific_feature][gs]['null_differences'], bins=10,
+                            histtype='stepfilled', color='#808080', edgecolor='#000000', alpha=.5)
+                    ax.axvline(x=np.nanpercentile(shuffled_dict[specific_feature][gs]['null_differences'], 0.5), color='#000000', ls='-.', lw=.5)
+                    ax.axvline(x=np.nanpercentile(shuffled_dict[specific_feature][gs]['null_differences'], 99.5), color='#000000', ls='-.', lw=.5)
+                    ax.set_ylim(ymax=275)
+                    ax.plot(shuffled_dict[specific_feature][gs]['true_difference'], 0+.05*275, marker='o', color=feature_color, markersize=5)
+                    if col < 1:
+                        ax.set_ylabel('Shuffled count', labelpad=.1, fontsize=6)
+                        ax.set_yticks(np.arange(0, 275, 50))
+                    elif col == 1:
+                        if gs == 'peaks':
+                            ax.set_xlabel(f'L{self.light_session} - {self.middle_session_type} difference (spikes/s)', labelpad=.5, fontsize=6)
+                        elif gs == 'information_rates':
+                            ax.set_xlabel(f'L{self.light_session} - {self.middle_session_type} difference (bits/spike)', labelpad=.5, fontsize=6)
+                        else:
+                            ax.set_xlabel(f'L{self.light_session} - {self.middle_session_type} difference (rho)', labelpad=.5, fontsize=6)
+                        ax.set_yticklabels([])
+                    else:
+                        ax.set_yticklabels([])
+                    ax.tick_params(axis='both', which='both', labelsize=5)
+                if 'head' in chosen_feature or 'Head' in chosen_feature:
+                    head_col += 1
+                else:
+                    back_col += 1
+        if self.save_fig:
+            if os.path.exists(self.save_dir):
+                fig.savefig(f'{self.save_dir}{os.sep}weight_features_comparisons.{self.fig_format}', dpi=300)
+            else:
+                print("Specified save directory doesn't exist. Try again.")
+                sys.exit()
+        plt.show()
 
     def plot_weight_statistics(self, **kwargs):
         """
@@ -523,9 +578,11 @@ class WeightComparer:
                                         peak_min=self.peak_min,
                                         rate_stability_bound=self.rate_stability_bound,
                                         der=self.der,
-                                        ref_dict=self.ref_dict)
+                                        ref_dict=self.ref_dict,
+                                        middle_session=self.middle_session_type)
 
-        shuffled_dict = make_shuffled_distributions(weight_dict=weight_dict, ref_dict=self.ref_dict)
+        shuffled_dict = make_shuffled_distributions(weight_dict=weight_dict, ref_dict=self.ref_dict,
+                                                    middle_session=self.middle_session_type)
 
         weight_stats_dict={'features': {'peaks': [], 'correlations': [], 'cl_n': [], 'names': [], 'feature_colors': []},
                            'features_der': {'peaks': [], 'correlations': [], 'cl_n': [], 'names': [], 'feature_colors': []}}
@@ -534,13 +591,13 @@ class WeightComparer:
             if 'der' not in feature:
                 weight_stats_dict['features']['peaks'].append(shuffled_dict[feature]['peaks']['p-value'])
                 weight_stats_dict['features']['correlations'].append(shuffled_dict[feature]['correlations']['p-value'])
-                weight_stats_dict['features']['cl_n'].append(len(weight_dict[feature]['peaks']['weight']))
+                weight_stats_dict['features']['cl_n'].append(len(weight_dict[feature]['peaks'][self.middle_session_type]))
                 weight_stats_dict['features']['names'].append(feature)
                 weight_stats_dict['features']['feature_colors'].append([val for key, val in Ratemap.feature_colors.items() if key in feature][0])
             else:
                 weight_stats_dict['features_der']['peaks'].append(shuffled_dict[feature]['peaks']['p-value'])
                 weight_stats_dict['features_der']['correlations'].append(shuffled_dict[feature]['correlations']['p-value'])
-                weight_stats_dict['features_der']['cl_n'].append(len(weight_dict[feature]['peaks']['weight']))
+                weight_stats_dict['features_der']['cl_n'].append(len(weight_dict[feature]['peaks'][self.middle_session_type]))
                 weight_stats_dict['features_der']['names'].append(feature)
                 weight_stats_dict['features_der']['feature_colors'].append([val for key, val in Ratemap.feature_colors.items() if key in feature][0])
 
