@@ -143,7 +143,7 @@ class WeightComparer:
                  rate_stability_bound=True, peak_min=True,
                  save_dir='', save_fig=False, fig_format='png',
                  light_session=1, der='1st', baseline_dict={},
-                 ref_dict=None):
+                 ref_dict=None, middle_session_type='weight'):
         if chosen_features is None:
             chosen_features = ['Speeds']
         if ref_dict is None:
@@ -159,6 +159,7 @@ class WeightComparer:
         self.der = der
         self.baseline_dict = baseline_dict
         self.ref_dict = ref_dict
+        self.middle_session_type = middle_session_type
 
     def baseline_rate_change_over_time(self, **kwargs):
         """
@@ -200,8 +201,8 @@ class WeightComparer:
         for animal in self.baseline_dict.keys():
             activity_dict[animal] = {}
             for cl_id in self.baseline_dict[animal]['cl_ids']:
-                activity_dict[animal][cl_id] = {'light1': 0, 'weight': 0, 'light2': 0}
-                for idx, session_name in enumerate(['light1', 'weight', 'light2']):
+                activity_dict[animal][cl_id] = {'light1': 0, self.middle_session_type: 0, 'light2': 0}
+                for idx, session_name in enumerate(['light1', self.middle_session_type, 'light2']):
                     file_id, \
                     activity_dictionary, \
                     purged_spikes_dictionary = Spikes(input_file=self.baseline_dict[animal]['files'][idx]).convert_activity_to_frames_with_shuffles(get_clusters=cl_id,
@@ -219,7 +220,7 @@ class WeightComparer:
             borders[animal] = [0, 0, 0]
             for cl_idx, cl_id in enumerate(activity_dict[animal].keys()):
                 concatenated_activity = np.concatenate((activity_dict[animal][cl_id]['light1'],
-                                                        activity_dict[animal][cl_id]['weight'],
+                                                        activity_dict[animal][cl_id][self.middle_session_type],
                                                         activity_dict[animal][cl_id]['light2']))
                 labels[animal][cl_id] = concatenated_activity.max()
                 smoothed_activity = uniform_filter1d(concatenated_activity, size=rolling_average_window)
@@ -227,9 +228,9 @@ class WeightComparer:
                 if cl_idx == 0:
                     borders[animal][0] = activity_dict[animal][cl_id]['light1'].shape[0]
                     borders[animal][1] = activity_dict[animal][cl_id]['light1'].shape[0] \
-                                         + activity_dict[animal][cl_id]['weight'].shape[0]
+                                         + activity_dict[animal][cl_id][self.middle_session_type].shape[0]
                     borders[animal][2] = activity_dict[animal][cl_id]['light1'].shape[0] \
-                                         + activity_dict[animal][cl_id]['weight'].shape[0]\
+                                         + activity_dict[animal][cl_id][self.middle_session_type].shape[0]\
                                          + activity_dict[animal][cl_id]['light2'].shape[0]
 
         row_num = len(self.baseline_dict.keys())
@@ -249,7 +250,7 @@ class WeightComparer:
             ax.set_xticks([borders[animal][0] // 2,
                            (borders[animal][1]+borders[animal][0]) // 2,
                            (borders[animal][2]+borders[animal][1]) // 2])
-            ax.set_xticklabels(['Light1', 'Weight', 'Light2'])
+            ax.set_xticklabels(['light1', self.middle_session_type, 'light2'])
             ax.tick_params(axis='both', which='both', length=0)
             ax.set_ylabel('Order of recordings')
             ax.set_ylabel('Peak normalized activity')

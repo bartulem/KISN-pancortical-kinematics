@@ -641,7 +641,7 @@ class RatemapCharacteristics:
                                     weight_comparison[cl_num]['baseline_firing_rates']['light1'] = baseline_activity_dictionary[cl_id]
                                 elif all(one_item in pkl_file for one_item in session_id.split('_')) and session_2_type in pkl_file:
                                     file_id_2, baseline_activity_dictionary_2 = Spikes(input_file=f'{self.pkl_sessions_dir}{os.sep}{pkl_file}').get_baseline_firing_rates(get_clusters=[cl_id])
-                                    weight_comparison[cl_num]['baseline_firing_rates']['weight'] = baseline_activity_dictionary_2[cl_id]
+                                    weight_comparison[cl_num]['baseline_firing_rates'][session_2_type] = baseline_activity_dictionary_2[cl_id]
                                 elif all(one_item in pkl_file for one_item in session_id.split('_')) and 'light' in pkl_file and first_session_id not in pkl_file:
                                     file_id_3, baseline_activity_dictionary_3 = Spikes(input_file=f'{self.pkl_sessions_dir}{os.sep}{pkl_file}').get_baseline_firing_rates(get_clusters=[cl_id])
                                     weight_comparison[cl_num]['baseline_firing_rates']['light2'] = baseline_activity_dictionary_3[cl_id]
