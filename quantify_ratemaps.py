@@ -627,7 +627,7 @@ class RatemapCharacteristics:
                             weight_comparison[cl_num]['features'] = {}
 
                         if feature_id not in weight_comparison[cl_num]['features'].keys():
-                            weight_comparison[cl_num]['features'][feature_id] = {}
+                            weight_comparison[cl_num]['features'][feature_id] = {'light1': {}, session_2_type: {}, 'light2': {}}
 
                         if 'baseline_firing_rates' not in weight_comparison[cl_num].keys():
                             if self.session_non_filter is True:
@@ -646,9 +646,12 @@ class RatemapCharacteristics:
                                     file_id_3, baseline_activity_dictionary_3 = Spikes(input_file=f'{self.pkl_sessions_dir}{os.sep}{pkl_file}').get_baseline_firing_rates(get_clusters=[cl_id])
                                     weight_comparison[cl_num]['baseline_firing_rates']['light2'] = baseline_activity_dictionary_3[cl_id]
 
-                        weight_comparison[cl_num]['features'][feature_id]['light1'] = list(valid_rm_revised)
-                        weight_comparison[cl_num]['features'][feature_id][session_2_type] = list(valid_rm2_revised)
-                        weight_comparison[cl_num]['features'][feature_id]['light2'] = list(valid_rm3_revised)
+                        weight_comparison[cl_num]['features'][feature_id]['light1']['rm'] = list(valid_rm_revised)
+                        weight_comparison[cl_num]['features'][feature_id]['light1']['x'] = list(mat[key][0, :].take(indices=indices_intersection))
+                        weight_comparison[cl_num]['features'][feature_id][session_2_type]['rm'] = list(valid_rm2_revised)
+                        weight_comparison[cl_num]['features'][feature_id][session_2_type]['x'] = list(mat2[key][0, :].take(indices=indices_intersection))
+                        weight_comparison[cl_num]['features'][feature_id]['light2']['rm'] = list(valid_rm3_revised)
+                        weight_comparison[cl_num]['features'][feature_id]['light2']['x'] = list(mat3[key][0, :].take(indices=indices_intersection))
                         weight_comparison[cl_num]['features'][feature_id]['ICr-light1'] = mat[key.replace('data', 'ICr')].ravel()[0]
                         weight_comparison[cl_num]['features'][feature_id][f'ICr-{session_2_type}'] = mat2[key.replace('data', 'ICr')].ravel()[0]
                         weight_comparison[cl_num]['features'][feature_id]['ICr-light2'] = mat3[key.replace('data', 'ICr')].ravel()[0]

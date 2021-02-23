@@ -23,9 +23,10 @@ from mpl_toolkits.axes_grid1.inset_locator import inset_axes
 from make_ratemaps import Ratemap
 from neural_activity import Spikes
 
-def extract_json_data(json_file='', weight=False, features=None,
+def extract_json_data(json_file='', features=None,
                       peak_min=True, der='1st', rate_stability_bound=True,
-                      ref_dict=None, test_session='weight'):
+                      ref_dict=None, test_session='weight', composite_score=True,
+                      cleanse_negatives=False):
     """
     Description
     ----------
@@ -38,8 +39,8 @@ def extract_json_data(json_file='', weight=False, features=None,
     **kwargs (dictionary)
     json_file (str)
         Absolute path to the .json file of interest.
-    weight (bool)
-        Yey or ney on the 'weight' data; defaults to False.
+    composite_score (bool)
+        To use the composite score for rate maps, instead of something else; defaults to True.
     features (list)
         List of features you're interested in (der not necessary!); defaults to ['Speeds'].
     peak_min (int / bool)
@@ -52,6 +53,8 @@ def extract_json_data(json_file='', weight=False, features=None,
         The reference and second light session: defaults to {'ref_session': 'light1', 'other_session': 'light2'}
     test_session (str)
         The test session of interest; defaults to 'weight'.
+    cleanse_negatives (bool)
+        Don't allow negatives in baseline subtracted ratemaps; defaults to True.
     ----------
 
     Returns
@@ -69,38 +72,41 @@ def extract_json_data(json_file='', weight=False, features=None,
     with open(json_file) as j_file:
         json_data = json.load(j_file)
 
-    if weight:
-        weight_dict = {}
-        for feature in features:
-            for feature_type in [feature, f'{feature}_{der}_der']:
-                if der == '2nd' and feature == 'Speeds':
-                    continue
-                else:
-                    weight_dict[feature_type] = {'peaks': {ref_dict['ref_session']: [], test_session: [], ref_dict['other_session']: []},
+
+    weight_dict = {}
+    for feature in features:
+        for feature_type in [feature, f'{feature}_{der}_der']:
+            if der == '2nd' and feature == 'Speeds':
+                continue
+            else:
+                if composite_score:
+                    weight_dict[feature_type] = {'auc': {ref_dict['ref_session']: [], test_session: [], ref_dict['other_session']: []},
+                                                 'peak_position': {ref_dict['ref_session']: [], test_session: [], ref_dict['other_session']: []},
                                                  'information_rates': {ref_dict['ref_session']: [], test_session: [], ref_dict['other_session']: []},
                                                  'stability': {'{}-{}'.format(ref_dict['ref_session'], test_session): [],
                                                                '{}-{}'.format(ref_dict['other_session'], test_session): [],
                                                                '{}-{}'.format(ref_dict['ref_session'], ref_dict['other_session']): []}}
 
     for cl_num in json_data.keys():
-        if weight:
+        if composite_score:
             for key in json_data[cl_num]['features'].keys():
-                if key in weight_dict.keys() and len(json_data[cl_num]['features'][key][ref_dict['ref_session']]) > 5:
-                    ref_session_data = json_data[cl_num]['features'][key][ref_dict['ref_session']]
-                    test_session_data = json_data[cl_num]['features'][key][test_session]
-                    other_session_data = json_data[cl_num]['features'][key][ref_dict['other_session']]
+                if key in weight_dict.keys() and len(json_data[cl_num]['features'][key][ref_dict['ref_session']]['rm']) > 5:
+                    ref_session_data = json_data[cl_num]['features'][key][ref_dict['ref_session']]['rm']
+                    test_session_data = json_data[cl_num]['features'][key][test_session]['rm']
+                    other_session_data = json_data[cl_num]['features'][key][ref_dict['other_session']]['rm']
                     ref_session_peak = np.max(ref_session_data)
-                    test_at_peak =  np.max(test_session_data)  # test_session_data[np.argmax(ref_session_peak)]
-                    other_session_at_peak = np.max(other_session_data)  # other_session_data[np.argmax(ref_session_peak)]
+                    test_peak =  np.max(test_session_data)
+                    other_session_peak = np.max(other_session_data)
                     if (peak_min is True or ref_session_peak > peak_min) \
-                            and (peak_min is True or np.max(test_session_data) > peak_min) \
-                            and (peak_min is True or np.max(other_session_data) > peak_min) \
+                            and (peak_min is True or test_peak > peak_min) \
+                            and (peak_min is True or other_session_peak > peak_min) \
                             and rate_stability_bound is True or abs(json_data[cl_num]['baseline_firing_rates'][ref_dict['ref_session']]
                                                                     - json_data[cl_num]['baseline_firing_rates'][test_session]) \
                             < (json_data[cl_num]['baseline_firing_rates'][ref_dict['ref_session']] * (rate_stability_bound / 100)):
-                        weight_dict[key]['peaks'][ref_dict['ref_session']].append(ref_session_peak)
-                        weight_dict[key]['peaks'][test_session].append(test_at_peak)
-                        weight_dict[key]['peaks'][ref_dict['other_session']].append(other_session_at_peak)
+
+                        weight_dict[key]['auc'][ref_dict['ref_session']].append(np.sum(ref_session_data))
+                        weight_dict[key]['auc'][test_session].append(np.sum(test_session_data))
+                        weight_dict[key]['auc'][ref_dict['other_session']].append(np.sum(other_session_data))
 
                         weight_dict[key]['information_rates'][ref_dict['ref_session']].append(json_data[cl_num]['features'][key]['ICr-{}'.format(ref_dict['ref_session'])])
                         weight_dict[key]['information_rates'][test_session].append(json_data[cl_num]['features'][key]['ICr-{}'.format(test_session)])
@@ -110,17 +116,17 @@ def extract_json_data(json_file='', weight=False, features=None,
                         weight_dict[key]['stability']['{}-{}'.format(ref_dict['other_session'], test_session)].append(scipy.stats.spearmanr(other_session_data, test_session_data)[0])
                         weight_dict[key]['stability']['{}-{}'.format(ref_dict['ref_session'], ref_dict['other_session'])].append(scipy.stats.spearmanr(ref_session_data, other_session_data)[0])
 
-    if weight:
-        return weight_dict
+
+    return weight_dict
 
 
 def make_shuffled_distributions(weight_dict, ref_dict, test_session, n_shuffles=1000):
     shuffled_dict = {}
     for feature in tqdm(weight_dict.keys()):
-        shuffled_dict[feature] = {'peaks': {'null_differences': np.zeros(n_shuffles), 'true_difference': 0, 'z-value': 1, 'p-value': 1},
+        shuffled_dict[feature] = {'auc': {'null_differences': np.zeros(n_shuffles), 'true_difference': 0, 'z-value': 1, 'p-value': 1},
                                   'stability': {'null_differences': np.zeros(n_shuffles), 'true_difference': 0, 'z-value': 1, 'p-value': 1},
                                   'information_rates': {'null_differences': np.zeros(n_shuffles), 'true_difference': 0, 'z-value': 1, 'p-value': 1}}
-        for attribute in ['peaks', 'information_rates']:
+        for attribute in ['auc', 'information_rates']:
             true_difference_attribute = np.mean(np.diff(np.array([weight_dict[feature][attribute][test_session],
                                                               weight_dict[feature][attribute][ref_dict['ref_session']]]), axis=0))
             shuffled_dict[feature][attribute]['true_difference'] = true_difference_attribute
@@ -129,19 +135,19 @@ def make_shuffled_distributions(weight_dict, ref_dict, test_session, n_shuffles=
         corr_arr[corr_arr > .99] = .99
         true_difference_corr = np.mean(np.diff(np.arctanh(corr_arr), axis=0))
         for sh in range(n_shuffles):
-            joint_arr = np.array([weight_dict[feature]['peaks'][test_session],
-                                  weight_dict[feature]['peaks'][ref_dict['ref_session']]])
+            joint_arr = np.array([weight_dict[feature]['auc'][test_session],
+                                  weight_dict[feature]['auc'][ref_dict['ref_session']]])
             joint_arr_ir = np.array([weight_dict[feature]['information_rates'][test_session],
                                      weight_dict[feature]['information_rates'][ref_dict['ref_session']]])
             joint_arr_corr = np.arctanh(corr_arr.copy())
             for col in range(joint_arr.shape[1]):
                 np.random.shuffle(joint_arr[:, col])
-                shuffled_dict[feature]['peaks']['null_differences'][sh] = np.mean(np.diff(joint_arr, axis=0))
+                shuffled_dict[feature]['auc']['null_differences'][sh] = np.mean(np.diff(joint_arr, axis=0))
                 np.random.shuffle(joint_arr_ir[:, col])
                 shuffled_dict[feature]['information_rates']['null_differences'][sh] = np.mean(np.diff(joint_arr_ir, axis=0))
                 np.random.shuffle(joint_arr_corr[:, col])
                 shuffled_dict[feature]['stability']['null_differences'][sh] = np.mean(np.diff(joint_arr_corr, axis=0))
-        for attribute in ['peaks', 'information_rates']:
+        for attribute in ['auc', 'information_rates']:
             shuffled_dict[feature][attribute]['z-value'] = (shuffled_dict[feature][attribute]['true_difference'] - shuffled_dict[feature][attribute]['null_differences'].mean()) \
                                                          / shuffled_dict[feature][attribute]['null_differences'].std()
             p_val_attribute = 1 - scipy.stats.norm.cdf(shuffled_dict[feature][attribute]['z-value'])
@@ -437,7 +443,6 @@ class WeightComparer:
         hist_step = kwargs['hist_step'] if 'hist_step' in kwargs.keys() and type(kwargs['hist_step']) == int else 50
 
         weight_dict = extract_json_data(json_file=self.weight_json_file,
-                                        weight=True,
                                         features=self.chosen_features,
                                         peak_min=self.peak_min,
                                         rate_stability_bound=self.rate_stability_bound,
@@ -448,10 +453,14 @@ class WeightComparer:
         shuffled_dict = make_shuffled_distributions(weight_dict=weight_dict, ref_dict=self.ref_dict,
                                                     test_session=self.test_session_type)
 
+        # for feature in weight_dict.keys():
+        #     print(feature, min(weight_dict[feature]['auc'][self.test_session_type]), max(weight_dict[feature]['auc'][self.test_session_type]))
+        #     print(feature, min(weight_dict[feature]['auc'][self.ref_dict['ref_session']]), max(weight_dict[feature]['auc'][self.ref_dict['ref_session']]))
+
         fig = plt.figure(figsize=(12, 20))
         gs_left = [.075, .405, .735]
         gs_right = [.33, .66, .98]
-        for gs_idx, gs in enumerate(['peaks', 'information_rates', 'stability']):
+        for gs_idx, gs in enumerate(['auc', 'information_rates', 'stability']):
             gs1 = fig.add_gridspec(nrows=12, ncols=3, left=gs_left[gs_idx],
                                    right=gs_right[gs_idx], wspace=.1, hspace=.5)
             ax1 = fig.add_subplot(gs1[:2, :])
@@ -477,15 +486,15 @@ class WeightComparer:
             for ax_idx, ax in enumerate([ax1, ax2, ax3, ax4]):
                 if ax_idx == 0:
                     ax.set_title(gs.replace('_', ' '))
-                if gs == 'peaks':
-                    ax.plot([.1, 100], [.1, 100], ls='-.', lw=.5, color='#000000')
-                    ax.set_xlim(.1, 100)
+                if gs == 'auc':
+                    ax.plot([1, 1e4], [1, 1e4], ls='-.', lw=.5, color='#000000')
+                    ax.set_xlim(1, 1e4)
                     ax.set_xscale('log')
-                    ax.set_ylim(.1, 100)
+                    ax.set_ylim(1, 1e4)
                     ax.set_yscale('log')
                     ax.tick_params(axis='both', which='major', length=0, labelsize=8, pad=.5)
-                    ax.set_xlabel('{} peak rate (spikes/s)'.format(self.ref_dict['ref_session']), labelpad=.1)
-                    ax.set_ylabel('{} rate at {} peak (spikes/s)'.format(self.test_session_type, self.ref_dict['ref_session']), labelpad=.1)
+                    ax.set_xlabel('{} AUC (spikes/s)'.format(self.ref_dict['ref_session']), labelpad=.1)
+                    ax.set_ylabel('{} AUC (spikes/s)'.format(self.test_session_type), labelpad=.1)
                 elif gs == 'information_rates':
                     ax.plot([.001, 1], [.001, 1], ls='-.', lw=.5, color='#000000')
                     ax.tick_params(axis='both', which='major', length=0, labelsize=8, pad=.75)
@@ -501,8 +510,8 @@ class WeightComparer:
                     ax.set_ylim(-1.1, 1.1)
                     ax.set_yticks([-1, -.5, 0, .5, 1])
                     ax.tick_params(axis='both', which='major', length=1, labelsize=8, pad=.75)
-                    ax.set_xlabel('{}-{} stability'.format(self.ref_dict['ref_session'], self.ref_dict['other_session']), labelpad=.1)
-                    ax.set_ylabel('{}-{} stability'.format(self.test_session_type, self.ref_dict['ref_session']), labelpad=.1)
+                    ax.set_xlabel('{}-{} correlation'.format(self.ref_dict['ref_session'], self.ref_dict['other_session']), labelpad=.1)
+                    ax.set_ylabel('{}-{} correlation'.format(self.test_session_type, self.ref_dict['ref_session']), labelpad=.1)
 
             head_col = 0
             back_col = 0
@@ -527,8 +536,8 @@ class WeightComparer:
                         ax.set_ylabel('Shuffled count', labelpad=.1, fontsize=6)
                         ax.set_yticks(np.arange(0, hist_max, hist_step))
                     elif col == 1:
-                        if gs == 'peaks':
-                            ax.set_xlabel('{} - {} difference (spikes/s)'.format(self.ref_dict['ref_session'], self.test_session_type), labelpad=.5, fontsize=6)
+                        if gs == 'auc':
+                            ax.set_xlabel('{} - {} AUC difference (spikes/s)'.format(self.ref_dict['ref_session'], self.test_session_type), labelpad=.5, fontsize=6)
                         elif gs == 'information_rates':
                             ax.set_xlabel('{} - {} difference (bits/spike)'.format(self.ref_dict['ref_session'], self.test_session_type), labelpad=.5, fontsize=6)
                         else:
@@ -574,7 +583,6 @@ class WeightComparer:
         """
 
         weight_dict = extract_json_data(json_file=self.weight_json_file,
-                                        weight=True,
                                         features=self.chosen_features,
                                         peak_min=self.peak_min,
                                         rate_stability_bound=self.rate_stability_bound,
@@ -585,32 +593,32 @@ class WeightComparer:
         shuffled_dict = make_shuffled_distributions(weight_dict=weight_dict, ref_dict=self.ref_dict,
                                                     test_session=self.test_session_type)
 
-        weight_stats_dict={'features': {'peaks': [], 'information_rates': [], 'stability': [],
-                                        'z_peaks': [], 'z_information_rates': [], 'z_stability': [],
+        weight_stats_dict={'features': {'auc': [], 'information_rates': [], 'stability': [],
+                                        'z_auc': [], 'z_information_rates': [], 'z_stability': [],
                                         'cl_n': [], 'names': [], 'feature_colors': []},
-                           'features_der': {'peaks': [], 'information_rates': [], 'stability': [],
-                                            'z_peaks': [], 'z_information_rates': [], 'z_stability': [],
+                           'features_der': {'auc': [], 'information_rates': [], 'stability': [],
+                                            'z_auc': [], 'z_information_rates': [], 'z_stability': [],
                                             'cl_n': [], 'names': [], 'feature_colors': []}}
 
         for feature in weight_dict.keys():
             if 'der' not in feature:
-                weight_stats_dict['features']['peaks'].append(shuffled_dict[feature]['peaks']['p-value'])
+                weight_stats_dict['features']['auc'].append(shuffled_dict[feature]['auc']['p-value'])
                 weight_stats_dict['features']['information_rates'].append(shuffled_dict[feature]['information_rates']['p-value'])
                 weight_stats_dict['features']['stability'].append(shuffled_dict[feature]['stability']['p-value'])
-                weight_stats_dict['features']['z_peaks'].append(shuffled_dict[feature]['peaks']['z-value'])
+                weight_stats_dict['features']['z_auc'].append(shuffled_dict[feature]['auc']['z-value'])
                 weight_stats_dict['features']['z_information_rates'].append(shuffled_dict[feature]['information_rates']['z-value'])
                 weight_stats_dict['features']['z_stability'].append(shuffled_dict[feature]['stability']['z-value'])
-                weight_stats_dict['features']['cl_n'].append(len(weight_dict[feature]['peaks'][self.test_session_type]))
+                weight_stats_dict['features']['cl_n'].append(len(weight_dict[feature]['auc'][self.test_session_type]))
                 weight_stats_dict['features']['names'].append(feature)
                 weight_stats_dict['features']['feature_colors'].append([val for key, val in Ratemap.feature_colors.items() if key in feature][0])
             else:
-                weight_stats_dict['features_der']['peaks'].append(shuffled_dict[feature]['peaks']['p-value'])
+                weight_stats_dict['features_der']['auc'].append(shuffled_dict[feature]['auc']['p-value'])
                 weight_stats_dict['features_der']['information_rates'].append(shuffled_dict[feature]['information_rates']['p-value'])
                 weight_stats_dict['features_der']['stability'].append(shuffled_dict[feature]['stability']['p-value'])
-                weight_stats_dict['features_der']['z_peaks'].append(shuffled_dict[feature]['peaks']['z-value'])
+                weight_stats_dict['features_der']['z_auc'].append(shuffled_dict[feature]['auc']['z-value'])
                 weight_stats_dict['features_der']['z_information_rates'].append(shuffled_dict[feature]['information_rates']['z-value'])
                 weight_stats_dict['features_der']['z_stability'].append(shuffled_dict[feature]['stability']['z-value'])
-                weight_stats_dict['features_der']['cl_n'].append(len(weight_dict[feature]['peaks'][self.test_session_type]))
+                weight_stats_dict['features_der']['cl_n'].append(len(weight_dict[feature]['auc'][self.test_session_type]))
                 weight_stats_dict['features_der']['names'].append(feature)
                 weight_stats_dict['features_der']['feature_colors'].append([val for key, val in Ratemap.feature_colors.items() if key in feature][0])
 
@@ -622,10 +630,10 @@ class WeightComparer:
         cmap=plt.cm.seismic_r
         normal_range = plt.Normalize(vmin=-4, vmax=0)
         for idx, feature in enumerate(weight_stats_dict['features']['names']):
-            probabilities=np.log10([weight_stats_dict['features']['peaks'][idx],
+            probabilities=np.log10([weight_stats_dict['features']['auc'][idx],
                                     weight_stats_dict['features']['information_rates'][idx],
                                     weight_stats_dict['features']['stability'][idx],
-                                    weight_stats_dict['features_der']['peaks'][idx],
+                                    weight_stats_dict['features_der']['auc'][idx],
                                     weight_stats_dict['features_der']['information_rates'][idx],
                                     weight_stats_dict['features_der']['stability'][idx]])
             colors = plt.cm.seismic_r(normal_range(probabilities))
