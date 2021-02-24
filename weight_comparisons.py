@@ -25,8 +25,7 @@ from neural_activity import Spikes
 
 def extract_json_data(json_file='', features=None,
                       peak_min=True, der='1st', rate_stability_bound=True,
-                      ref_dict=None, test_session='weight', composite_score=True,
-                      cleanse_negatives=False):
+                      ref_dict=None, test_session='weight', composite_score=True):
     """
     Description
     ----------
@@ -53,8 +52,6 @@ def extract_json_data(json_file='', features=None,
         The reference and second light session: defaults to {'ref_session': 'light1', 'other_session': 'light2'}
     test_session (str)
         The test session of interest; defaults to 'weight'.
-    cleanse_negatives (bool)
-        Don't allow negatives in baseline subtracted ratemaps; defaults to True.
     ----------
 
     Returns
@@ -81,7 +78,7 @@ def extract_json_data(json_file='', features=None,
             else:
                 if composite_score:
                     weight_dict[feature_type] = {'auc': {ref_dict['ref_session']: [], test_session: [], ref_dict['other_session']: []},
-                                                 'peak_position': {ref_dict['ref_session']: [], test_session: [], ref_dict['other_session']: []},
+                                                 'peaks': {ref_dict['ref_session']: [], test_session: [], ref_dict['other_session']: []},
                                                  'information_rates': {ref_dict['ref_session']: [], test_session: [], ref_dict['other_session']: []},
                                                  'stability': {'{}-{}'.format(ref_dict['ref_session'], test_session): [],
                                                                '{}-{}'.format(ref_dict['other_session'], test_session): [],
@@ -94,12 +91,9 @@ def extract_json_data(json_file='', features=None,
                     ref_session_data = json_data[cl_num]['features'][key][ref_dict['ref_session']]['rm']
                     test_session_data = json_data[cl_num]['features'][key][test_session]['rm']
                     other_session_data = json_data[cl_num]['features'][key][ref_dict['other_session']]['rm']
-                    ref_session_peak = np.max(ref_session_data)
-                    test_peak =  np.max(test_session_data)
-                    other_session_peak = np.max(other_session_data)
-                    if (peak_min is True or ref_session_peak > peak_min) \
-                            and (peak_min is True or test_peak > peak_min) \
-                            and (peak_min is True or other_session_peak > peak_min) \
+                    if (peak_min is True or np.max(ref_session_data) > peak_min) \
+                            and (peak_min is True or np.max(test_session_data) > peak_min) \
+                            and (peak_min is True or np.max(other_session_data) > peak_min) \
                             and rate_stability_bound is True or abs(json_data[cl_num]['baseline_firing_rates'][ref_dict['ref_session']]
                                                                     - json_data[cl_num]['baseline_firing_rates'][test_session]) \
                             < (json_data[cl_num]['baseline_firing_rates'][ref_dict['ref_session']] * (rate_stability_bound / 100)):
@@ -107,6 +101,10 @@ def extract_json_data(json_file='', features=None,
                         weight_dict[key]['auc'][ref_dict['ref_session']].append(np.sum(ref_session_data))
                         weight_dict[key]['auc'][test_session].append(np.sum(test_session_data))
                         weight_dict[key]['auc'][ref_dict['other_session']].append(np.sum(other_session_data))
+
+                        weight_dict[key]['peaks'][ref_dict['ref_session']].append(json_data[cl_num]['features'][key][ref_dict['ref_session']]['x'][np.argmax(ref_session_data)])
+                        weight_dict[key]['peaks'][test_session].append(json_data[cl_num]['features'][key][test_session]['x'][np.argmax(test_session_data)])
+                        weight_dict[key]['peaks'][ref_dict['other_session']].append(json_data[cl_num]['features'][key][ref_dict['other_session']]['x'][np.argmax(other_session_data)])
 
                         weight_dict[key]['information_rates'][ref_dict['ref_session']].append(json_data[cl_num]['features'][key]['ICr-{}'.format(ref_dict['ref_session'])])
                         weight_dict[key]['information_rates'][test_session].append(json_data[cl_num]['features'][key]['ICr-{}'.format(test_session)])
@@ -124,12 +122,12 @@ def make_shuffled_distributions(weight_dict, ref_dict, test_session, n_shuffles=
     shuffled_dict = {}
     for feature in tqdm(weight_dict.keys()):
         shuffled_dict[feature] = {'auc': {'null_differences': np.zeros(n_shuffles), 'true_difference': 0, 'z-value': 1, 'p-value': 1},
+                                  'peaks': {'null_differences': np.zeros(n_shuffles), 'true_difference': 0, 'z-value': 1, 'p-value': 1},
                                   'stability': {'null_differences': np.zeros(n_shuffles), 'true_difference': 0, 'z-value': 1, 'p-value': 1},
                                   'information_rates': {'null_differences': np.zeros(n_shuffles), 'true_difference': 0, 'z-value': 1, 'p-value': 1}}
         for attribute in ['auc', 'information_rates']:
-            true_difference_attribute = np.mean(np.diff(np.array([weight_dict[feature][attribute][test_session],
-                                                              weight_dict[feature][attribute][ref_dict['ref_session']]]), axis=0))
-            shuffled_dict[feature][attribute]['true_difference'] = true_difference_attribute
+            shuffled_dict[feature][attribute]['true_difference'] = np.mean(np.diff(np.array([weight_dict[feature][attribute][test_session],
+                                                                                             weight_dict[feature][attribute][ref_dict['ref_session']]]), axis=0))
         corr_arr = np.array([weight_dict[feature]['stability']['{}-{}'.format(ref_dict['ref_session'], test_session)],
                              weight_dict[feature]['stability']['{}-{}'.format(ref_dict['ref_session'], ref_dict['other_session'])]])
         corr_arr[corr_arr > .99] = .99
@@ -137,17 +135,21 @@ def make_shuffled_distributions(weight_dict, ref_dict, test_session, n_shuffles=
         for sh in range(n_shuffles):
             joint_arr = np.array([weight_dict[feature]['auc'][test_session],
                                   weight_dict[feature]['auc'][ref_dict['ref_session']]])
+            joint_arr_peaks = np.array([weight_dict[feature]['peaks'][test_session],
+                                        weight_dict[feature]['peaks'][ref_dict['ref_session']]])
             joint_arr_ir = np.array([weight_dict[feature]['information_rates'][test_session],
                                      weight_dict[feature]['information_rates'][ref_dict['ref_session']]])
             joint_arr_corr = np.arctanh(corr_arr.copy())
             for col in range(joint_arr.shape[1]):
                 np.random.shuffle(joint_arr[:, col])
                 shuffled_dict[feature]['auc']['null_differences'][sh] = np.mean(np.diff(joint_arr, axis=0))
+                np.random.shuffle(joint_arr_peaks[:, col])
+                shuffled_dict[feature]['peaks']['null_differences'][sh] = np.mean(np.diff(joint_arr_peaks, axis=0))
                 np.random.shuffle(joint_arr_ir[:, col])
                 shuffled_dict[feature]['information_rates']['null_differences'][sh] = np.mean(np.diff(joint_arr_ir, axis=0))
                 np.random.shuffle(joint_arr_corr[:, col])
                 shuffled_dict[feature]['stability']['null_differences'][sh] = np.mean(np.diff(joint_arr_corr, axis=0))
-        for attribute in ['auc', 'information_rates']:
+        for attribute in ['auc', 'peaks', 'information_rates']:
             shuffled_dict[feature][attribute]['z-value'] = (shuffled_dict[feature][attribute]['true_difference'] - shuffled_dict[feature][attribute]['null_differences'].mean()) \
                                                          / shuffled_dict[feature][attribute]['null_differences'].std()
             p_val_attribute = 1 - scipy.stats.norm.cdf(shuffled_dict[feature][attribute]['z-value'])
@@ -226,73 +228,73 @@ class WeightComparer:
         smooth_sd = kwargs['smooth_sd'] if 'smooth_sd' in kwargs.keys() and type(kwargs['smooth_sd']) == int else 1
         rolling_average_window = kwargs['rolling_average_window'] if 'rolling_average_window' in kwargs.keys() and type(kwargs['rolling_average_window']) == int else 50
 
-        activity_dict = {}
-        for animal in self.baseline_dict.keys():
-            activity_dict[animal] = {}
-            for cl_id in self.baseline_dict[animal]['cl_ids']:
-                activity_dict[animal][cl_id] = {'light1': 0, self.test_session_type: 0, 'light2': 0}
-                for idx, session_name in enumerate(['light1', self.test_session_type, 'light2']):
-                    file_id, \
-                    activity_dictionary, \
-                    purged_spikes_dictionary = Spikes(input_file=self.baseline_dict[animal]['files'][idx]).convert_activity_to_frames_with_shuffles(get_clusters=cl_id,
-                                                                                                                                                    to_shuffle=False,
-                                                                                                                                                    condense_arr=True,
-                                                                                                                                                    condense_bin_ms=int(1000*condensing_bin))
-                    activity_dict[animal][cl_id][session_name] = gaussian_filter1d(input=activity_dictionary[cl_id]['activity'].todense(), sigma=smooth_sd) / condensing_bin
-
-        plot_dict = {}
-        labels = {}
-        borders = {}
-        for animal in activity_dict.keys():
-            plot_dict[animal] = {}
-            labels[animal] = {}
-            borders[animal] = [0, 0, 0]
-            for cl_idx, cl_id in enumerate(activity_dict[animal].keys()):
-                concatenated_activity = np.concatenate((activity_dict[animal][cl_id]['light1'],
-                                                        activity_dict[animal][cl_id][self.test_session_type],
-                                                        activity_dict[animal][cl_id]['light2']))
-                labels[animal][cl_id] = concatenated_activity.max()
-                smoothed_activity = uniform_filter1d(concatenated_activity, size=rolling_average_window)
-                plot_dict[animal][cl_id] = smoothed_activity / smoothed_activity.max()
-                if cl_idx == 0:
-                    borders[animal][0] = activity_dict[animal][cl_id]['light1'].shape[0]
-                    borders[animal][1] = activity_dict[animal][cl_id]['light1'].shape[0] \
-                                         + activity_dict[animal][cl_id][self.test_session_type].shape[0]
-                    borders[animal][2] = activity_dict[animal][cl_id]['light1'].shape[0] \
-                                         + activity_dict[animal][cl_id][self.test_session_type].shape[0]\
-                                         + activity_dict[animal][cl_id]['light2'].shape[0]
-
-        row_num = len(self.baseline_dict.keys())
-        fig, ax = plt.subplots(nrows=row_num, ncols=1, figsize=(6.4, row_num*4.8))
-        for animal_idx, animal in enumerate(self.baseline_dict.keys()):
-            ax = plt.subplot(row_num, 1, animal_idx+1)
-            for cl_id in sorted(labels[animal], key=labels[animal].get, reverse=True):
-                ax.plot(plot_dict[animal][cl_id], '-',
-                        color='#000000',
-                        alpha=labels[animal][cl_id] / 100 + .05,
-                        label=f'{labels[animal][cl_id]} spikes/s')
-            ax.legend(frameon=False)
-            ax.set_title(f'Rat #{animal}')
-            for bo_idx, border in enumerate(borders[animal]):
-                if bo_idx < 2:
-                    ax.axvline(x=border, ls='-.', color='#000000', alpha=.25)
-            ax.set_xticks([borders[animal][0] // 2,
-                           (borders[animal][1]+borders[animal][0]) // 2,
-                           (borders[animal][2]+borders[animal][1]) // 2])
-            ax.set_xticklabels(['light1', self.test_session_type, 'light2'])
-            ax.tick_params(axis='both', which='both', length=0)
-            ax.set_ylabel('Order of recordings')
-            ax.set_ylabel('Peak normalized activity')
-            ax.spines['top'].set_visible(False)
-            ax.spines['right'].set_visible(False)
-            ax.spines['bottom'].set_visible(False)
-        if self.save_fig:
-            if os.path.exists(self.save_dir):
-                fig.savefig(f'{self.save_dir}{os.sep}baseline_change_examples.{self.fig_format}', dpi=300)
-            else:
-                print("Specified save directory doesn't exist. Try again.")
-                sys.exit()
-        plt.show()
+        # activity_dict = {}
+        # for animal in self.baseline_dict.keys():
+        #     activity_dict[animal] = {}
+        #     for cl_id in self.baseline_dict[animal]['cl_ids']:
+        #         activity_dict[animal][cl_id] = {'light1': 0, self.test_session_type: 0, 'light2': 0}
+        #         for idx, session_name in enumerate(['light1', self.test_session_type, 'light2']):
+        #             file_id, \
+        #             activity_dictionary, \
+        #             purged_spikes_dictionary = Spikes(input_file=self.baseline_dict[animal]['files'][idx]).convert_activity_to_frames_with_shuffles(get_clusters=cl_id,
+        #                                                                                                                                             to_shuffle=False,
+        #                                                                                                                                             condense_arr=True,
+        #                                                                                                                                             condense_bin_ms=int(1000*condensing_bin))
+        #             activity_dict[animal][cl_id][session_name] = gaussian_filter1d(input=activity_dictionary[cl_id]['activity'].todense(), sigma=smooth_sd) / condensing_bin
+        #
+        # plot_dict = {}
+        # labels = {}
+        # borders = {}
+        # for animal in activity_dict.keys():
+        #     plot_dict[animal] = {}
+        #     labels[animal] = {}
+        #     borders[animal] = [0, 0, 0]
+        #     for cl_idx, cl_id in enumerate(activity_dict[animal].keys()):
+        #         concatenated_activity = np.concatenate((activity_dict[animal][cl_id]['light1'],
+        #                                                 activity_dict[animal][cl_id][self.test_session_type],
+        #                                                 activity_dict[animal][cl_id]['light2']))
+        #         labels[animal][cl_id] = concatenated_activity.max()
+        #         smoothed_activity = uniform_filter1d(concatenated_activity, size=rolling_average_window)
+        #         plot_dict[animal][cl_id] = smoothed_activity / smoothed_activity.max()
+        #         if cl_idx == 0:
+        #             borders[animal][0] = activity_dict[animal][cl_id]['light1'].shape[0]
+        #             borders[animal][1] = activity_dict[animal][cl_id]['light1'].shape[0] \
+        #                                  + activity_dict[animal][cl_id][self.test_session_type].shape[0]
+        #             borders[animal][2] = activity_dict[animal][cl_id]['light1'].shape[0] \
+        #                                  + activity_dict[animal][cl_id][self.test_session_type].shape[0]\
+        #                                  + activity_dict[animal][cl_id]['light2'].shape[0]
+        #
+        # row_num = len(self.baseline_dict.keys())
+        # fig, ax = plt.subplots(nrows=row_num, ncols=1, figsize=(6.4, row_num*4.8))
+        # for animal_idx, animal in enumerate(self.baseline_dict.keys()):
+        #     ax = plt.subplot(row_num, 1, animal_idx+1)
+        #     for cl_id in sorted(labels[animal], key=labels[animal].get, reverse=True):
+        #         ax.plot(plot_dict[animal][cl_id], '-',
+        #                 color='#000000',
+        #                 alpha=labels[animal][cl_id] / 100 + .05,
+        #                 label=f'{labels[animal][cl_id]} spikes/s')
+        #     ax.legend(frameon=False)
+        #     ax.set_title(f'Rat #{animal}')
+        #     for bo_idx, border in enumerate(borders[animal]):
+        #         if bo_idx < 2:
+        #             ax.axvline(x=border, ls='-.', color='#000000', alpha=.25)
+        #     ax.set_xticks([borders[animal][0] // 2,
+        #                    (borders[animal][1]+borders[animal][0]) // 2,
+        #                    (borders[animal][2]+borders[animal][1]) // 2])
+        #     ax.set_xticklabels(['light1', self.test_session_type, 'light2'])
+        #     ax.tick_params(axis='both', which='both', length=0)
+        #     ax.set_ylabel('Order of recordings')
+        #     ax.set_ylabel('Peak normalized activity')
+        #     ax.spines['top'].set_visible(False)
+        #     ax.spines['right'].set_visible(False)
+        #     ax.spines['bottom'].set_visible(False)
+        # if self.save_fig:
+        #     if os.path.exists(self.save_dir):
+        #         fig.savefig(f'{self.save_dir}{os.sep}baseline_change_examples.{self.fig_format}', dpi=300)
+        #     else:
+        #         print("Specified save directory doesn't exist. Try again.")
+        #         sys.exit()
+        # plt.show()
 
         # statistics on baseline rate change
         with open(self.weight_json_file, 'r') as json_file:
@@ -376,7 +378,7 @@ class WeightComparer:
         axins1.axvline(x=np.nanpercentile(shuffled[0, :], 99.5), color='#000000', ls='-.', alpha=.5)
         axins1.plot(diff_light1_weight.mean(), 10, marker='o', color='#000000')
         axins1.set_xticks([-.1, 0, .1, .2])
-        axins1.set_yticks([])
+        axins1.set_yticks([0, 50, 100, 150])
         ax32 = plt.subplot(1, 3, 2)
         ax32.hist(diff_weight_light2, bins=hist_bins, histtype='stepfilled', color='#FFFFFF', edgecolor='#000000')
         ax32.axvline(x=0, ls='-.', color='#000000', alpha=.25)
@@ -388,7 +390,7 @@ class WeightComparer:
         axins2.hist(shuffled[1, :], bins=np.linspace(-.15, .15, 20), histtype='stepfilled', color='#000000', alpha=.25)
         axins2.plot(diff_weight_light2.mean(), 10, marker='o', color='#000000')
         axins2.set_xticks([-.1, 0, .1])
-        axins2.set_yticks([])
+        axins2.set_yticks([0, 50, 100, 150])
         ax33 = plt.subplot(1, 3, 3)
         ax33.hist(diff_light1_light2, bins=hist_bins, histtype='stepfilled', color='#FFFFFF', edgecolor='#000000')
         ax33.axvline(x=0, ls='-.', color='#000000', alpha=.25)
@@ -401,7 +403,7 @@ class WeightComparer:
         axins3.axvline(x=np.nanpercentile(shuffled[2, :], 99.5), color='#000000', ls='-.', alpha=.5)
         axins3.plot(diff_light1_light2.mean(), 7, marker='o', color='#000000')
         axins3.set_xticks([-.1, 0, .1, .2])
-        axins3.set_yticks([])
+        axins3.set_yticks([0, 50, 100])
         if self.save_fig:
             if os.path.exists(self.save_dir):
                 fig3.savefig(f'{self.save_dir}{os.sep}baseline_change_statistics2.{self.fig_format}', dpi=300)
@@ -439,7 +441,7 @@ class WeightComparer:
         ----------
         """
 
-        hist_max = kwargs['hist_max'] if 'hist_max' in kwargs.keys() and type(kwargs['hist_max']) == int else 275
+        hist_max = kwargs['hist_max'] if 'hist_max' in kwargs.keys() and type(kwargs['hist_max']) == int else 301
         hist_step = kwargs['hist_step'] if 'hist_step' in kwargs.keys() and type(kwargs['hist_step']) == int else 50
 
         weight_dict = extract_json_data(json_file=self.weight_json_file,
@@ -453,65 +455,139 @@ class WeightComparer:
         shuffled_dict = make_shuffled_distributions(weight_dict=weight_dict, ref_dict=self.ref_dict,
                                                     test_session=self.test_session_type)
 
-        # for feature in weight_dict.keys():
-        #     print(feature, min(weight_dict[feature]['auc'][self.test_session_type]), max(weight_dict[feature]['auc'][self.test_session_type]))
-        #     print(feature, min(weight_dict[feature]['auc'][self.ref_dict['ref_session']]), max(weight_dict[feature]['auc'][self.ref_dict['ref_session']]))
-
-        fig = plt.figure(figsize=(12, 20))
-        gs_left = [.075, .405, .735]
-        gs_right = [.33, .66, .98]
-        for gs_idx, gs in enumerate(['auc', 'information_rates', 'stability']):
+        fig = plt.figure(figsize=(16, 20))
+        gs_left = [.075, .325, .575, .825]
+        gs_right = [.25, .5, .75, .98]
+        for gs_idx, gs in enumerate(['auc', 'peaks', 'information_rates', 'stability']):
             gs1 = fig.add_gridspec(nrows=12, ncols=3, left=gs_left[gs_idx],
                                    right=gs_right[gs_idx], wspace=.1, hspace=.5)
-            ax1 = fig.add_subplot(gs1[:2, :])
-            ax2 = fig.add_subplot(gs1[6:8, :])
-            ax3 = fig.add_subplot(gs1[3:5, :])
-            ax4 = fig.add_subplot(gs1[9:11, :])
-            for chosen_feature in self.chosen_features:
-                if 'head' in chosen_feature or 'Head' in chosen_feature:
-                    axes_list = [ax1, ax2]
-                else:
-                    axes_list = [ax3, ax4]
-                chosen_feature_der = f'{chosen_feature}_{self.der}_der'
-                feature_color = [val for key, val in Ratemap.feature_colors.items() if key in chosen_feature][0]
-                for ax, specific_feature in zip(axes_list, [chosen_feature, chosen_feature_der]):
-                    if gs != 'stability':
+            if gs != 'peaks':
+                ax1 = fig.add_subplot(gs1[:2, :])
+                ax2 = fig.add_subplot(gs1[6:8, :])
+                ax3 = fig.add_subplot(gs1[3:5, :])
+                ax4 = fig.add_subplot(gs1[9:11, :])
+                for chosen_feature in self.chosen_features:
+                    if 'head' in chosen_feature or 'Head' in chosen_feature:
+                        axes_list = [ax1, ax2]
+                    else:
+                        axes_list = [ax3, ax4]
+                    chosen_feature_der = f'{chosen_feature}_{self.der}_der'
+                    feature_color = [val for key, val in Ratemap.feature_colors.items() if key in chosen_feature][0]
+                    for ax, specific_feature in zip(axes_list, [chosen_feature, chosen_feature_der]):
+                        if gs != 'stability':
+                            ax.scatter(x=np.array(weight_dict[specific_feature][gs][self.ref_dict['ref_session']]),
+                                       y=np.array(weight_dict[specific_feature][gs][self.test_session_type]),
+                                       color=feature_color, alpha=1, s=10)
+                        else:
+                            ax.scatter(x=np.array(weight_dict[chosen_feature][gs]['{}-{}'.format(self.ref_dict['ref_session'], self.ref_dict['other_session'])]),
+                                       y=np.array(weight_dict[chosen_feature][gs]['{}-{}'.format(self.ref_dict['ref_session'], self.test_session_type)]),
+                                       color=feature_color, alpha=1, s=10)
+                for ax_idx, ax in enumerate([ax1, ax2, ax3, ax4]):
+                    if ax_idx == 0:
+                        ax.set_title(gs.replace('_', ' '))
+                    if gs == 'auc':
+                        ax.plot([1, 3e3], [1, 3e3], ls='-.', lw=.5, color='#000000')
+                        ax.set_xlim(1, 3e3)
+                        ax.set_xscale('log')
+                        ax.set_ylim(1, 3e3)
+                        ax.set_yscale('log')
+                        ax.tick_params(axis='both', which='major', length=0, labelsize=8, pad=.5)
+                        ax.set_xlabel('{} AUC (spikes/s)'.format(self.ref_dict['ref_session']), labelpad=.1)
+                        ax.set_ylabel('{} AUC (spikes/s)'.format(self.test_session_type), labelpad=.1)
+                    elif gs == 'information_rates':
+                        ax.plot([.001, 1], [.001, 1], ls='-.', lw=.5, color='#000000')
+                        ax.tick_params(axis='both', which='major', length=0, labelsize=8, pad=.75)
+                        ax.set_xlim(.001, 1)
+                        ax.set_xscale('log')
+                        ax.set_ylim(.001, 1)
+                        ax.set_yscale('log')
+                        ax.set_xlabel('{} info rate (bits/spike)'.format(self.ref_dict['ref_session']), labelpad=.1)
+                        ax.set_ylabel(f'{self.test_session_type} info rate (bits/spike)', labelpad=.1)
+                    else:
+                        ax.plot([-0.1, 1.1], [-0.1, 1.1], ls='-.', lw=.5, color='#000000')
+                        ax.set_xlim(-0.1, 1.1)
+                        ax.set_ylim(-0.1, 1.1)
+                        ax.set_xticks([0, .25, .5, .75, 1])
+                        ax.set_yticks([0, .25, .5, .75, 1])
+                        ax.tick_params(axis='both', which='major', length=1, labelsize=8, pad=.75)
+                        ax.set_xlabel('{}-{} correlation'.format(self.ref_dict['ref_session'], self.ref_dict['other_session']), labelpad=.1)
+                        ax.set_ylabel('{}-{} correlation'.format(self.test_session_type, self.ref_dict['ref_session']), labelpad=.1)
+            else:
+                head_count = 0
+                back_count = 0
+                gs_x = {'head': [0, 1, 1], 'head_der': [6, 7, 7],
+                        'back': [3, 4, 4], 'back_der': [9, 10, 10]}
+                for chosen_feature in self.chosen_features:
+                    chosen_feature_der = f'{chosen_feature}_{self.der}_der'
+                    feature_color = [val for key, val in Ratemap.feature_colors.items() if key in chosen_feature][0]
+                    if 'head' in chosen_feature or 'Head' in chosen_feature:
+                        ax2 = fig.add_subplot(gs1[gs_x['head'][head_count], head_count])
+                        ax3 = fig.add_subplot(gs1[gs_x['head_der'][head_count], head_count])
+                    else:
+                        ax2 = fig.add_subplot(gs1[gs_x['back'][back_count], back_count])
+                        ax3 = fig.add_subplot(gs1[gs_x['back_der'][back_count], back_count])
+                    for ax, specific_feature in zip([ax2, ax3], [chosen_feature, chosen_feature_der]):
                         ax.scatter(x=np.array(weight_dict[specific_feature][gs][self.ref_dict['ref_session']]),
                                    y=np.array(weight_dict[specific_feature][gs][self.test_session_type]),
                                    color=feature_color, alpha=1, s=10)
+                        ax.tick_params(axis='both', which='major', length=1, labelsize=6, pad=.75)
+                        if 'head' in chosen_feature or 'Head' in chosen_feature:
+                            if 'der' not in specific_feature:
+                                ax.plot([-180, 180], [-180, 180], ls='-.', lw=.5, color='#000000')
+                                ax.set_xlim(-180, 180)
+                                ax.set_ylim(-180, 180)
+                                ax.set_xticks([-180, -90, 0, 90, 180])
+                                ax.set_yticks([-180, -90, 0, 90, 180])
+                                ax.set_xlabel('{} (deg)'.format(self.ref_dict['ref_session']), labelpad=.1)
+                                ax.set_ylabel('{} (deg)'.format(self.test_session_type), labelpad=.1)
+                            else:
+                                ax.plot([-400, 400], [-400, 400], ls='-.', lw=.5, color='#000000')
+                                ax.set_xlim(-400, 400)
+                                ax.set_ylim(-400, 400)
+                                ax.set_xticks([-480, -200, 0, 200, 400])
+                                ax.set_yticks([-400, -200, 0, 200, 400])
+                                ax.set_xlabel('{} (deg/s)'.format(self.ref_dict['ref_session']), labelpad=.1)
+                                ax.set_ylabel('{} (deg/s)'.format(self.test_session_type), labelpad=.1)
+                        else:
+                            if back_count < 2:
+                                if 'der' not in specific_feature:
+                                    ax.plot([-60, 60], [-60, 60], ls='-.', lw=.5, color='#000000')
+                                    ax.set_xlim(-60, 60)
+                                    ax.set_ylim(-60, 60)
+                                    ax.set_xticks([-60, -30, 0, 30, 60])
+                                    ax.set_yticks([-60, -30, 0, 30, 60])
+                                    ax.set_xlabel('{} (deg)'.format(self.ref_dict['ref_session']), labelpad=.1)
+                                    ax.set_ylabel('{} (deg)'.format(self.test_session_type), labelpad=.1)
+                                else:
+                                    ax.plot([-100, 100], [-100, 100], ls='-.', lw=.5, color='#000000')
+                                    ax.set_xlim(-100, 100)
+                                    ax.set_ylim(-100, 100)
+                                    ax.set_xticks([-100, -50, 0, 50, 100])
+                                    ax.set_yticks([-100, -50, 0, 50, 100])
+                                    ax.set_xlabel('{} (deg/s)'.format(self.ref_dict['ref_session']), labelpad=.1)
+                                    ax.set_ylabel('{} (deg/s)'.format(self.test_session_type), labelpad=.1)
+                            else:
+                                if 'der' not in specific_feature:
+                                    ax.plot([0, 18], [0, 18], ls='-.', lw=.5, color='#000000')
+                                    ax.set_xlim(0, 18)
+                                    ax.set_ylim(0, 18)
+                                    ax.set_xticks([0, 4.5, 9, 13.5, 18])
+                                    ax.set_yticks([0, 4.5, 9, 13.5, 18])
+                                    ax.set_xlabel('{} (cm)'.format(self.ref_dict['ref_session']), labelpad=.1)
+                                    ax.set_ylabel('{} (cm)'.format(self.test_session_type), labelpad=.1)
+                                else:
+                                    ax.plot([-10, 10], [-10, 10], ls='-.', lw=.5, color='#000000')
+                                    ax.set_xlim(-10, 10)
+                                    ax.set_ylim(-10, 10)
+                                    ax.set_xticks([-10, -5, 0, 5, 10])
+                                    ax.set_yticks([-10, -5, 0, 5, 10])
+                                    ax.set_xlabel('{} (cm/s)'.format(self.ref_dict['ref_session']), labelpad=.1)
+                                    ax.set_ylabel('{} (cm/s)'.format(self.test_session_type), labelpad=.1)
+
+                    if 'head' in chosen_feature or 'Head' in chosen_feature:
+                        head_count += 1
                     else:
-                        ax.scatter(x=np.array(weight_dict[chosen_feature][gs]['{}-{}'.format(self.ref_dict['ref_session'], self.ref_dict['other_session'])]),
-                                   y=np.array(weight_dict[chosen_feature][gs]['{}-{}'.format(self.ref_dict['ref_session'], self.test_session_type)]),
-                                   color=feature_color, alpha=1, s=10)
-            for ax_idx, ax in enumerate([ax1, ax2, ax3, ax4]):
-                if ax_idx == 0:
-                    ax.set_title(gs.replace('_', ' '))
-                if gs == 'auc':
-                    ax.plot([1, 1e4], [1, 1e4], ls='-.', lw=.5, color='#000000')
-                    ax.set_xlim(1, 1e4)
-                    ax.set_xscale('log')
-                    ax.set_ylim(1, 1e4)
-                    ax.set_yscale('log')
-                    ax.tick_params(axis='both', which='major', length=0, labelsize=8, pad=.5)
-                    ax.set_xlabel('{} AUC (spikes/s)'.format(self.ref_dict['ref_session']), labelpad=.1)
-                    ax.set_ylabel('{} AUC (spikes/s)'.format(self.test_session_type), labelpad=.1)
-                elif gs == 'information_rates':
-                    ax.plot([.001, 1], [.001, 1], ls='-.', lw=.5, color='#000000')
-                    ax.tick_params(axis='both', which='major', length=0, labelsize=8, pad=.75)
-                    ax.set_xlim(.001, 1)
-                    ax.set_xscale('log')
-                    ax.set_ylim(.001, 1)
-                    ax.set_yscale('log')
-                    ax.set_xlabel('{} info rate (bits/spike)'.format(self.ref_dict['ref_session']), labelpad=.1)
-                    ax.set_ylabel(f'{self.test_session_type} info rate (bits/spike)', labelpad=.1)
-                else:
-                    ax.plot([-1.1, 1.1], [-1.1, 1.1], ls='-.', lw=.5, color='#000000')
-                    ax.set_xlim(-1.1, 1.1)
-                    ax.set_ylim(-1.1, 1.1)
-                    ax.set_yticks([-1, -.5, 0, .5, 1])
-                    ax.tick_params(axis='both', which='major', length=1, labelsize=8, pad=.75)
-                    ax.set_xlabel('{}-{} correlation'.format(self.ref_dict['ref_session'], self.ref_dict['other_session']), labelpad=.1)
-                    ax.set_ylabel('{}-{} correlation'.format(self.test_session_type, self.ref_dict['ref_session']), labelpad=.1)
+                        back_count += 1
 
             head_col = 0
             back_col = 0
@@ -538,6 +614,8 @@ class WeightComparer:
                     elif col == 1:
                         if gs == 'auc':
                             ax.set_xlabel('{} - {} AUC difference (spikes/s)'.format(self.ref_dict['ref_session'], self.test_session_type), labelpad=.5, fontsize=6)
+                        elif gs == 'peaks':
+                            ax.set_xlabel('{} - {} peak position difference'.format(self.ref_dict['ref_session'], self.test_session_type), labelpad=.5, fontsize=6)
                         elif gs == 'information_rates':
                             ax.set_xlabel('{} - {} difference (bits/spike)'.format(self.ref_dict['ref_session'], self.test_session_type), labelpad=.5, fontsize=6)
                         else:

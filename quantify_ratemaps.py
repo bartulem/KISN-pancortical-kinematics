@@ -612,6 +612,11 @@ class RatemapCharacteristics:
                                                              shuffled_mean=mat3[key][4, :].take(indices=indices_intersection),
                                                              shuffled_std=mat3[key][5, :].take(indices=indices_intersection),
                                                              min_acc_rate=min_acc_rate,
+                                                             bin_radius_to_check=bin_radius_to_check) \
+                            and check_curve_exceeds_shuffled(curve1d=valid_rm2_revised,
+                                                             shuffled_mean=mat2[key][4, :].take(indices=indices_intersection),
+                                                             shuffled_std=mat2[key][5, :].take(indices=indices_intersection),
+                                                             min_acc_rate=min_acc_rate,
                                                              bin_radius_to_check=bin_radius_to_check):
 
                         if cl_num not in weight_comparison.keys():
