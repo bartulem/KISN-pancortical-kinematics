@@ -13,6 +13,7 @@ import sys
 import json
 import scipy.stats
 import numpy as np
+from mpl_toolkits.mplot3d.art3d import Line3DCollection
 import matplotlib.patches as patches
 import matplotlib.colorbar as cbar
 import matplotlib.pyplot as plt
@@ -20,6 +21,7 @@ from scipy.ndimage.filters import gaussian_filter1d, uniform_filter1d
 from tqdm import tqdm
 from random import gauss
 from mpl_toolkits.axes_grid1.inset_locator import inset_axes
+from sessions2load import Session
 from make_ratemaps import Ratemap
 from neural_activity import Spikes
 
@@ -175,7 +177,8 @@ class WeightComparer:
                  rate_stability_bound=True, peak_min=True,
                  save_dir='', save_fig=False, fig_format='png',
                  der='1st', baseline_dict={},
-                 ref_dict=None, test_session_type='weight'):
+                 ref_dict=None, test_session_type='weight',
+                 beh_plot_sessions={}):
         if chosen_features is None:
             chosen_features = ['Speeds']
         if ref_dict is None:
@@ -191,6 +194,8 @@ class WeightComparer:
         self.baseline_dict = baseline_dict
         self.ref_dict = ref_dict
         self.test_session_type = test_session_type
+        self.beh_plot_sessions=beh_plot_sessions
+
 
     def baseline_rate_change_over_time(self, **kwargs):
         """
@@ -768,6 +773,81 @@ class WeightComparer:
         if self.save_fig:
             if os.path.exists(self.save_dir):
                 fig.savefig(f'{self.save_dir}{os.sep}weight_features_statistics.{self.fig_format}', dpi=300)
+            else:
+                print("Specified save directory doesn't exist. Try again.")
+                sys.exit()
+        plt.show()
+
+    def plot_behavioral_comparisons(self, **kwargs):
+        """
+        Description
+        ----------
+        This method plots behavioral differences in two sets of sessions:
+        weight and no-weight.
+        ----------
+
+        Parameters
+        ----------
+        **kwargs (list)
+        z_axis_bounds (int)
+            The min and max of the z-axis; defaults [5, 20].
+        ----------
+
+        Returns
+        ----------
+        weight_behavioral_comparisons (plot)
+            A plot comparing behavior in weight vs. no-weight sessions.
+        ----------
+        """
+
+        z_axis_bounds = kwargs['z_axis_bounds'] if 'z_axis_bounds' in kwargs.keys() and type(kwargs['z_axis_bounds']) == list else [5, 20]
+
+        three_d_occ = {'baseline': {}, 'test': {}}
+        for session_type in self.beh_plot_sessions.keys():
+            for file_loc in self.beh_plot_sessions[session_type]:
+                file_name, point_data = Session(session=file_loc).data_loader(extract_variables=['sorted_point_data'])
+                temp_neck_data = point_data['sorted_point_data'][:, 4, :]
+                for i in range(2):
+                    temp_neck_data[:, i] += abs(min(temp_neck_data[:, i]))
+                print(min(temp_neck_data[:, 2]), max(temp_neck_data[:, 2]))
+                three_d_occ[session_type][file_name] = temp_neck_data * 100
+
+        fig = plt.figure(figsize=(10, 5))
+        fig.subplots_adjust(right=.8, wspace=.5)
+        normal_range = plt.Normalize(vmin=z_axis_bounds[0], vmax=z_axis_bounds[1])
+        for idx, session_type in enumerate(three_d_occ.keys()):
+            ax = fig.add_subplot(1, 2, idx+1, projection='3d')
+            for session_data in three_d_occ[session_type].keys():
+                color_array = three_d_occ[session_type][session_data][:, 2].copy()
+                neck_point = three_d_occ[session_type][session_data].reshape(-1, 1, 3)
+                segments = np.concatenate([neck_point[:-1],neck_point[1:]], axis=1)
+                lc = Line3DCollection(segments,
+                                      cmap=plt.get_cmap('cividis'),
+                                      norm=normal_range)
+                lc.set_array(color_array)
+                ax.add_collection3d(lc)
+            ax.set_title(session_type)
+            ax.set_xlim(0, 200)
+            ax.set_ylim(0, 200)
+            ax.set_zlim(z_axis_bounds[0], z_axis_bounds[1])
+            ax.set_zticks(range(z_axis_bounds[0], z_axis_bounds[1]+1, 5))
+            ax.set_xlabel('X (cm)')
+            ax.set_ylabel('Y (cm)')
+            ax.set_zlabel('Z (cm)')
+            ax.grid(False)
+            ax.xaxis.set_pane_color((1.0, 1.0, 1.0, 0.0))
+            ax.yaxis.set_pane_color((1.0, 1.0, 1.0, 0.0))
+            ax.zaxis.set_pane_color((1.0, 1.0, 1.0, 0.0))
+            ax.view_init(elev=None, azim=30)
+            if idx > 0:
+                cbar_ax = fig.add_axes([0.85, 0.25, 0.01, 0.4])
+                color_bar = cbar.ColorbarBase(cbar_ax, cmap=plt.cm.cividis, norm=normal_range)
+                color_bar.set_label('Neck elevation (cm)')
+                color_bar.ax.locator_params(nbins=4)
+                color_bar.ax.tick_params(size=0)
+        if self.save_fig:
+            if os.path.exists(self.save_dir):
+                fig.savefig(f'{self.save_dir}{os.sep}weight_behavioral_comparisons.{self.fig_format}', dpi=300)
             else:
                 print("Specified save directory doesn't exist. Try again.")
                 sys.exit()
