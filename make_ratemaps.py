@@ -43,7 +43,9 @@ class Ratemap:
                       'Back_pitch': '#3052A0',
                       'Back_azimuth': '#77AEDF',
                       'Neck_elevation': '#F07F00',
+                      'neck_elevation': '#F07F00',
                       'Speeds': '#228B22',
+                      'speeds': '#228B22',
                       'Body_direction': '#EEC900',
                       'head_direction': '#8B7500'}
 
