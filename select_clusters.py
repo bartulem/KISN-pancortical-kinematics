@@ -170,7 +170,7 @@ class ClusterFinder:
                                             # find cluster profile
                                             for idx, row in profile_data.iterrows():
                                                 if row[0] == f'{file_animal}_{file_date}_{file_bank}' and row[1] == cluster:
-                                                    cl_profile = row[-1]
+                                                    cl_profile = row[7]
                                                     break
 
                                     if filter_by_spiking_profile is True or filter_by_spiking_profile == cl_profile:

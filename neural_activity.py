@@ -8,14 +8,18 @@ Load spike data, bin and smooth.
 
 """
 
+import os
 import sys
 import sparse
 import warnings
 import numpy as np
+import matplotlib.pyplot as plt
 from scipy.ndimage.filters import gaussian_filter1d
 from numba import njit
 from sessions2load import Session
+from quantify_ratemaps import RatemapCharacteristics
 import decode_events
+
 
 warnings.simplefilter('ignore')
 
@@ -492,12 +496,14 @@ class Spikes:
 
     def __init__(self, input_file='', purged_spikes_dictionary='', input_012=['', '', ''],
                  cluster_groups_dir='/home/bartulm/Insync/mimica.bartul@gmail.com/OneDrive/Work/data/posture_2020/cluster_groups_info',
-                 sp_profiles_csv='/home/bartulm/Insync/mimica.bartul@gmail.com/OneDrive/Work/data/posture_2020/spiking_profiles/spiking_profiles.csv'):
+                 sp_profiles_csv='/home/bartulm/Insync/mimica.bartul@gmail.com/OneDrive/Work/data/posture_2020/spiking_profiles/spiking_profiles.csv',
+                 pkl_files_dir = '/home/bartulm/Insync/mimica.bartul@gmail.com/OneDrive/Work/data/posture_2020/data_files'):
         self.input_file = input_file
         self.purged_spikes_dictionary = purged_spikes_dictionary
         self.input_012 = input_012
         self.cluster_groups_dir = cluster_groups_dir
         self.sp_profiles_csv = sp_profiles_csv
+        self.pkl_files_dir = pkl_files_dir
 
     def get_baseline_firing_rates(self, **kwargs):
         """
@@ -921,3 +927,136 @@ class Spikes:
             return peth_dictionary, raster_dictionary
         else:
             return peth_dictionary
+
+    def correlate_activity(self, **kwargs):
+
+        to_corr = True
+
+        condense_bin_ms=100
+
+        specific_date = {'bruno': ['020520', '030520'],
+                         'roy': True,
+                         'jacopo': True,
+                         'crazyjoe': True,
+                         'frank': True,
+                         'johnjohn': ['210520', '220520'],
+                         'kavorka': True}
+
+        corr_input_dict = {'light1': {'area_filter': 'V',
+                                      'animal_filter': True,
+                                      'profile_filter': 'RS',
+                                      'session_id_filter': 's1',
+                                      'session_non_filter': True,
+                                      'session_type_filter': True,
+                                      'cluster_type_filter': 'good',
+                                      'specific_date': None},
+                           'dark': {'area_filter': 'V',
+                                    'animal_filter': True,
+                                    'profile_filter': 'RS',
+                                    'session_id_filter': True,
+                                    'session_non_filter': True,
+                                    'session_type_filter': ['dark'],
+                                    'cluster_type_filter': 'good',
+                                    'specific_date': None}}
+
+        cluster_dict = {}
+        for session_type in corr_input_dict.keys():
+            cluster_dict[session_type] = RatemapCharacteristics(pkl_sessions_dir=self.pkl_files_dir,
+                                                                area_filter=corr_input_dict[session_type]['area_filter'],
+                                                                animal_filter=corr_input_dict[session_type]['animal_filter'],
+                                                                profile_filter=corr_input_dict[session_type]['profile_filter'],
+                                                                session_id_filter=corr_input_dict[session_type]['session_id_filter'],
+                                                                session_non_filter=corr_input_dict[session_type]['session_non_filter'],
+                                                                session_type_filter=corr_input_dict[session_type]['session_type_filter'],
+                                                                cluster_type_filter=corr_input_dict[session_type]['cluster_type_filter'],
+                                                                cluster_groups_dir=self.cluster_groups_dir,
+                                                                sp_profiles_csv=self.sp_profiles_csv,
+                                                                specific_date=corr_input_dict[session_type]['specific_date']).file_finder(return_clusters=True)
+
+        # get clusters that are present in both sessions
+        acceptable_cluster_dict = {}
+        for st_idx, session_type in enumerate(cluster_dict.keys()):
+            if st_idx == 0:
+                acceptable_cluster_dict[session_type] = {}
+                for animal in cluster_dict[session_type].keys():
+                    acceptable_cluster_dict[session_type][animal] = {}
+                    for bank in cluster_dict[session_type][animal].keys():
+                        acceptable_cluster_dict[session_type][animal][bank] = []
+                        for cl in cluster_dict[session_type][animal][bank]:
+                            if cl in cluster_dict[list(cluster_dict.keys())[1]][animal][bank]:
+                                acceptable_cluster_dict[session_type][animal][bank].append(cl)
+
+        # get activity for each cluster
+        activity_dict = {}
+        for session_type in acceptable_cluster_dict.keys():
+            for animal in acceptable_cluster_dict[session_type].keys():
+                activity_dict[animal] = {}
+                for bank in acceptable_cluster_dict[session_type][animal].keys():
+                    activity_dict[animal][bank] = {key: {} for key in cluster_dict.keys()}
+                    for pkl_file in os.listdir(self.pkl_files_dir):
+                        first_for_loop = False
+                        if (specific_date[animal] is True or any(one_date in pkl_file for one_date in specific_date[animal])) and \
+                                animal in pkl_file and \
+                                bank in pkl_file and \
+                                (corr_input_dict[session_type]['session_id_filter'] is True or corr_input_dict[session_type]['session_id_filter'] in pkl_file) and \
+                                (corr_input_dict[session_type]['session_non_filter'] is True or corr_input_dict[session_type]['session_non_filter'] not in pkl_file) and \
+                                (corr_input_dict[session_type]['session_type_filter'] is True or any(one_word in pkl_file for one_word in corr_input_dict[session_type]['session_type_filter']) in pkl_file):
+                            for pkl_file2 in os.listdir(self.pkl_files_dir):
+                                if (specific_date[animal] is True or any(one_date in pkl_file2 for one_date in specific_date[animal])) and \
+                                        animal in pkl_file2 and \
+                                        bank in pkl_file2 and \
+                                        (corr_input_dict[list(cluster_dict.keys())[1]]['session_id_filter'] is True or corr_input_dict[list(cluster_dict.keys())[1]]['session_id_filter'] in pkl_file2) and \
+                                        (corr_input_dict[list(cluster_dict.keys())[1]]['session_non_filter'] is True or corr_input_dict[list(cluster_dict.keys())[1]]['session_non_filter'] not in pkl_file2) and \
+                                        (corr_input_dict[list(cluster_dict.keys())[1]]['session_type_filter'] is True or any(one_word in pkl_file2 for one_word in corr_input_dict[list(cluster_dict.keys())[1]]['session_type_filter'])):
+                                    print(pkl_file, pkl_file2)
+                                    file_id, \
+                                    activity_dictionary, \
+                                    purged_spikes_dictionary = Spikes(input_file=f'{self.pkl_files_dir}{os.sep}{pkl_file}').convert_activity_to_frames_with_shuffles(get_clusters=acceptable_cluster_dict[session_type][animal][bank],
+                                                                                                                                                                     to_shuffle=False,
+                                                                                                                                                                     condense_arr=True,
+                                                                                                                                                                     condense_bin_ms=condense_bin_ms)
+                                    file_id2, \
+                                    activity_dictionary2, \
+                                    purged_spikes_dictionary2 = Spikes(input_file=f'{self.pkl_files_dir}{os.sep}{pkl_file2}').convert_activity_to_frames_with_shuffles(get_clusters=acceptable_cluster_dict[session_type][animal][bank],
+                                                                                                                                                                       to_shuffle=False,
+                                                                                                                                                                       condense_arr=True,
+                                                                                                                                                                       condense_bin_ms=condense_bin_ms)
+                                    activity_dict[animal][bank][session_type] = activity_dictionary
+                                    activity_dict[animal][bank][list(cluster_dict.keys())[1]] = activity_dictionary2
+                                    first_for_loop = True
+                                    break
+                        if first_for_loop:
+                            break
+
+        # place activity in arrays
+        rearranged_activity_dict = {}
+        for animal in activity_dict.keys():
+            rearranged_activity_dict[animal] = {}
+            for bank in activity_dict[animal].keys():
+                rearranged_activity_dict[animal][bank] = {}
+                for session_type in cluster_dict.keys():
+                    for cl_idx, cl in enumerate(activity_dict[animal][bank][session_type].keys()):
+                        if cl_idx == 0:
+                            arr_len = np.shape(activity_dict[animal][bank][session_type][cl]['activity'].todense())[0]
+                    rearranged_activity_dict[animal][bank][session_type] = np.zeros((len(activity_dict[animal][bank][session_type].keys()), arr_len))
+                    for cl_idx, cl in enumerate(activity_dict[animal][bank][session_type].keys()):
+                        rearranged_activity_dict[animal][bank][session_type][cl_idx, :] = activity_dict[animal][bank][session_type][cl]['activity'].todense()
+
+        # calculate corr/cov and plot
+        for animal in rearranged_activity_dict.keys():
+            for bank in rearranged_activity_dict[animal].keys():
+                results = {}
+                for session_type in rearranged_activity_dict[animal][bank].keys():
+                    if to_corr:
+                        results[session_type] = np.corrcoef(x=rearranged_activity_dict[animal][bank][session_type])
+                    else:
+                        results[session_type] = np.cov(m=rearranged_activity_dict[animal][bank][session_type])
+
+                to_plot_arr = np.tril(results[list(results.keys())[0]], k=-1) + np.triu(results[list(results.keys())[1]], k=1)
+
+                fig, ax = plt.subplots(nrows=1, ncols=1)
+                ax.imshow(to_plot_arr, vmin=-1, vmax=1, cmap='seismic')
+                ax.set_title(f'{animal} {bank}')
+                ax.set_xlabel(list(results.keys())[0])
+                ax.set_ylabel(list(results.keys())[1])
+                plt.show()

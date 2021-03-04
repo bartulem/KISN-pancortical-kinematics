@@ -19,7 +19,8 @@ from tqdm import tqdm
 from numba import njit
 from scipy.stats import spearmanr
 from select_clusters import ClusterFinder
-from neural_activity import Spikes
+if 'neural_activity' not in sys.modules:
+    from neural_activity import Spikes
 
 # data[0, :] = xvals (bin centers)
 # data[1, :] = raw rate map (ratemap / no smoothing)
@@ -249,7 +250,7 @@ class RatemapCharacteristics:
                 for pkl_file in os.listdir(self.pkl_sessions_dir):
                     if animal in pkl_file and bank in pkl_file and (self.session_id_filter is True or self.session_id_filter in pkl_file) \
                             and (self.session_non_filter is True or self.session_non_filter not in pkl_file) \
-                            and (self.session_type_filter is True or self.session_type_filter in pkl_file) \
+                            and (self.session_type_filter is True or any(one_word in pkl_file for one_word in self.session_type_filter)) \
                             and (self.specific_date[animal] is True or any(one_date in pkl_file for one_date in self.specific_date[animal])):
                         cluster_list = ClusterFinder(session=f'{self.pkl_sessions_dir}{os.sep}{pkl_file}',
                                                      cluster_groups_dir=self.cluster_groups_dir,
@@ -272,7 +273,7 @@ class RatemapCharacteristics:
                     if (self.animal_filter is True or any(one_animal in file_name for one_animal in self.animal_filter)) \
                             and (self.session_id_filter is True or self.session_id_filter in file_name) \
                             and (self.session_non_filter is True or self.session_non_filter not in file_name) \
-                            and (self.session_type_filter is True or self.session_type_filter in file_name):
+                            and (self.session_type_filter is True or any(one_word in file_name for one_word in self.session_type_filter)):
                         animal_id = [name for name in ClusterFinder.probe_site_areas.keys() if name in file_name][0]
                         if animal_id == 'bruno':
                             bank_id = 'distal'
