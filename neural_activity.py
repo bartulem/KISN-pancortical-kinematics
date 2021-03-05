@@ -1014,8 +1014,6 @@ class Spikes:
                                     acceptable_cluster_dict[session_type][animal][bank] = []
                                 acceptable_cluster_dict[session_type][animal][bank].append(cl)
 
-        print(acceptable_cluster_dict)
-
         # get activity for each cluster
         activity_dict = {}
         for session_type in acceptable_cluster_dict.keys():
@@ -1079,7 +1077,6 @@ class Spikes:
             for bank in rearranged_activity_dict[animal].keys():
                 results = {}
                 for session_type in rearranged_activity_dict[animal][bank].keys():
-                    print(animal, bank, session_type)
                     if to_corr:
                         results[session_type] = np.corrcoef(x=rearranged_activity_dict[animal][bank][session_type])
                     else:

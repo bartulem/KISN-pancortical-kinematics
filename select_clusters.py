@@ -136,9 +136,11 @@ class ClusterFinder:
                         file_bank = [bank for bank in ['distal', 'intermediate'] if bank in file_info][0]
                     get_date_idx = [date.start() for date in re.finditer('20_s', file_info)][-1]
                     file_date = file_info[get_date_idx-4:get_date_idx+2]
-                    file_date_cg = file_date
                     if file_animal == 'bruno' and file_date == '030520':
                         file_date_cg = '020520'
+                        file_date = '020520'
+                    else:
+                        file_date_cg = file_date
 
                     for cluster in clusters:
                         if filter_by_area is True and filter_by_cluster_type is True and filter_by_spiking_profile is True:
