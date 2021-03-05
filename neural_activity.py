@@ -929,35 +929,60 @@ class Spikes:
             return peth_dictionary
 
     def correlate_activity(self, **kwargs):
+        """
+        Description
+        ----------
+        This method correlates spiking activity between different clusters within a recording
+        condition and then compares how it differs across conditions (e.g. light/dark).
+        ----------
 
-        to_corr = True
+        Parameters
+        ----------
+        **kwargs (dictionary)
+        to_corr (bool)
+            To correlate or use covariance; defaults to True.
+        condense_bin_ms (int)
+            The size of bin for spikes; defaults to 100 (ms).
+        specific_date (dict)
+            Selected dates for specific animals; defaults to *see below*.
+        corr_input_dict (dict)
+            Parameters that find appropriate clusters; defaults to *see below*.
+        ----------
 
-        condense_bin_ms=100
+        Returns
+        ----------
+        activity_correlation (fig)
+            A figure of activity correlations.
+        ----------
+        """
 
-        specific_date = {'bruno': ['020520', '030520'],
-                         'roy': True,
-                         'jacopo': True,
-                         'crazyjoe': True,
-                         'frank': True,
-                         'johnjohn': ['210520', '220520'],
-                         'kavorka': True}
+        to_corr = kwargs['to_corr'] if 'to_corr' in kwargs.keys() and type(kwargs['to_corr']) == bool else True
+        condense_bin_ms = kwargs['condense_bin_ms'] if 'condense_bin_ms' in kwargs.keys() and type(kwargs['condense_bin_ms']) == int else 100
+        specific_date = kwargs['specific_date'] if 'specific_date' in kwargs.keys() and type(kwargs['specific_date']) == dict else {'bruno': ['020520', '030520'],
+                                                                                                                                    'roy': True,
+                                                                                                                                    'jacopo': True,
+                                                                                                                                    'crazyjoe': True,
+                                                                                                                                    'frank': True,
+                                                                                                                                    'johnjohn': ['210520', '220520'],
+                                                                                                                                    'kavorka': True}
 
-        corr_input_dict = {'light1': {'area_filter': 'V',
-                                      'animal_filter': True,
-                                      'profile_filter': 'RS',
-                                      'session_id_filter': 's1',
-                                      'session_non_filter': True,
-                                      'session_type_filter': True,
-                                      'cluster_type_filter': 'good',
-                                      'specific_date': None},
-                           'dark': {'area_filter': 'V',
-                                    'animal_filter': True,
-                                    'profile_filter': 'RS',
-                                    'session_id_filter': True,
-                                    'session_non_filter': True,
-                                    'session_type_filter': ['dark'],
-                                    'cluster_type_filter': 'good',
-                                    'specific_date': None}}
+        corr_input_dict = kwargs['corr_input_dict'] if 'corr_input_dict' in kwargs.keys() and type(kwargs['corr_input_dict']) == dict else {'light1': {'area_filter': 'V',
+                                                                                                                                                       'animal_filter': True,
+                                                                                                                                                       'profile_filter': True,
+                                                                                                                                                       'session_id_filter': 's1',
+                                                                                                                                                       'session_non_filter': True,
+                                                                                                                                                       'session_type_filter': True,
+                                                                                                                                                       'cluster_type_filter': 'good',
+                                                                                                                                                       'specific_date': None},
+                                                                                                                                            'dark': {'area_filter': 'V',
+                                                                                                                                                     'animal_filter': True,
+                                                                                                                                                     'profile_filter': True,
+                                                                                                                                                     'session_id_filter': True,
+                                                                                                                                                     'session_non_filter': True,
+                                                                                                                                                     'session_type_filter': ['dark'],
+                                                                                                                                                     'cluster_type_filter': 'good',
+                                                                                                                                                     'specific_date': None}}
+
 
         cluster_dict = {}
         for session_type in corr_input_dict.keys():
@@ -971,8 +996,8 @@ class Spikes:
                                                                 cluster_type_filter=corr_input_dict[session_type]['cluster_type_filter'],
                                                                 cluster_groups_dir=self.cluster_groups_dir,
                                                                 sp_profiles_csv=self.sp_profiles_csv,
-                                                                specific_date=corr_input_dict[session_type]['specific_date']).file_finder(return_clusters=True)
-
+                                                                specific_date=corr_input_dict[session_type]['specific_date']).file_finder(return_clusters=True,
+                                                                                                                                          sort_ch_num=True)
         # get clusters that are present in both sessions
         acceptable_cluster_dict = {}
         for st_idx, session_type in enumerate(cluster_dict.keys()):

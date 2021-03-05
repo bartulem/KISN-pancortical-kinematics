@@ -225,6 +225,8 @@ class RatemapCharacteristics:
             If True, looks for ratemap files across three desired sessions; defaults to False.
         session_3_type (str)
             The type of session you want to get the third session data for; defaults to 'light'.
+        sort_ch_num (bool)
+            If True, sorts clusters by channel number; defaults to False.
         ----------
 
         Returns
@@ -240,6 +242,7 @@ class RatemapCharacteristics:
         return_clusters = kwargs['return_clusters'] if 'return_clusters' in kwargs.keys() and type(kwargs['return_clusters']) == bool else False
         seek_third_session = kwargs['seek_third_session'] if 'seek_third_session' in kwargs.keys() and type(kwargs['seek_third_session']) == bool else False
         session_3_type = kwargs['session_3_type'] if 'session_3_type' in kwargs.keys() and type(kwargs['session_3_type']) == str else 'light'
+        sort_ch_num = kwargs['sort_ch_num'] if 'sort_ch_num' in kwargs.keys() and type(kwargs['sort_ch_num']) == bool else False
 
         # get clusters of interest
         cluster_dict = {}
@@ -256,7 +259,8 @@ class RatemapCharacteristics:
                                                      cluster_groups_dir=self.cluster_groups_dir,
                                                      sp_profiles_csv=self.sp_profiles_csv).get_desired_clusters(filter_by_area=[self.area_filter],
                                                                                                                 filter_by_cluster_type=self.cluster_type_filter,
-                                                                                                                filter_by_spiking_profile=self.profile_filter)
+                                                                                                                filter_by_spiking_profile=self.profile_filter,
+                                                                                                                sort_ch_num=sort_ch_num)
                         cluster_dict[animal][bank] = cluster_list
                         total_clusters += len(cluster_list)
                         break

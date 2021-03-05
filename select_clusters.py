@@ -93,6 +93,8 @@ class ClusterFinder:
             Sessions to be included: 's1', 's2', etc.; defaults to True.
         filter_by_spiking_profile (str / bool)
             Profile to be included: 'RS' or 'FS'; defaults to True.
+        sort_ch_num (bool)
+            If True, sorts clusters by channel number; defaults to False.
         ----------
 
         Returns
@@ -109,6 +111,7 @@ class ClusterFinder:
         filter_by_bank = kwargs['filter_by_bank'] if 'filter_by_bank' in kwargs.keys() and type(kwargs['filter_by_bank']) == str else True
         filter_by_session_num = kwargs['filter_by_session_num'] if 'filter_by_session_num' in kwargs.keys() and type(kwargs['filter_by_session_num']) == list else True
         filter_by_spiking_profile = kwargs['filter_by_spiking_profile'] if 'filter_by_spiking_profile' in kwargs.keys() and type(kwargs['filter_by_spiking_profile']) == str else True
+        sort_ch_num = kwargs['sort_ch_num'] if 'sort_ch_num' in kwargs.keys() and type(kwargs['sort_ch_num']) == bool else False
 
         cluster_list = []
         if self.session != 0:
@@ -182,5 +185,8 @@ class ClusterFinder:
             print("No session provided.")
             sys.exit()
 
-        cluster_list.sort()
+        if sort_ch_num:
+            cluster_list = sorted(cluster_list, key = lambda x: x.split('ch')[1])
+        else:
+            cluster_list.sort()
         return cluster_list
