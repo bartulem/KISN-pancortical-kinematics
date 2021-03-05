@@ -974,14 +974,14 @@ class Spikes:
                                                                                                                                                        'session_type_filter': True,
                                                                                                                                                        'cluster_type_filter': 'good',
                                                                                                                                                        'specific_date': None},
-                                                                                                                                            'dark': {'area_filter': 'V',
-                                                                                                                                                     'animal_filter': True,
-                                                                                                                                                     'profile_filter': True,
-                                                                                                                                                     'session_id_filter': True,
-                                                                                                                                                     'session_non_filter': True,
-                                                                                                                                                     'session_type_filter': ['dark'],
-                                                                                                                                                     'cluster_type_filter': 'good',
-                                                                                                                                                     'specific_date': None}}
+                                                                                                                                             'dark': {'area_filter': 'V',
+                                                                                                                                                      'animal_filter': True,
+                                                                                                                                                      'profile_filter': True,
+                                                                                                                                                      'session_id_filter': True,
+                                                                                                                                                      'session_non_filter': True,
+                                                                                                                                                      'session_type_filter': ['dark'],
+                                                                                                                                                      'cluster_type_filter': 'good',
+                                                                                                                                                      'specific_date': None}}
 
 
         cluster_dict = {}
@@ -1002,14 +1002,19 @@ class Spikes:
         acceptable_cluster_dict = {}
         for st_idx, session_type in enumerate(cluster_dict.keys()):
             if st_idx == 0:
-                acceptable_cluster_dict[session_type] = {}
                 for animal in cluster_dict[session_type].keys():
-                    acceptable_cluster_dict[session_type][animal] = {}
                     for bank in cluster_dict[session_type][animal].keys():
-                        acceptable_cluster_dict[session_type][animal][bank] = []
                         for cl in cluster_dict[session_type][animal][bank]:
                             if cl in cluster_dict[list(cluster_dict.keys())[1]][animal][bank]:
+                                if session_type not in acceptable_cluster_dict.keys():
+                                    acceptable_cluster_dict[session_type] = {}
+                                if animal not in acceptable_cluster_dict[session_type].keys():
+                                    acceptable_cluster_dict[session_type][animal] = {}
+                                if bank not in acceptable_cluster_dict[session_type][animal].keys():
+                                    acceptable_cluster_dict[session_type][animal][bank] = []
                                 acceptable_cluster_dict[session_type][animal][bank].append(cl)
+
+        print(acceptable_cluster_dict)
 
         # get activity for each cluster
         activity_dict = {}
@@ -1063,19 +1068,23 @@ class Spikes:
                     for cl_idx, cl in enumerate(activity_dict[animal][bank][session_type].keys()):
                         if cl_idx == 0:
                             arr_len = np.shape(activity_dict[animal][bank][session_type][cl]['activity'].todense())[0]
+                            break
                     rearranged_activity_dict[animal][bank][session_type] = np.zeros((len(activity_dict[animal][bank][session_type].keys()), arr_len))
                     for cl_idx, cl in enumerate(activity_dict[animal][bank][session_type].keys()):
                         rearranged_activity_dict[animal][bank][session_type][cl_idx, :] = activity_dict[animal][bank][session_type][cl]['activity'].todense()
+
 
         # calculate corr/cov and plot
         for animal in rearranged_activity_dict.keys():
             for bank in rearranged_activity_dict[animal].keys():
                 results = {}
                 for session_type in rearranged_activity_dict[animal][bank].keys():
+                    print(animal, bank, session_type)
                     if to_corr:
                         results[session_type] = np.corrcoef(x=rearranged_activity_dict[animal][bank][session_type])
                     else:
                         results[session_type] = np.cov(m=rearranged_activity_dict[animal][bank][session_type])
+
 
                 to_plot_arr = np.tril(results[list(results.keys())[0]], k=-1) + np.triu(results[list(results.keys())[1]], k=1)
 
