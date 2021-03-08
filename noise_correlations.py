@@ -15,29 +15,24 @@ from numba import njit
 from itertools import combinations
 from scipy.ndimage import gaussian_filter1d
 from sessions2load import Session
-from tqdm import tqdm
 from select_clusters import ClusterFinder
 from neural_activity import purge_spikes_beyond_tracking
 
 
-@njit(parallel=False)
 def get_firing_rate(cl_activity, bin_size,
                     tracking_start, tracking_stop,
                     to_jitter=True, jitter_size=.005, shuffle_n=1000):
-    binned_activity_range = np.arange(tracking_start, tracking_stop, bin_size)
     fr_arr = np.zeros(int(np.ceil((tracking_stop-tracking_start)/bin_size)))
     jitter_arr = np.zeros((shuffle_n, fr_arr.shape[0]))
     if to_jitter:
         for sh in range(shuffle_n):
-            print('FR shuffle num ', sh)
-            jitter_spikes = cl_activity.copy() + (-jitter_size + (2 * jitter_size * np.random.random(cl_activity.shape[0])))
-            for st_idx, spike_time in enumerate(cl_activity):
-                jitter_arr[sh, np.abs(binned_activity_range-jitter_spikes[st_idx]).argmin()] += 1
-                if sh == 0:
-                    fr_arr[np.abs(binned_activity_range-spike_time).argmin()] += 1
+            jitter_spikes = cl_activity.copy() + ((2 * jitter_size * np.random.random(cl_activity.shape[0])) - jitter_size)
+            jitter_spikes = jitter_spikes[jitter_spikes <= tracking_stop]
+            jitter_arr[sh, np.round(jitter_spikes/bin_size).astype(np.int32)] += 1
+            if sh == 0:
+                fr_arr[np.round(cl_activity/bin_size).astype(np.int32)] += 1
     else:
-        for spike_time in cl_activity:
-            fr_arr[np.abs(binned_activity_range-spike_time).argmin()] += 1
+        fr_arr[np.round(cl_activity/bin_size).astype(np.int32)] += 1
     return fr_arr, jitter_arr
 
 @njit(parallel=False)
@@ -90,14 +85,14 @@ class FunctionalConnectivity:
             Profile to be included: 'RS' or 'FS'; defaults to True.
         sort_ch_num (bool)
             If True, sorts clusters by channel number; defaults to False.
-        combo_num (int)
-            Number of combination of choice; defaults to 0.
+        combo_idx (int)
+            Index of combination of choice; defaults to 0.
         ----------
 
         Returns
         ----------
-        noise_corrs ()
-            ...
+        noise_corrs (.mat file)
+            .mat files containing cross-correlations of data/jitters.
         ----------
         """
 
@@ -112,30 +107,27 @@ class FunctionalConnectivity:
         cluster_type_filter = kwargs['cluster_type_filter'] if 'cluster_type_filter' in kwargs.keys() and type(kwargs['cluster_type_filter']) == str else True
         profile_filter = kwargs['profile_filter'] if 'profile_filter' in kwargs.keys() and type(kwargs['profile_filter']) == str else True
         sort_ch_num = kwargs['sort_ch_num'] if 'sort_ch_num' in kwargs.keys() and type(kwargs['sort_ch_num']) == bool else False
-        combo_num = kwargs['combo_num'] if 'combo_num' in kwargs.keys() and type(kwargs['combo_num']) == int else 0
+        combo_idx = kwargs['combo_idx'] if 'combo_idx' in kwargs.keys() and type(kwargs['combo_idx']) == int else 0
 
-        # cluster_list = ClusterFinder(session=f'{self.pkl_sessions_dir}{os.sep}{self.pkl_file}',
-        #                              cluster_groups_dir=self.cluster_groups_dir,
-        #                              sp_profiles_csv=self.sp_profiles_csv).get_desired_clusters(filter_by_area=area_filter,
-        #                                                                                         filter_by_cluster_type=cluster_type_filter,
-        #                                                                                         filter_by_spiking_profile=profile_filter,
-        #                                                                                         sort_ch_num=sort_ch_num)
+        combo_num = list(range(0, 40186, 113))[combo_idx]
 
-        cluster_list = ['imec0_cl0003_ch001', 'imec0_cl0015_ch005', 'imec0_cl0043_ch017', 'imec0_cl0011_ch002', 'imec0_cl0012_ch004', 'imec0_cl0033_ch013', 'imec0_cl0038_ch014']
+        cluster_list = ClusterFinder(session=f'{self.pkl_sessions_dir}{os.sep}{self.pkl_file}',
+                                     cluster_groups_dir=self.cluster_groups_dir,
+                                     sp_profiles_csv=self.sp_profiles_csv).get_desired_clusters(filter_by_area=area_filter,
+                                                                                                filter_by_cluster_type=cluster_type_filter,
+                                                                                                filter_by_spiking_profile=profile_filter,
+                                                                                                sort_ch_num=sort_ch_num)
+
         # get spike data in seconds and tracking start and end time
         file_id, cluster_data = Session(session=f'{self.pkl_sessions_dir}{os.sep}{self.pkl_file}').data_loader(extract_clusters=cluster_list, extract_variables=['tracking_ts'])
 
         # get all combinations of clusters
-        # cl_combinations = list(combinations(cluster_data['cluster_spikes'].keys(), 2))
+        cl_combinations = list(combinations(cluster_data['cluster_spikes'].keys(), 2))
 
         # pick a combination
-        # combo_name = f'{cl_combinations[combo_num][0]}-{cl_combinations[combo_num][1]}'
-        # act1 = cluster_data['cluster_spikes'][cl_combinations[combo_num][0]]
-        # act2 = cluster_data['cluster_spikes'][cl_combinations[combo_num][1]]
-        combo_name = 'imec0_cl0033_ch013-imec0_cl0038_ch014'
-        act1 = cluster_data['cluster_spikes']['imec0_cl0033_ch013']
-        act2 = cluster_data['cluster_spikes']['imec0_cl0038_ch014']
-
+        combo_name = f'{cl_combinations[combo_num][0]}-{cl_combinations[combo_num][1]}'
+        act1 = cluster_data['cluster_spikes'][cl_combinations[combo_num][0]]
+        act2 = cluster_data['cluster_spikes'][cl_combinations[combo_num][1]]
 
         # eliminate spikes that happen prior to and post tracking
         act1 = purge_spikes_beyond_tracking(spike_train=act1, tracking_ts=cluster_data['tracking_ts'])
@@ -182,7 +174,7 @@ class FunctionalConnectivity:
         y = np.zeros(y_end-y_start)
         if to_jitter:
             sh_data = np.zeros((num_jitters, all_bins.shape[0]))
-            for sh in tqdm(range(num_jitters)):
+            for sh in range(num_jitters):
                 big_x_sh = np.zeros((all_bins.shape[0], y_end-y_start))
                 y_sh = np.zeros(y_end-y_start)
                 for bin_idx, one_bin in enumerate(all_bins):
@@ -216,4 +208,7 @@ class FunctionalConnectivity:
                                    small_y=y,
                                    small_y_mean=y.mean())
 
-        sio.savemat(f'{self.save_dir}{os.sep}{combo_name}.mat', {'cross_corr': data, 'sh_corr': sh_data}, oned_as='column')
+        if to_jitter:
+            sio.savemat(f'{self.save_dir}{os.sep}{combo_name}.mat', {'cross_corr': data, 'sh_corr': sh_data}, oned_as='column')
+        else:
+            sio.savemat(f'{self.save_dir}{os.sep}{combo_name}.mat', {'cross_corr': data}, oned_as='column')
