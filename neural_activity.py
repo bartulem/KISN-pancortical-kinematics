@@ -145,7 +145,8 @@ def convert_spikes_to_frame_events(purged_spike_train, frames_total, camera_fram
 
 @njit(parallel=False)
 def condense_frame_arrays(frame_array, camera_framerate=120.,
-                          bin_size_ms=100, arr_type=True):
+                          bin_size_ms=100, arr_type=True,
+                          sound=True):
 
     """
     Parameters
@@ -157,7 +158,9 @@ def condense_frame_arrays(frame_array, camera_framerate=120.,
     camera_framerate : np.float64
         The sampling frequency of the tracking system; defaults to 120.
     arr_type : bool
-        True if it's a spike array, False if it's the sound array; defaults to True.
+        True if it's a spike array, False if it's some other array; defaults to True.
+    sound : bool
+        If true, it's the sound array, if false - it's a variable; defaults to True.
     ----------
 
     Returns
@@ -181,7 +184,10 @@ def condense_frame_arrays(frame_array, camera_framerate=120.,
         if arr_type:
             new_arr[idx] = array_excerpt.sum()
         else:
-            new_arr[idx] = 1 if array_excerpt.sum() >= (step / 2) else 0
+            if sound:
+                new_arr[idx] = 1 if array_excerpt.sum() >= (step / 2) else 0
+            else:
+                new_arr[idx] = np.nanmean(array_excerpt)
 
     return new_arr
 
@@ -1081,7 +1087,6 @@ class Spikes:
                         results[session_type] = np.corrcoef(x=rearranged_activity_dict[animal][bank][session_type])
                     else:
                         results[session_type] = np.cov(m=rearranged_activity_dict[animal][bank][session_type])
-
 
                 to_plot_arr = np.tril(results[list(results.keys())[0]], k=-1) + np.triu(results[list(results.keys())[1]], k=1)
 

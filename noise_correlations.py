@@ -12,6 +12,7 @@ import os
 import numpy as np
 import scipy.io as sio
 from numba import njit
+from tqdm import tqdm
 from itertools import combinations
 from scipy.ndimage import gaussian_filter1d
 from sessions2load import Session
@@ -25,12 +26,11 @@ def get_firing_rate(cl_activity, bin_size,
     fr_arr = np.zeros(int(np.ceil((tracking_stop-tracking_start)/bin_size)))
     jitter_arr = np.zeros((shuffle_n, fr_arr.shape[0]))
     if to_jitter:
+        fr_arr[np.round(cl_activity/bin_size).astype(np.int32)] += 1
         for sh in range(shuffle_n):
             jitter_spikes = cl_activity.copy() + ((2 * jitter_size * np.random.random(cl_activity.shape[0])) - jitter_size)
             jitter_spikes = jitter_spikes[jitter_spikes <= tracking_stop]
             jitter_arr[sh, np.round(jitter_spikes/bin_size).astype(np.int32)] += 1
-            if sh == 0:
-                fr_arr[np.round(cl_activity/bin_size).astype(np.int32)] += 1
     else:
         fr_arr[np.round(cl_activity/bin_size).astype(np.int32)] += 1
     return fr_arr, jitter_arr
@@ -85,7 +85,7 @@ class FunctionalConnectivity:
             Profile to be included: 'RS' or 'FS'; defaults to True.
         sort_ch_num (bool)
             If True, sorts clusters by channel number; defaults to False.
-        combo_idx (int)
+        combo_num (int)
             Index of combination of choice; defaults to 0.
         ----------
 
@@ -107,9 +107,7 @@ class FunctionalConnectivity:
         cluster_type_filter = kwargs['cluster_type_filter'] if 'cluster_type_filter' in kwargs.keys() and type(kwargs['cluster_type_filter']) == str else True
         profile_filter = kwargs['profile_filter'] if 'profile_filter' in kwargs.keys() and type(kwargs['profile_filter']) == str else True
         sort_ch_num = kwargs['sort_ch_num'] if 'sort_ch_num' in kwargs.keys() and type(kwargs['sort_ch_num']) == bool else False
-        combo_idx = kwargs['combo_idx'] if 'combo_idx' in kwargs.keys() and type(kwargs['combo_idx']) == int else 0
-
-        combo_num = list(range(0, 40186, 113))[combo_idx]
+        combo_num = kwargs['combo_num'] if 'combo_num' in kwargs.keys() and type(kwargs['combo_num']) == int else 0
 
         cluster_list = ClusterFinder(session=f'{self.pkl_sessions_dir}{os.sep}{self.pkl_file}',
                                      cluster_groups_dir=self.cluster_groups_dir,
@@ -170,39 +168,30 @@ class FunctionalConnectivity:
         fr1_shape = fr1.shape[0]
         y_start = int(round(bin_num))
         y_end = int(round(fr1_shape-bin_num))
-        big_x = np.zeros((all_bins.shape[0], y_end-y_start))
-        y = np.zeros(y_end-y_start)
+
+        x_bool = np.zeros((all_bins.shape[0], fr1_shape), dtype=bool)
+        for bin_idx, one_bin in enumerate(all_bins):
+            x_bool[bin_idx, int(round(bin_num+one_bin)):int(round(fr1_shape-bin_num+one_bin))] = True
+
+        big_x = np.tile(A=fr1, reps=(all_bins.shape[0], 1))
+        big_x = big_x[x_bool].reshape(all_bins.shape[0], y_end-y_start)
+        y = fr2[y_start:y_end]
+
         if to_jitter:
+            data = cross_correlate(big_x=big_x,
+                                   big_x_mean=big_x.mean(axis=1),
+                                   small_y=y,
+                                   small_y_mean=y.mean())
             sh_data = np.zeros((num_jitters, all_bins.shape[0]))
-            for sh in range(num_jitters):
-                big_x_sh = np.zeros((all_bins.shape[0], y_end-y_start))
-                y_sh = np.zeros(y_end-y_start)
-                for bin_idx, one_bin in enumerate(all_bins):
-                    start_x = int(round(bin_num+one_bin))
-                    end_x = int(round(fr1_shape-bin_num+one_bin))
-                    if sh == 0:
-                        big_x[bin_idx, :] = fr1[start_x:end_x]
-                    big_x_sh[bin_idx, :] = sh1[sh, start_x:end_x]
-                    if bin_idx == 0:
-                        if sh == 0:
-                            y = fr2[y_start:y_end]
-                        y_sh = sh2[sh, y_start:y_end]
-                if sh == 0:
-                    data = cross_correlate(big_x=big_x,
-                                           big_x_mean=big_x.mean(axis=1),
-                                           small_y=y,
-                                           small_y_mean=y.mean())
+            for sh in tqdm(range(num_jitters)):
+                big_x_sh = np.tile(A=sh1[sh, :], reps=(all_bins.shape[0], 1))
+                big_x_sh = big_x_sh[x_bool].reshape(all_bins.shape[0], y_end-y_start)
+                y_sh = sh2[sh, y_start:y_end]
                 sh_data[sh, :] = cross_correlate(big_x=big_x_sh,
                                                  big_x_mean=big_x_sh.mean(axis=1),
                                                  small_y=y_sh,
                                                  small_y_mean=y_sh.mean())
         else:
-            for bin_idx, one_bin in enumerate(all_bins):
-                start_x = int(round(bin_num+one_bin))
-                end_x = int(round(fr1_shape-bin_num+one_bin))
-                big_x[bin_idx, :] = fr1[start_x:end_x]
-                if bin_idx == 0:
-                    y = fr2[y_start:y_end]
             data = cross_correlate(big_x=big_x,
                                    big_x_mean=big_x.mean(axis=1),
                                    small_y=y,
