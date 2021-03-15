@@ -37,9 +37,8 @@ def get_firing_rate(cl_activity, bin_size,
 
 @njit(parallel=False)
 def cross_correlate(big_x, big_x_mean, small_y, small_y_mean):
-    reshaped_x_mean = np.reshape(big_x_mean, (big_x.shape[0], 1))
-    r_num = np.sum((big_x-reshaped_x_mean)*(small_y-small_y_mean), axis=1)
-    r_den = np.sqrt(np.sum((big_x-reshaped_x_mean)**2, axis=1)*np.sum((small_y-small_y_mean)**2))
+    r_num = np.sum((big_x-big_x_mean)*(small_y-small_y_mean), axis=1)
+    r_den = np.sqrt(np.sum((big_x-big_x_mean)**2, axis=1)*np.sum((small_y-small_y_mean)**2))
     r = r_num/r_den
     return r
 
@@ -58,7 +57,7 @@ class FunctionalConnectivity:
         """
         Description
         ----------
-        This method calculates noise correlations for all clusters in a given session.
+        This method calculates noise correlations for all selected clusters in a given session.
         ----------
 
         Parameters
@@ -67,9 +66,9 @@ class FunctionalConnectivity:
         bin_size (float)
             The size of bins for binning spikes; defaults to .5 (ms).
         bin_num (float)
-            The one-sided number of bins for the cross-correlogram; defaults to 40.
+            The one-sided number of bins for the cross-correlogram; defaults to 20.
         std_smooth (float)
-            The std. deviation of the gaussian smoothing kernel; defaults to 0.001 (ms).
+            The std. deviation of the gaussian smoothing kernel; defaults to 0.0005 (ms).
         to_jitter (bool)
             To jitter or not to jitter spikes; defaults to True.
         num_jitters (int)
@@ -97,9 +96,9 @@ class FunctionalConnectivity:
         """
 
         bin_size = kwargs['bin_size'] if 'bin_size' in kwargs.keys() and type(kwargs['bin_size']) == float else .0005
-        bin_num = kwargs['bin_num'] if 'bin_num' in kwargs.keys() and type(kwargs['bin_num']) == int else 40
+        bin_num = kwargs['bin_num'] if 'bin_num' in kwargs.keys() and type(kwargs['bin_num']) == int else 20
         smooth_fr = kwargs['smooth_fr'] if 'smooth_fr' in kwargs.keys() and type(kwargs['smooth_fr']) == bool else False
-        std_smooth = kwargs['std_smooth'] if 'std_smooth' in kwargs.keys() and type(kwargs['std_smooth']) == float else .001
+        std_smooth = kwargs['std_smooth'] if 'std_smooth' in kwargs.keys() and type(kwargs['std_smooth']) == float else .0005
         to_jitter = kwargs['to_jitter'] if 'to_jitter' in kwargs.keys() and type(kwargs['to_jitter']) == bool else True
         num_jitters = kwargs['num_jitters'] if 'num_jitters' in kwargs.keys() and type(kwargs['num_jitters']) == int else 1000
         jitter_size = kwargs['jitter_size'] if 'jitter_size' in kwargs.keys() and type(kwargs['jitter_size']) == float else .005
@@ -115,6 +114,7 @@ class FunctionalConnectivity:
                                                                                                 filter_by_cluster_type=cluster_type_filter,
                                                                                                 filter_by_spiking_profile=profile_filter,
                                                                                                 sort_ch_num=sort_ch_num)
+
 
         # get spike data in seconds and tracking start and end time
         file_id, cluster_data = Session(session=f'{self.pkl_sessions_dir}{os.sep}{self.pkl_file}').data_loader(extract_clusters=cluster_list, extract_variables=['tracking_ts'])
@@ -175,27 +175,27 @@ class FunctionalConnectivity:
 
         big_x = np.tile(A=fr1, reps=(all_bins.shape[0], 1))
         big_x = big_x[x_bool].reshape(all_bins.shape[0], y_end-y_start)
+        big_x_mean=np.reshape(big_x.mean(axis=1), (big_x.shape[0], 1))
         y = fr2[y_start:y_end]
+        y_mean = y.mean()
+
+        data = cross_correlate(big_x=big_x,
+                               big_x_mean=big_x_mean,
+                               small_y=y,
+                               small_y_mean=y_mean)
 
         if to_jitter:
-            data = cross_correlate(big_x=big_x,
-                                   big_x_mean=big_x.mean(axis=1),
-                                   small_y=y,
-                                   small_y_mean=y.mean())
             sh_data = np.zeros((num_jitters, all_bins.shape[0]))
             for sh in tqdm(range(num_jitters)):
                 big_x_sh = np.tile(A=sh1[sh, :], reps=(all_bins.shape[0], 1))
                 big_x_sh = big_x_sh[x_bool].reshape(all_bins.shape[0], y_end-y_start)
+                big_x_sh_mean = np.reshape(big_x_sh.mean(axis=1), (big_x_sh.shape[0], 1))
                 y_sh = sh2[sh, y_start:y_end]
+                y_sh_mean = y_sh.mean()
                 sh_data[sh, :] = cross_correlate(big_x=big_x_sh,
-                                                 big_x_mean=big_x_sh.mean(axis=1),
+                                                 big_x_mean=big_x_sh_mean,
                                                  small_y=y_sh,
-                                                 small_y_mean=y_sh.mean())
-        else:
-            data = cross_correlate(big_x=big_x,
-                                   big_x_mean=big_x.mean(axis=1),
-                                   small_y=y,
-                                   small_y_mean=y.mean())
+                                                 small_y_mean=y_sh_mean)
 
         if to_jitter:
             sio.savemat(f'{self.save_dir}{os.sep}{combo_name}.mat', {'cross_corr': data, 'sh_corr': sh_data}, oned_as='column')

@@ -12,7 +12,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from scipy.stats import pearsonr
 from scipy.stats import zscore
-from sklearn.decomposition import PCA
+from sklearn.decomposition import PCA, FactorAnalysis
 from decode_events import choose_012_clusters
 from neural_activity import condense_frame_arrays
 from neural_activity import Spikes
@@ -155,8 +155,11 @@ class LatentSpace:
         input_arr = neural_data_all.T
 
         # do PCA
-        pca = PCA(whiten=True)
-        x_new = pca.fit_transform(input_arr)
+        # pca = PCA(whiten=True)
+        # x_new = pca.fit_transform(input_arr)
+
+        fa = FactorAnalysis(n_components=50)
+        x_new = fa.fit_transform(input_arr)
 
         # split data back to individual sessions
         if num_components is True:
