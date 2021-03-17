@@ -10,9 +10,12 @@ Dimensionality reduction on neural data.
 
 import numpy as np
 import matplotlib.pyplot as plt
+import umap.umap_ as umap
+import matplotlib.animation as animation
 from scipy.stats import pearsonr
 from scipy.stats import zscore
 from sklearn.decomposition import PCA, FactorAnalysis
+from sklearn.manifold import TSNE, SpectralEmbedding
 from decode_events import choose_012_clusters
 from neural_activity import condense_frame_arrays
 from neural_activity import Spikes
@@ -150,61 +153,89 @@ class LatentSpace:
                                           neural_data[list(self.input_dict.keys())[2]]), axis=1)
 
         neural_data_all = zscore(neural_data_all, axis=1)
+        shape_1 = neural_data[list(self.input_dict.keys())[0]].shape[1]
+        shape_2 = neural_data[list(self.input_dict.keys())[1]].shape[1]
+        shape_3 = neural_data[list(self.input_dict.keys())[2]].shape[1]
 
         # rearrange array to shape (n_samples, n_features)
         input_arr = neural_data_all.T
 
-        # do PCA
-        # pca = PCA(whiten=True)
-        # x_new = pca.fit_transform(input_arr)
+        frames = np.arange(93, 181, .5)
+        frames = frames[(frames < 149) | (frames > 153)]
 
-        fa = FactorAnalysis(n_components=50)
-        x_new = fa.fit_transform(input_arr)
+        # do PCA
+        pca = PCA(whiten=True)
+        embedding = pca.fit_transform(input_arr)
+
+        comp_1 = 0
+        comp_2 = 8
+        comp_3 = 34
+        fig = plt.figure()
+        ax = fig.add_subplot(1, 1, 1, projection='3d')
+        ax.scatter(embedding[:shape_1, comp_1], embedding[:shape_1, comp_2], embedding[:shape_1, comp_3], c='#EEC900', alpha=.5)
+        ax.scatter(embedding[shape_1:shape_1+shape_2, comp_1], embedding[shape_1:shape_1+shape_2, comp_2], embedding[shape_1:shape_1+shape_2, comp_3], c='#00008B', alpha=.5)
+        ax.scatter(embedding[shape_1+shape_2:, comp_1], embedding[shape_1+shape_2:, comp_2], embedding[shape_1+shape_2:, comp_3], c='#CD950C', alpha=.5)
+        ax.view_init(elev=10, azim=92)
+        ax.set_xlabel('PC1')
+        ax.set_ylabel('PC9')
+        ax.set_zlabel('PC35')
+        ax.xaxis.set_pane_color((1.0, 1.0, 1.0, 0.0))
+        ax.yaxis.set_pane_color((1.0, 1.0, 1.0, 0.0))
+        ax.zaxis.set_pane_color((1.0, 1.0, 1.0, 0.0))
+        ax.grid(False)
+        plt.show()
+
+        # def animate(i):
+        #     ax.view_init(elev=10, azim=frames[i])
+        #
+        # ani = animation.FuncAnimation(fig=fig, func=animate, frames=frames.shape[0], interval=50, blit=False)
+        # ani.save('/home/bartulm/Downloads/yeyo.mp4', dpi=300)
+
 
         # split data back to individual sessions
-        if num_components is True:
-            num_components = x_new.shape[1]
-        split_data = {}
-        split_counts = [0] + list(np.cumsum(list(new_shapes.values())))
-        for s_idx, session in enumerate(new_shapes.keys()):
-            split_data[session] = x_new[split_counts[s_idx]:split_counts[s_idx+1], :num_components]
-
-        # plot correlations of PCs with beh. features
-        plot_dict = {}
-        for session in split_data.keys():
-            pc_corr = np.zeros((15, num_components))
-            variables = []
-            row = 0
-            for var in behavioral_data[session].keys():
-                if var == 'speeds' or var == 'neck_elevation' or var == 'body_direction' or var == 'neck_1st_der':
-                    nas = np.isnan(behavioral_data[session][var])
-                    for nc in range(num_components):
-                        x, y = split_data[session][:, nc], behavioral_data[session][var]
-                        pc_corr[row, nc] = pearsonr(x[~nas], y[~nas])[0]
-                    variables.append(var)
-                    row += 1
-                else:
-                    for sub_var in behavioral_data[session][var].keys():
-                        nas = np.isnan(behavioral_data[session][var][sub_var])
-                        for nc in range(num_components):
-                            x, y = split_data[session][:, nc], behavioral_data[session][var][sub_var]
-                            pc_corr[row, nc] = pearsonr(x[~nas], y[~nas])[0]
-                        variables.append(f'{var}_{sub_var}')
-                        row += 1
-            plot_dict[session] = pc_corr
-
-        fig, ax = plt.subplots(nrows=1, ncols=3, figsize=(15, 7))
-        for s_idx, session in enumerate(plot_dict.keys()):
-            ax = plt.subplot(1, 3, s_idx+1)
-            ax.imshow(plot_dict[session], aspect='auto', cmap='seismic', vmin=-1, vmax=1)
-            ax.set_title(session)
-            if s_idx == 0:
-                ax.set_yticks(list(range(0, 15)))
-                ax.set_yticklabels(variables)
-            else:
-                ax.set_yticks(list(range(0, 15)))
-                ax.set_yticklabels([])
-        plt.tight_layout(pad=1.08)
-        plt.show()
+        # if num_components is True:
+        #     num_components = x_new.shape[1]
+        # split_data = {}
+        # split_counts = [0] + list(np.cumsum(list(new_shapes.values())))
+        # for s_idx, session in enumerate(new_shapes.keys()):
+        #     split_data[session] = x_new[split_counts[s_idx]:split_counts[s_idx+1], :num_components]
+        #
+        # # plot correlations of PCs with beh. features
+        # plot_dict = {}
+        # for session in split_data.keys():
+        #     pc_corr = np.zeros((15, num_components))
+        #     variables = []
+        #     row = 0
+        #     for var in behavioral_data[session].keys():
+        #         if var == 'speeds' or var == 'neck_elevation' or var == 'body_direction' or var == 'neck_1st_der':
+        #             nas = np.isnan(behavioral_data[session][var])
+        #             for nc in range(num_components):
+        #                 x, y = split_data[session][:, nc], behavioral_data[session][var]
+        #                 pc_corr[row, nc] = pearsonr(x[~nas], y[~nas])[0]
+        #             variables.append(var)
+        #             row += 1
+        #         else:
+        #             for sub_var in behavioral_data[session][var].keys():
+        #                 nas = np.isnan(behavioral_data[session][var][sub_var])
+        #                 for nc in range(num_components):
+        #                     x, y = split_data[session][:, nc], behavioral_data[session][var][sub_var]
+        #                     pc_corr[row, nc] = pearsonr(x[~nas], y[~nas])[0]
+        #                 variables.append(f'{var}_{sub_var}')
+        #                 row += 1
+        #     plot_dict[session] = pc_corr
+        #
+        # fig, ax = plt.subplots(nrows=1, ncols=3, figsize=(15, 7))
+        # for s_idx, session in enumerate(plot_dict.keys()):
+        #     ax = plt.subplot(1, 3, s_idx+1)
+        #     ax.imshow(plot_dict[session], aspect='auto', cmap='seismic', vmin=-1, vmax=1)
+        #     ax.set_title(session)
+        #     if s_idx == 0:
+        #         ax.set_yticks(list(range(0, 15)))
+        #         ax.set_yticklabels(variables)
+        #     else:
+        #         ax.set_yticks(list(range(0, 15)))
+        #         ax.set_yticklabels([])
+        # plt.tight_layout(pad=1.08)
+        # plt.show()
 
 

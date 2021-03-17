@@ -11,6 +11,7 @@ Calculate noise correlations.
 import os
 import numpy as np
 import scipy.io as sio
+from scipy import sparse
 from numba import njit
 from tqdm import tqdm
 from itertools import combinations
@@ -23,16 +24,14 @@ from neural_activity import purge_spikes_beyond_tracking
 def get_firing_rate(cl_activity, bin_size,
                     tracking_start, tracking_stop,
                     to_jitter=True, jitter_size=.005, shuffle_n=1000):
-    fr_arr = np.zeros(int(np.ceil((tracking_stop-tracking_start)/bin_size)))
-    jitter_arr = np.zeros((shuffle_n, fr_arr.shape[0]))
+    fr_arr = np.zeros(int(np.ceil((tracking_stop-tracking_start)/bin_size))).astype(np.float32)
+    fr_arr[np.round(cl_activity/bin_size).astype(np.int32)] += 1
+    jitter_arr = sparse.csr_matrix((shuffle_n, fr_arr.shape[0]), dtype=np.float32)
     if to_jitter:
-        fr_arr[np.round(cl_activity/bin_size).astype(np.int32)] += 1
         for sh in range(shuffle_n):
             jitter_spikes = cl_activity.copy() + ((2 * jitter_size * np.random.random(cl_activity.shape[0])) - jitter_size)
             jitter_spikes = jitter_spikes[jitter_spikes <= tracking_stop]
-            jitter_arr[sh, np.round(jitter_spikes/bin_size).astype(np.int32)] += 1
-    else:
-        fr_arr[np.round(cl_activity/bin_size).astype(np.int32)] += 1
+            jitter_arr[sh, np.round(jitter_spikes/bin_size).astype(np.int32)] = 1
     return fr_arr, jitter_arr
 
 @njit(parallel=False)
@@ -123,9 +122,13 @@ class FunctionalConnectivity:
         cl_combinations = list(combinations(cluster_data['cluster_spikes'].keys(), 2))
 
         # pick a combination
-        combo_name = f'{cl_combinations[combo_num][0]}-{cl_combinations[combo_num][1]}'
-        act1 = cluster_data['cluster_spikes'][cl_combinations[combo_num][0]]
-        act2 = cluster_data['cluster_spikes'][cl_combinations[combo_num][1]]
+        # combo_name = f'{cl_combinations[combo_num][0]}-{cl_combinations[combo_num][1]}'
+        # print(combo_name)
+        # act1 = cluster_data['cluster_spikes'][cl_combinations[combo_num][0]]
+        # act2 = cluster_data['cluster_spikes'][cl_combinations[combo_num][1]]
+        combo_name = 'imec0_cl0011_ch002-imec0_cl0012_ch004'
+        act1 = cluster_data['cluster_spikes']['imec0_cl0011_ch002']
+        act2 = cluster_data['cluster_spikes']['imec0_cl0012_ch004']
 
         # eliminate spikes that happen prior to and post tracking
         act1 = purge_spikes_beyond_tracking(spike_train=act1, tracking_ts=cluster_data['tracking_ts'])
@@ -145,9 +148,9 @@ class FunctionalConnectivity:
 
             if smooth_fr:
                 fr1 = gaussian_filter1d(input=fr1, sigma=int(round(std_smooth/bin_size)))
-                sh1 = gaussian_filter1d(input=sh1, sigma=int(round(std_smooth/bin_size)), axis=1)
+                sh1 = gaussian_filter1d(input=sh1.todense(), sigma=int(round(std_smooth/bin_size)), axis=1)
                 fr2 = gaussian_filter1d(input=fr2, sigma=int(round(std_smooth/bin_size)))
-                sh2 = gaussian_filter1d(input=sh2, sigma=int(round(std_smooth/bin_size)), axis=1)
+                sh2 = gaussian_filter1d(input=sh2.todense(), sigma=int(round(std_smooth/bin_size)), axis=1)
         else:
             fr1, sh1 = get_firing_rate(cl_activity=act1, bin_size=bin_size,
                                        tracking_start=cluster_data['tracking_ts'][0]-cluster_data['tracking_ts'][0],
@@ -183,10 +186,12 @@ class FunctionalConnectivity:
                                big_x_mean=big_x_mean,
                                small_y=y,
                                small_y_mean=y_mean)
+        del big_x, big_x_mean
+        del y, y_mean
 
         if to_jitter:
             sh_data = np.zeros((num_jitters, all_bins.shape[0]))
-            for sh in tqdm(range(num_jitters)):
+            for sh in tqdm(range(num_jitters), position=0, leave=True):
                 big_x_sh = np.tile(A=sh1[sh, :], reps=(all_bins.shape[0], 1))
                 big_x_sh = big_x_sh[x_bool].reshape(all_bins.shape[0], y_end-y_start)
                 big_x_sh_mean = np.reshape(big_x_sh.mean(axis=1), (big_x_sh.shape[0], 1))
@@ -196,6 +201,8 @@ class FunctionalConnectivity:
                                                  big_x_mean=big_x_sh_mean,
                                                  small_y=y_sh,
                                                  small_y_mean=y_sh_mean)
+                del big_x_sh, big_x_sh_mean
+                del y_sh, y_sh_mean
 
         if to_jitter:
             sio.savemat(f'{self.save_dir}{os.sep}{combo_name}.mat', {'cross_corr': data, 'sh_corr': sh_data}, oned_as='column')
