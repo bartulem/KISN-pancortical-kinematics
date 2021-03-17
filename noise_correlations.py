@@ -122,13 +122,10 @@ class FunctionalConnectivity:
         cl_combinations = list(combinations(cluster_data['cluster_spikes'].keys(), 2))
 
         # pick a combination
-        # combo_name = f'{cl_combinations[combo_num][0]}-{cl_combinations[combo_num][1]}'
-        # print(combo_name)
-        # act1 = cluster_data['cluster_spikes'][cl_combinations[combo_num][0]]
-        # act2 = cluster_data['cluster_spikes'][cl_combinations[combo_num][1]]
-        combo_name = 'imec0_cl0011_ch002-imec0_cl0012_ch004'
-        act1 = cluster_data['cluster_spikes']['imec0_cl0011_ch002']
-        act2 = cluster_data['cluster_spikes']['imec0_cl0012_ch004']
+        combo_name = f'{cl_combinations[combo_num][0]}-{cl_combinations[combo_num][1]}'
+        print(combo_name)
+        act1 = cluster_data['cluster_spikes'][cl_combinations[combo_num][0]]
+        act2 = cluster_data['cluster_spikes'][cl_combinations[combo_num][1]]
 
         # eliminate spikes that happen prior to and post tracking
         act1 = purge_spikes_beyond_tracking(spike_train=act1, tracking_ts=cluster_data['tracking_ts'])
