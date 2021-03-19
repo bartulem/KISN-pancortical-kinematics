@@ -93,6 +93,14 @@ class ClusterFinder:
             Sessions to be included: 's1', 's2', etc.; defaults to True.
         filter_by_spiking_profile (str / bool)
             Profile to be included: 'RS' or 'FS'; defaults to True.
+        filter_by_smi (str / bool)
+            Select clusters that have a significant SMI; defaults to True.
+        smi_criterion (float)
+            The p-value for SMI significance; defaults to .001.
+        filter_by_lmi (str / bool)
+            Select clusters that have a significant LMI; defaults to True.
+        lmi_criterion (float)
+            The p-value for LMI significance; defaults to .005.
         sort_ch_num (bool)
             If True, sorts clusters by channel number; defaults to False.
         ----------
@@ -111,6 +119,10 @@ class ClusterFinder:
         filter_by_bank = kwargs['filter_by_bank'] if 'filter_by_bank' in kwargs.keys() and type(kwargs['filter_by_bank']) == str else True
         filter_by_session_num = kwargs['filter_by_session_num'] if 'filter_by_session_num' in kwargs.keys() and type(kwargs['filter_by_session_num']) == list else True
         filter_by_spiking_profile = kwargs['filter_by_spiking_profile'] if 'filter_by_spiking_profile' in kwargs.keys() and type(kwargs['filter_by_spiking_profile']) == str else True
+        filter_by_smi = kwargs['filter_by_smi'] if 'filter_by_smi' in kwargs.keys() and type(kwargs['filter_by_smi']) == str else True
+        smi_criterion = kwargs['smi_criterion'] if 'smi_criterion' in kwargs.keys() and type(kwargs['smi_criterion']) == float else .001
+        filter_by_lmi = kwargs['filter_by_lmi'] if 'filter_by_lmi' in kwargs.keys() and type(kwargs['filter_by_lmi']) == str else True
+        lmi_criterion = kwargs['lmi_criterion'] if 'lmi_criterion' in kwargs.keys() and type(kwargs['lmi_criterion']) == float else .005
         sort_ch_num = kwargs['sort_ch_num'] if 'sort_ch_num' in kwargs.keys() and type(kwargs['sort_ch_num']) == bool else False
 
         cluster_list = []
@@ -143,7 +155,8 @@ class ClusterFinder:
                         file_date_cg = file_date
 
                     for cluster in clusters:
-                        if filter_by_area is True and filter_by_cluster_type is True and filter_by_spiking_profile is True:
+                        if filter_by_area is True and filter_by_cluster_type is True and filter_by_spiking_profile is True \
+                                and filter_by_smi is True and filter_by_lmi is True:
                             cluster_list.append(cluster)
                         else:
                             if type(filter_by_cluster_type) == str:
@@ -167,7 +180,7 @@ class ClusterFinder:
                                     break
 
                                 if filter_by_area is True or any(area in cluster_area for area in filter_by_area):
-                                    if type(filter_by_spiking_profile) == str:
+                                    if type(filter_by_spiking_profile) == str or type(filter_by_smi) == str or type(filter_by_lmi) == str:
                                         # load profile data
                                         if not os.path.exists(self.sp_profiles_csv):
                                             print(f"Invalid location for file {self.sp_profiles_csv}. Please try again.")
@@ -179,10 +192,26 @@ class ClusterFinder:
                                             for idx, row in profile_data.iterrows():
                                                 if row[0] == f'{file_animal}_{file_date}_{file_bank}' and row[1] == cluster:
                                                     cl_profile = row[7]
+                                                    if row[9] < smi_criterion and row[8] < 0:
+                                                        cl_smi = ['sign', 'neg']
+                                                    elif row[9] < smi_criterion and row[8] > 0:
+                                                        cl_smi = ['sign', 'pos']
+                                                    else:
+                                                        cl_smi = ['ns']
+
+                                                    if row[11] < lmi_criterion < row[12] and row[10] < 0:
+                                                        cl_lmi = ['sign', 'neg']
+                                                    elif row[11] < lmi_criterion < row[12] and row[10] > 0:
+                                                        cl_lmi = ['sign', 'pos']
+                                                    else:
+                                                        cl_lmi = ['ns']
                                                     break
 
-                                    if filter_by_spiking_profile is True or filter_by_spiking_profile == cl_profile:
+                                    if (filter_by_spiking_profile is True or filter_by_spiking_profile == cl_profile) \
+                                            and (filter_by_smi is True or filter_by_smi in cl_smi) \
+                                            and (filter_by_lmi is True or filter_by_lmi in cl_lmi):
                                         cluster_list.append(cluster)
+
             else:
                 print(f"Invalid location for file {self.session}. Please try again.")
                 sys.exit()
