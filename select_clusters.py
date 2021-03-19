@@ -120,9 +120,9 @@ class ClusterFinder:
         filter_by_session_num = kwargs['filter_by_session_num'] if 'filter_by_session_num' in kwargs.keys() and type(kwargs['filter_by_session_num']) == list else True
         filter_by_spiking_profile = kwargs['filter_by_spiking_profile'] if 'filter_by_spiking_profile' in kwargs.keys() and type(kwargs['filter_by_spiking_profile']) == str else True
         filter_by_smi = kwargs['filter_by_smi'] if 'filter_by_smi' in kwargs.keys() and type(kwargs['filter_by_smi']) == str else True
-        smi_criterion = kwargs['smi_criterion'] if 'smi_criterion' in kwargs.keys() and type(kwargs['smi_criterion']) == float else .001
+        smi_criterion = kwargs['smi_criterion'] if 'smi_criterion' in kwargs.keys() and type(kwargs['smi_criterion']) == float else .01
         filter_by_lmi = kwargs['filter_by_lmi'] if 'filter_by_lmi' in kwargs.keys() and type(kwargs['filter_by_lmi']) == str else True
-        lmi_criterion = kwargs['lmi_criterion'] if 'lmi_criterion' in kwargs.keys() and type(kwargs['lmi_criterion']) == float else .005
+        lmi_criterion = kwargs['lmi_criterion'] if 'lmi_criterion' in kwargs.keys() and type(kwargs['lmi_criterion']) == float else .05
         sort_ch_num = kwargs['sort_ch_num'] if 'sort_ch_num' in kwargs.keys() and type(kwargs['sort_ch_num']) == bool else False
 
         cluster_list = []
