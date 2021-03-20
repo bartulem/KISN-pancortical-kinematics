@@ -164,7 +164,7 @@ class RatemapCharacteristics:
 
     def __init__(self, ratemap_mat_dir='', pkl_sessions_dir='', save_dir='', area_filter='M', animal_filter=True, profile_filter=True,
                  session_id_filter='s1', session_non_filter=True, session_type_filter=True, cluster_type_filter=True,
-                 cluster_groups_dir='', sp_profiles_csv='', specific_date=None):
+                 smi_filter=True, lmi_filter=True, cluster_groups_dir='', sp_profiles_csv='', specific_date=None):
         if specific_date is None:
             specific_date = {'bruno': ['020520', '030520'],
                              'roy': True,
@@ -179,6 +179,8 @@ class RatemapCharacteristics:
         self.area_filter = area_filter
         self.cluster_type_filter = cluster_type_filter
         self.profile_filter = profile_filter
+        self.smi_filter = smi_filter
+        self.lmi_filter = lmi_filter
         self.animal_filter = animal_filter
         self.session_id_filter = session_id_filter
         self.session_non_filter = session_non_filter
@@ -260,6 +262,8 @@ class RatemapCharacteristics:
                                                      sp_profiles_csv=self.sp_profiles_csv).get_desired_clusters(filter_by_area=[self.area_filter],
                                                                                                                 filter_by_cluster_type=self.cluster_type_filter,
                                                                                                                 filter_by_spiking_profile=self.profile_filter,
+                                                                                                                filter_by_smi=self.smi_filter,
+                                                                                                                filter_by_lmi=self.lmi_filter,
                                                                                                                 sort_ch_num=sort_ch_num)
                         cluster_dict[animal][bank] = cluster_list
                         total_clusters += len(cluster_list)
