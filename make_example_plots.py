@@ -13,7 +13,8 @@ import sys
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.stats import sem
-from neural_activity import Spikes
+if 'neural_activity' not in sys.modules:
+    from neural_activity import Spikes
 
 
 class PlotExamples:

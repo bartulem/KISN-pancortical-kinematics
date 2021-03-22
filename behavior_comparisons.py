@@ -14,8 +14,10 @@ import numpy as np
 import matplotlib.pyplot as plt
 from numba import njit
 from scipy.stats import sem
-from sessions2load import Session
-from make_ratemaps import Ratemap
+if 'sessions2load' not in sys.modules:
+    from sessions2load import Session
+if 'make_ratemaps' not in sys.modules:
+    from make_ratemaps import Ratemap
 
 
 @njit(parallel=False)

@@ -10,15 +10,18 @@ Decode events like sound stimulation or luminance/weight presence.
 
 import os
 import gc
+import sys
 import time
 import numpy as np
-import neural_activity
-from select_clusters import ClusterFinder
-from sessions2load import Session
+from numba import njit
 from sklearn import svm
 from tqdm import tqdm
-from numba import njit
-
+if 'neural_activity' not in sys.modules:
+    import neural_activity
+if 'select_clusters' not in sys.modules:
+    from select_clusters import ClusterFinder
+if 'sessions2load' not in sys.modules:
+    from sessions2load import Session
 
 @njit(parallel=False)
 def correlate_quickly(big_x, big_x_mean, big_y, big_y_mean):

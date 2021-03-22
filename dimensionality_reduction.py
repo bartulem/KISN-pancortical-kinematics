@@ -8,6 +8,7 @@ Dimensionality reduction on neural data.
 
 """
 
+import sys
 import numpy as np
 import matplotlib.pyplot as plt
 import umap.umap_ as umap
@@ -16,10 +17,13 @@ from scipy.stats import pearsonr
 from scipy.stats import zscore
 from sklearn.decomposition import PCA, FactorAnalysis
 from sklearn.manifold import TSNE, SpectralEmbedding
-from decode_events import choose_012_clusters
-from neural_activity import condense_frame_arrays
-from neural_activity import Spikes
-from sessions2load import Session
+if 'decode_events' not in sys.modules:
+    from decode_events import choose_012_clusters
+if 'neural_activity' not in sys.modules:
+    from neural_activity import condense_frame_arrays
+    from neural_activity import Spikes
+if 'sessions2load' not in sys.modules:
+    from sessions2load import Session
 
 def get_condensed_features(behavioral_data, bin_size_ms=100):
     condensed = {}

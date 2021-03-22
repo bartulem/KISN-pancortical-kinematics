@@ -12,13 +12,16 @@ import os
 import sys
 import sparse
 import warnings
-import numpy as np
 import matplotlib.pyplot as plt
-from scipy.ndimage.filters import gaussian_filter1d
 from numba import njit
-from sessions2load import Session
-from quantify_ratemaps import RatemapCharacteristics
-import decode_events
+import numpy as np
+from scipy.ndimage.filters import gaussian_filter1d
+if 'sessions2load' not in sys.modules:
+    from sessions2load import Session
+if 'quantify_ratemaps' not in sys.modules:
+    from quantify_ratemaps import RatemapCharacteristics
+if 'decode_events' not in sys.modules:
+    import decode_events
 
 
 warnings.simplefilter('ignore')

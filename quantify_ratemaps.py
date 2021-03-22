@@ -18,7 +18,8 @@ import scipy.io as sio
 from tqdm import tqdm
 from numba import njit
 from scipy.stats import spearmanr
-from select_clusters import ClusterFinder
+if 'select_clusters' not in sys.modules:
+    from select_clusters import ClusterFinder
 if 'neural_activity' not in sys.modules:
     from neural_activity import Spikes
 

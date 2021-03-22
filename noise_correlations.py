@@ -9,6 +9,7 @@ Calculate noise correlations.
 """
 
 import os
+import sys
 import numpy as np
 import scipy.io as sio
 from scipy import sparse
@@ -16,9 +17,12 @@ from numba import njit
 from tqdm import tqdm
 from itertools import combinations
 from scipy.ndimage import gaussian_filter1d
-from sessions2load import Session
-from select_clusters import ClusterFinder
-from neural_activity import purge_spikes_beyond_tracking
+if 'sessions2load' not in sys.modules:
+    from sessions2load import Session
+if 'select_clusters' not in sys.modules:
+    from select_clusters import ClusterFinder
+if 'neural_activity' not in sys.modules:
+    from neural_activity import purge_spikes_beyond_tracking
 
 
 def get_firing_rate(cl_activity, bin_size,

@@ -21,12 +21,17 @@ from tqdm import tqdm
 from scipy.stats import wilcoxon
 from scipy.stats import sem
 from scipy.stats import pearsonr
-import decode_events
-from sessions2load import Session
-from neural_activity import Spikes
-from neural_activity import gaussian_smoothing
-from select_clusters import ClusterFinder
-from define_spiking_profile import get_cluster_spiking_profiles
+if 'decode_events' not in sys.modules:
+    import decode_events
+if 'sessions2load' not in sys.modules:
+    from sessions2load import Session
+if 'neural_activity' not in sys.modules:
+    from neural_activity import Spikes
+    from neural_activity import gaussian_smoothing
+if 'select_clusters' not in sys.modules:
+    from select_clusters import ClusterFinder
+if 'define_spiking_profile' not in sys.modules:
+    from define_spiking_profile import get_cluster_spiking_profiles
 
 
 class PlotGroupResults:

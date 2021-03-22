@@ -21,9 +21,12 @@ from scipy.ndimage.filters import gaussian_filter1d, uniform_filter1d
 from tqdm import tqdm
 from random import gauss
 from mpl_toolkits.axes_grid1.inset_locator import inset_axes
-from sessions2load import Session
-from make_ratemaps import Ratemap
-from neural_activity import Spikes
+if 'sessions2load' not in sys.modules:
+    from sessions2load import Session
+if 'make_ratemaps' not in sys.modules:
+    from make_ratemaps import Ratemap
+if 'neural_activity' not in sys.modules:
+    from neural_activity import Spikes
 
 def extract_json_data(json_file='', features=None,
                       peak_min=True, der='1st', rate_stability_bound=True,
