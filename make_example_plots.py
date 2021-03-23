@@ -13,8 +13,7 @@ import sys
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.stats import sem
-if 'neural_activity' not in sys.modules:
-    from neural_activity import Spikes
+import neural_activity
 
 
 class PlotExamples:
@@ -62,7 +61,11 @@ class PlotExamples:
         beh_color = kwargs['beh_color'] if 'beh_color' in kwargs.keys() and type(kwargs['beh_color']) == str else '#008000'
 
         # get peth, raster and behavior data
-        session_name, peth, raster, peth_beh = Spikes(input_file=self.session).get_peths(get_clusters=[self.cluster_name], smooth=True, smooth_sd=3, raster=True, beh_raster='speeds')
+        session_name, peth, raster, peth_beh = neural_activity.Spikes(input_file=self.session).get_peths(get_clusters=[self.cluster_name],
+                                                                                                         smooth=True,
+                                                                                                         smooth_sd=3,
+                                                                                                         raster=True,
+                                                                                                         beh_raster='speeds')
 
         # get means/SEMs for spikes/behavior
         peth_mean = np.nanmean(peth[self.cluster_name]['peth'], axis=0)
@@ -132,12 +135,12 @@ class PlotExamples:
         raster_color = kwargs['raster_color'] if 'raster_color' in kwargs.keys() and type(kwargs['raster_color']) == str else '#808080'
 
         # get discontinuous_peth and discontinuous_raster
-        discontinuous_peth, discontinuous_raster = Spikes(input_012=self.input_012).get_discontinuous_peths(get_clusters=[self.cluster_name],
-                                                                                                            cluster_type='good',
-                                                                                                            cluster_areas=[self.cl_brain_area],
-                                                                                                            discontinuous_raster=True,
-                                                                                                            to_smooth=True,
-                                                                                                            smooth_sd=3)
+        discontinuous_peth, discontinuous_raster = neural_activity.Spikes(input_012=self.input_012).get_discontinuous_peths(get_clusters=[self.cluster_name],
+                                                                                                                            cluster_type='good',
+                                                                                                                            cluster_areas=[self.cl_brain_area],
+                                                                                                                            discontinuous_raster=True,
+                                                                                                                            to_smooth=True,
+                                                                                                                            smooth_sd=3)
 
         # get means/SEMs for spikes/behavior
         discontinuous_peth_mean = np.nanmean(discontinuous_peth[self.cluster_name]['discontinuous_peth'], axis=0)

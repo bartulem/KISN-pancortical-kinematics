@@ -21,22 +21,16 @@ from tqdm import tqdm
 from scipy.stats import wilcoxon
 from scipy.stats import sem
 from scipy.stats import pearsonr
-if 'decode_events' not in sys.modules:
-    import decode_events
-if 'sessions2load' not in sys.modules:
-    from sessions2load import Session
-if 'neural_activity' not in sys.modules:
-    from neural_activity import Spikes
-    from neural_activity import gaussian_smoothing
-if 'select_clusters' not in sys.modules:
-    from select_clusters import ClusterFinder
-if 'define_spiking_profile' not in sys.modules:
-    from define_spiking_profile import get_cluster_spiking_profiles
+import decode_events
+import sessions2load
+import neural_activity
+import select_clusters
+import define_spiking_profile
 
 
 class PlotGroupResults:
     def __init__(self, session_list=[], cluster_groups_dir='', sp_profiles_csv='',
-                 save_fig=False, fig_format='png', save_dir='/home/bartulm/Downloads',
+                 save_fig=False, fig_format='png', save_dir='',
                  decoding_dir='', animal_ids=None,
                  relevant_areas=None, relevant_cluster_types='good',
                  bin_size_ms=50, window_size=10, smooth=False, smooth_sd=1, to_plot=False,
@@ -130,14 +124,14 @@ class PlotGroupResults:
         if len(self.session_list) > 0:
             for one_session in self.session_list:
                 if os.path.exists(one_session):
-                    relevant_session_clusters = ClusterFinder(session=one_session,
-                                                              cluster_groups_dir=self.cluster_groups_dir).get_desired_clusters(filter_by_area=self.relevant_areas,
-                                                                                                                               filter_by_cluster_type=self.relevant_cluster_types)
-                    session_name, peth = Spikes(input_file=one_session).get_peths(get_clusters=relevant_session_clusters,
-                                                                                  bin_size_ms=self.bin_size_ms,
-                                                                                  window_size=self.window_size,
-                                                                                  smooth=self.smooth,
-                                                                                  smooth_sd=self.smooth_sd)
+                    relevant_session_clusters = select_clusters.ClusterFinder(session=one_session,
+                                                                              cluster_groups_dir=self.cluster_groups_dir).get_desired_clusters(filter_by_area=self.relevant_areas,
+                                                                                                                                               filter_by_cluster_type=self.relevant_cluster_types)
+                    session_name, peth = neural_activity.Spikes(input_file=one_session).get_peths(get_clusters=relevant_session_clusters,
+                                                                                                  bin_size_ms=self.bin_size_ms,
+                                                                                                  window_size=self.window_size,
+                                                                                                  smooth=self.smooth,
+                                                                                                  smooth_sd=self.smooth_sd)
                     sound_stim_data[session_name] = peth
                 else:
                     print(f"Invalid location for file {one_session}. Please try again.")
@@ -207,7 +201,7 @@ class PlotGroupResults:
         significance_dict = {}
         for cluster in statistics_dict.keys():
             session_id = statistics_dict[cluster]['session']
-            file_animal = [animal for animal in ClusterFinder.probe_site_areas.keys() if animal in session_id][0]
+            file_animal = [animal for animal in select_clusters.ClusterFinder.probe_site_areas.keys() if animal in session_id][0]
             file_bank = [bank for bank in ['distal', 'intermediate'] if bank in session_id][0]
             file_date = session_id[session_id.find('20') - 4:session_id.find('20') + 2]
             if file_animal not in significance_dict.keys():
@@ -406,7 +400,7 @@ class PlotGroupResults:
             luminance_modulation_data = {}
             for three_sessions in tqdm(self.input_012_list):
                 # get details of the three sessions
-                file_animal = [name for name in ClusterFinder.probe_site_areas.keys() if name in three_sessions[0]][0]
+                file_animal = [name for name in select_clusters.ClusterFinder.probe_site_areas.keys() if name in three_sessions[0]][0]
                 file_bank = [bank for bank in ['distal', 'intermediate'] if bank in three_sessions[0]][0]
                 get_date_idx = [date.start() for date in re.finditer('20', three_sessions[0])][-1]
                 file_date = three_sessions[0][get_date_idx - 4:get_date_idx + 2]
@@ -421,19 +415,19 @@ class PlotGroupResults:
                                                                                                                        desired_profiles=True)
 
                 # get discontinuous PETHs
-                discontinuous_peths = Spikes(input_012=three_sessions,
-                                             cluster_groups_dir=self.cluster_groups_dir,
-                                             sp_profiles_csv=self.sp_profiles_csv).get_discontinuous_peths(get_clusters=all_clusters,
-                                                                                                           cluster_type=self.relevant_cluster_types,
-                                                                                                           cluster_areas=self.relevant_areas,
-                                                                                                           discontinuous_raster=False,
-                                                                                                           to_smooth=self.smooth,
-                                                                                                           smooth_sd=self.smooth_sd,
-                                                                                                           speed_threshold_high=speed_threshold_high,
-                                                                                                           speed_threshold_low=speed_threshold_low,
-                                                                                                           speed_min_seq_duration=speed_min_seq_duration,
-                                                                                                           bin_size_ms=self.bin_size_ms,
-                                                                                                           window_size=self.window_size)
+                discontinuous_peths = neural_activity.Spikes(input_012=three_sessions,
+                                                             cluster_groups_dir=self.cluster_groups_dir,
+                                                             sp_profiles_csv=self.sp_profiles_csv).get_discontinuous_peths(get_clusters=all_clusters,
+                                                                                                                           cluster_type=self.relevant_cluster_types,
+                                                                                                                           cluster_areas=self.relevant_areas,
+                                                                                                                           discontinuous_raster=False,
+                                                                                                                           to_smooth=self.smooth,
+                                                                                                                           smooth_sd=self.smooth_sd,
+                                                                                                                           speed_threshold_high=speed_threshold_high,
+                                                                                                                           speed_threshold_low=speed_threshold_low,
+                                                                                                                           speed_min_seq_duration=speed_min_seq_duration,
+                                                                                                                           bin_size_ms=self.bin_size_ms,
+                                                                                                                           window_size=self.window_size)
 
                 luminance_modulation_data[f'{file_animal}_{file_date}_{file_bank}'] = discontinuous_peths
 
@@ -506,7 +500,7 @@ class PlotGroupResults:
             significance_dict = {'kavorka': {'distal': {}, 'intermediate': {}}, 'johnjohn': {'distal': {}, 'intermediate': {}}, 'frank': {'distal': {}, 'intermediate': {}}}
             for cluster in tqdm(statistics_dict.keys()):
                 session_id = statistics_dict[cluster]['session']
-                file_animal = [animal for animal in ClusterFinder.probe_site_areas.keys() if animal in session_id][0]
+                file_animal = [animal for animal in select_clusters.ClusterFinder.probe_site_areas.keys() if animal in session_id][0]
                 file_bank = [bank for bank in ['distal', 'intermediate'] if bank in session_id][0]
                 get_date_idx = [date.start() for date in re.finditer('20', session_id)][-1]
                 file_date = session_id[get_date_idx-4:get_date_idx+2]
@@ -844,9 +838,9 @@ class PlotGroupResults:
                     reduced_plot_modulation_arrays[arr_name][rr_idx, :] = plot_modulation_arrays[arr_name][reduced_row:reduced_row+reduction_factor, :].sum()
 
             for arr_name in reduced_plot_modulation_arrays:
-                smoothed_arr = gaussian_smoothing(array=reduced_plot_modulation_arrays[arr_name],
-                                                  sigma=3,
-                                                  axis=0)
+                smoothed_arr = neural_activity.gaussian_smoothing(array=reduced_plot_modulation_arrays[arr_name],
+                                                                  sigma=3,
+                                                                  axis=0)
                 reduced_plot_modulation_arrays[arr_name] = smoothed_arr / smoothed_arr.max()
 
             fig = plt.figure(figsize=(2, 8))
@@ -899,10 +893,10 @@ class PlotGroupResults:
         for animal in self.all_animals_012.keys():
             clusters_across_sessions[animal] = {0: [], 1: [], 2: []}
             for session_id, session in enumerate(self.all_animals_012[animal]):
-                clusters_across_sessions[animal][session_id] = ClusterFinder(session=session,
-                                                                             cluster_groups_dir=self.cluster_groups_dir,
-                                                                             sp_profiles_csv=self.sp_profiles_csv).get_desired_clusters(filter_by_cluster_type=self.relevant_cluster_types,
-                                                                                                                                        filter_by_area=self.relevant_areas)
+                clusters_across_sessions[animal][session_id] = select_clusters.ClusterFinder(session=session,
+                                                                                             cluster_groups_dir=self.cluster_groups_dir,
+                                                                                             sp_profiles_csv=self.sp_profiles_csv).get_desired_clusters(filter_by_cluster_type=self.relevant_cluster_types,
+                                                                                                                                                        filter_by_area=self.relevant_areas)
 
             all_common_clusters[animal] = list(set(clusters_across_sessions[animal][0]).intersection(clusters_across_sessions[animal][1], clusters_across_sessions[animal][2]))
 
@@ -912,9 +906,9 @@ class PlotGroupResults:
         for animal in self.all_animals_012.keys():
             activity_across_sessions[animal] = {0: {}, 1: {}, 2: {}}
             for session_id, session in enumerate(self.all_animals_012[animal]):
-                the_session, activity_dictionary, purged_spikes_dict = Spikes(input_file=session).convert_activity_to_frames_with_shuffles(get_clusters=all_common_clusters[animal],
-                                                                                                                                           to_shuffle=False,
-                                                                                                                                           condense_arr=True)
+                the_session, activity_dictionary, purged_spikes_dict = neural_activity.Spikes(input_file=session).convert_activity_to_frames_with_shuffles(get_clusters=all_common_clusters[animal],
+                                                                                                                                                           to_shuffle=False,
+                                                                                                                                                           condense_arr=True)
                 activity_across_sessions[animal][session_id] = activity_dictionary
 
         if get_cl_profiles:
@@ -923,13 +917,15 @@ class PlotGroupResults:
                 file_bank = [bank for bank in ['distal', 'intermediate'] if bank in self.all_animals_012[animal][0]][0]
                 get_date_idx = [date.start() for date in re.finditer('20', self.all_animals_012[animal][0])][-1]
                 file_date = self.all_animals_012[animal][0][get_date_idx-4:get_date_idx+2]
-                cluster_profiles[animal] = get_cluster_spiking_profiles(cluster_list=all_common_clusters[animal], recording_day=f'{animal}_{file_date}_{file_bank}', sp_profiles_csv=self.sp_profiles_csv)
+                cluster_profiles[animal] = define_spiking_profile.get_cluster_spiking_profiles(cluster_list=all_common_clusters[animal],
+                                                                                               recording_day=f'{animal}_{file_date}_{file_bank}',
+                                                                                               sp_profiles_csv=self.sp_profiles_csv)
 
         activity_arrays = {}
         for animal in self.all_animals_012.keys():
-            zero_ses_name, zero_extracted_frame_info = Session(session=self.all_animals_012[animal][0]).data_loader(extract_variables=['total_frame_num'])
-            first_ses_name, first_extracted_frame_info = Session(session=self.all_animals_012[animal][1]).data_loader(extract_variables=['total_frame_num'])
-            second_ses_name, second_extracted_frame_info = Session(session=self.all_animals_012[animal][2]).data_loader(extract_variables=['total_frame_num'])
+            zero_ses_name, zero_extracted_frame_info = sessions2load.Session(session=self.all_animals_012[animal][0]).data_loader(extract_variables=['total_frame_num'])
+            first_ses_name, first_extracted_frame_info = sessions2load.Session(session=self.all_animals_012[animal][1]).data_loader(extract_variables=['total_frame_num'])
+            second_ses_name, second_extracted_frame_info = sessions2load.Session(session=self.all_animals_012[animal][2]).data_loader(extract_variables=['total_frame_num'])
             min_total_frame_num = np.array([zero_extracted_frame_info['total_frame_num'],
                                             first_extracted_frame_info['total_frame_num'],
                                             second_extracted_frame_info['total_frame_num']]).min() // int(120. * (100 / 1e3))

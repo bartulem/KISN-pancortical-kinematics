@@ -17,43 +17,39 @@ from scipy.stats import pearsonr
 from scipy.stats import zscore
 from sklearn.decomposition import PCA, FactorAnalysis
 from sklearn.manifold import TSNE, SpectralEmbedding
-if 'decode_events' not in sys.modules:
-    from decode_events import choose_012_clusters
-if 'neural_activity' not in sys.modules:
-    from neural_activity import condense_frame_arrays
-    from neural_activity import Spikes
-if 'sessions2load' not in sys.modules:
-    from sessions2load import Session
+import decode_events
+import neural_activity
+import sessions2load
 
 def get_condensed_features(behavioral_data, bin_size_ms=100):
     condensed = {}
     for var in behavioral_data.keys():
         if var == 'speeds':
-            condensed[var] = condense_frame_arrays(frame_array=behavioral_data[var][:, 3],
-                                                   camera_framerate=120.,
-                                                   bin_size_ms=bin_size_ms,
-                                                   arr_type=False,
-                                                   sound=False)
+            condensed[var] = neural_activity.condense_frame_arrays(frame_array=behavioral_data[var][:, 3],
+                                                                   camera_framerate=120.,
+                                                                   bin_size_ms=bin_size_ms,
+                                                                   arr_type=False,
+                                                                   sound=False)
         if var == 'sorted_point_data':
-            condensed['neck_elevation'] = condense_frame_arrays(frame_array=behavioral_data[var][:, 4, 2],
-                                                                camera_framerate=120.,
-                                                                bin_size_ms=bin_size_ms,
-                                                                arr_type=False,
-                                                                sound=False)
+            condensed['neck_elevation'] = neural_activity.condense_frame_arrays(frame_array=behavioral_data[var][:, 4, 2],
+                                                                                camera_framerate=120.,
+                                                                                bin_size_ms=bin_size_ms,
+                                                                                arr_type=False,
+                                                                                sound=False)
         elif var == 'neck_1st_der' or var == 'body_direction':
-            condensed[var] = condense_frame_arrays(frame_array=behavioral_data[var],
-                                                   camera_framerate=120.,
-                                                   bin_size_ms=bin_size_ms,
-                                                   arr_type=False,
-                                                   sound=False)
+            condensed[var] = neural_activity.condense_frame_arrays(frame_array=behavioral_data[var],
+                                                                   camera_framerate=120.,
+                                                                   bin_size_ms=bin_size_ms,
+                                                                   arr_type=False,
+                                                                   sound=False)
         elif var != 'total_frame_num' and var != 'speeds' and var != 'sorted_point_data' \
                 and var != 'neck_1st_der' and var != 'body_direction':
             condensed[var] = {}
             for n_col in range(behavioral_data[var].shape[1]):
-                condensed[var][n_col] = condense_frame_arrays(frame_array=behavioral_data[var][:, n_col],
-                                                              camera_framerate=120., bin_size_ms=bin_size_ms,
-                                                              arr_type=False,
-                                                              sound=False)
+                condensed[var][n_col] = neural_activity.condense_frame_arrays(frame_array=behavioral_data[var][:, n_col],
+                                                                              camera_framerate=120., bin_size_ms=bin_size_ms,
+                                                                              arr_type=False,
+                                                                              sound=False)
     return condensed
 
 class LatentSpace:
@@ -114,19 +110,19 @@ class LatentSpace:
         all_clusters, \
         chosen_clusters, \
         extra_chosen_clusters, \
-        cluster_dict = choose_012_clusters(the_input_012=list(self.input_dict.values()),
-                                           cl_gr_dir=self.cluster_groups_dir,
-                                           sp_prof_csv=self.sp_profiles_csv,
-                                           cl_areas=cluster_areas,
-                                           cl_type=cluster_type,
-                                           desired_profiles=cluster_profile,
-                                           dec_type=condition)
+        cluster_dict = decode_events.choose_012_clusters(the_input_012=list(self.input_dict.values()),
+                                                         cl_gr_dir=self.cluster_groups_dir,
+                                                         sp_prof_csv=self.sp_profiles_csv,
+                                                         cl_areas=cluster_areas,
+                                                         cl_type=cluster_type,
+                                                         desired_profiles=cluster_profile,
+                                                         dec_type=condition)
 
         # extract/condense beh. feature data
         behavioral_data = {}
         new_shapes = {}
         for session in self.input_dict.keys():
-            file_id, feature_data = Session(session= self.input_dict[session]).data_loader(extract_variables=feature_list)
+            file_id, feature_data = sessions2load.Session(session= self.input_dict[session]).data_loader(extract_variables=feature_list)
             behavioral_data[session] = get_condensed_features(feature_data)
             new_shapes[session] = feature_data['total_frame_num'] // int(120. * (condense_bin_ms / 1000))
 
@@ -140,10 +136,10 @@ class LatentSpace:
                 which_extra = 0
             file_id, \
             activity_dictionary, \
-            purged_spikes_dictionary = Spikes(input_file=full_session_path).convert_activity_to_frames_with_shuffles(get_clusters=chosen_clusters+extra_chosen_clusters[which_extra],
-                                                                                                                     to_shuffle=False,
-                                                                                                                     condense_arr=True,
-                                                                                                                     condense_bin_ms=condense_bin_ms)
+            purged_spikes_dictionary = neural_activity.Spikes(input_file=full_session_path).convert_activity_to_frames_with_shuffles(get_clusters=chosen_clusters+extra_chosen_clusters[which_extra],
+                                                                                                                                     to_shuffle=False,
+                                                                                                                                     condense_arr=True,
+                                                                                                                                     condense_bin_ms=condense_bin_ms)
             neural_data_binned =  np.zeros((len(all_clusters), new_shapes[session]))
             for cl_idx, cl in enumerate(all_clusters):
                 if cl in activity_dictionary.keys():

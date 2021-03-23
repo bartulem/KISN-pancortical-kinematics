@@ -21,12 +21,9 @@ from scipy.ndimage.filters import gaussian_filter1d, uniform_filter1d
 from tqdm import tqdm
 from random import gauss
 from mpl_toolkits.axes_grid1.inset_locator import inset_axes
-if 'sessions2load' not in sys.modules:
-    from sessions2load import Session
-if 'make_ratemaps' not in sys.modules:
-    from make_ratemaps import Ratemap
-if 'neural_activity' not in sys.modules:
-    from neural_activity import Spikes
+import sessions2load
+import make_ratemaps
+import neural_activity
 
 def extract_json_data(json_file='', features=None,
                       peak_min=True, der='1st', rate_stability_bound=True,
@@ -244,10 +241,10 @@ class WeightComparer:
         #         for idx, session_name in enumerate(['light1', self.test_session_type, 'light2']):
         #             file_id, \
         #             activity_dictionary, \
-        #             purged_spikes_dictionary = Spikes(input_file=self.baseline_dict[animal]['files'][idx]).convert_activity_to_frames_with_shuffles(get_clusters=cl_id,
-        #                                                                                                                                             to_shuffle=False,
-        #                                                                                                                                             condense_arr=True,
-        #                                                                                                                                             condense_bin_ms=int(1000*condensing_bin))
+        #             purged_spikes_dictionary = neural_activity.Spikes(input_file=self.baseline_dict[animal]['files'][idx]).convert_activity_to_frames_with_shuffles(get_clusters=cl_id,
+                        #                                                                                                                                             to_shuffle=False,
+                        #                                                                                                                                             condense_arr=True,
+                        #                                                                                                                                             condense_bin_ms=int(1000*condensing_bin))
         #             activity_dict[animal][cl_id][session_name] = gaussian_filter1d(input=activity_dictionary[cl_id]['activity'].todense(), sigma=smooth_sd) / condensing_bin
         #
         # plot_dict = {}
@@ -480,7 +477,7 @@ class WeightComparer:
                     else:
                         axes_list = [ax3, ax4]
                     chosen_feature_der = f'{chosen_feature}_{self.der}_der'
-                    feature_color = [val for key, val in Ratemap.feature_colors.items() if key in chosen_feature][0]
+                    feature_color = [val for key, val in make_ratemaps.Ratemap.feature_colors.items() if key in chosen_feature][0]
                     for ax, specific_feature in zip(axes_list, [chosen_feature, chosen_feature_der]):
                         if gs != 'stability':
                             ax.scatter(x=np.array(weight_dict[specific_feature][gs][self.ref_dict['ref_session']]),
@@ -527,7 +524,7 @@ class WeightComparer:
                         'back': [3, 4, 4], 'back_der': [9, 10, 10]}
                 for chosen_feature in self.chosen_features:
                     chosen_feature_der = f'{chosen_feature}_{self.der}_der'
-                    feature_color = [val for key, val in Ratemap.feature_colors.items() if key in chosen_feature][0]
+                    feature_color = [val for key, val in make_ratemaps.Ratemap.feature_colors.items() if key in chosen_feature][0]
                     if 'head' in chosen_feature or 'Head' in chosen_feature:
                         ax2 = fig.add_subplot(gs1[gs_x['head'][head_count], head_count])
                         ax3 = fig.add_subplot(gs1[gs_x['head_der'][head_count], head_count])
@@ -617,7 +614,7 @@ class WeightComparer:
                     row_list = [5, 11]
                     col = back_col
                 chosen_feature_der = f'{chosen_feature}_{self.der}_der'
-                feature_color = [val for key, val in Ratemap.feature_colors.items() if key in chosen_feature][0]
+                feature_color = [val for key, val in make_ratemaps.Ratemap.feature_colors.items() if key in chosen_feature][0]
                 for row, specific_feature in zip(row_list, [chosen_feature, chosen_feature_der]):
                     ax = fig.add_subplot(gs1[row, col])
                     ax.hist(shuffled_dict[specific_feature][gs]['null_differences'], bins=10,
@@ -706,7 +703,7 @@ class WeightComparer:
                 weight_stats_dict['features']['z_stability'].append(shuffled_dict[feature]['stability']['z-value'])
                 weight_stats_dict['features']['cl_n'].append(len(weight_dict[feature]['auc'][self.test_session_type]))
                 weight_stats_dict['features']['names'].append(feature)
-                weight_stats_dict['features']['feature_colors'].append([val for key, val in Ratemap.feature_colors.items() if key in feature][0])
+                weight_stats_dict['features']['feature_colors'].append([val for key, val in make_ratemaps.Ratemap.feature_colors.items() if key in feature][0])
             else:
                 weight_stats_dict['features_der']['auc'].append(shuffled_dict[feature]['auc']['p-value'])
                 weight_stats_dict['features_der']['information_rates'].append(shuffled_dict[feature]['information_rates']['p-value'])
@@ -716,7 +713,7 @@ class WeightComparer:
                 weight_stats_dict['features_der']['z_stability'].append(shuffled_dict[feature]['stability']['z-value'])
                 weight_stats_dict['features_der']['cl_n'].append(len(weight_dict[feature]['auc'][self.test_session_type]))
                 weight_stats_dict['features_der']['names'].append(feature)
-                weight_stats_dict['features_der']['feature_colors'].append([val for key, val in Ratemap.feature_colors.items() if key in feature][0])
+                weight_stats_dict['features_der']['feature_colors'].append([val for key, val in make_ratemaps.Ratemap.feature_colors.items() if key in feature][0])
 
         print(weight_stats_dict)
 
@@ -808,7 +805,7 @@ class WeightComparer:
         three_d_occ = {'baseline': {}, 'test': {}}
         for session_type in self.beh_plot_sessions.keys():
             for file_loc in self.beh_plot_sessions[session_type]:
-                file_name, point_data = Session(session=file_loc).data_loader(extract_variables=['sorted_point_data'])
+                file_name, point_data = sessions2load.Session(session=file_loc).data_loader(extract_variables=['sorted_point_data'])
                 temp_neck_data = point_data['sorted_point_data'][:, 4, :]
                 for i in range(2):
                     temp_neck_data[:, i] += abs(min(temp_neck_data[:, i]))

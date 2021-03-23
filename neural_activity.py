@@ -16,12 +16,9 @@ import matplotlib.pyplot as plt
 from numba import njit
 import numpy as np
 from scipy.ndimage.filters import gaussian_filter1d
-if 'sessions2load' not in sys.modules:
-    from sessions2load import Session
-if 'quantify_ratemaps' not in sys.modules:
-    from quantify_ratemaps import RatemapCharacteristics
-if 'decode_events' not in sys.modules:
-    import decode_events
+import sessions2load
+import quantify_ratemaps
+import decode_events
 
 
 warnings.simplefilter('ignore')
@@ -543,7 +540,8 @@ class Spikes:
                                                  and (kwargs['get_clusters'] == 'all' or type(kwargs['get_clusters']) == int or type(kwargs['get_clusters']) == list) else 'all'
 
         # get spike data in seconds and tracking start and end time
-        file_id, extracted_data = Session(session=self.input_file).data_loader(extract_clusters=get_clusters, extract_variables=['tracking_ts'])
+        file_id, extracted_data = sessions2load.Session(session=self.input_file).data_loader(extract_clusters=get_clusters,
+                                                                                             extract_variables=['tracking_ts'])
 
         # get baseline rates
         baseline_activity_dictionary = {}
@@ -596,7 +594,8 @@ class Spikes:
         condense_bin_ms = kwargs['condense_bin_ms'] if 'condense_bin_ms' in kwargs.keys() and type(kwargs['condense_bin_ms']) == int else 100
 
         # get spike data in seconds and tracking start and end time
-        file_id, extracted_data = Session(session=self.input_file).data_loader(extract_clusters=get_clusters, extract_variables=['tracking_ts', 'framerate', 'total_frame_num'])
+        file_id, extracted_data = sessions2load.Session(session=self.input_file).data_loader(extract_clusters=get_clusters,
+                                                                                             extract_variables=['tracking_ts', 'framerate', 'total_frame_num'])
 
         # convert spike arrays to frame arrays
         activity_dictionary = {}
@@ -718,7 +717,7 @@ class Spikes:
         get_variables = ['imu_sound', 'framerate']
         if type(beh_raster) == str:
             get_variables.append(beh_raster)
-        ses_name, session_vars = Session(session=self.input_file).data_loader(extract_variables=get_variables)
+        ses_name, session_vars = sessions2load.Session(session=self.input_file).data_loader(extract_variables=get_variables)
 
         # get activity converted to frames
         file_id, activity_dictionary, purged_spikes_dictionary = self.convert_activity_to_frames_with_shuffles(get_clusters=get_clusters)
@@ -871,7 +870,7 @@ class Spikes:
         session_variables = {0: {}, 1: {}, 2: {}}
         zero_first_second_behavior = {0: [], 1: [], 2: []}
         for file_idx, one_file in enumerate(self.input_012):
-            ses_name, session_vars = Session(session=one_file).data_loader(extract_variables=['speeds', 'framerate'])
+            ses_name, session_vars = sessions2load.Session(session=one_file).data_loader(extract_variables=['speeds', 'framerate'])
             session_variables[file_idx] = session_vars
             zero_first_second_behavior[file_idx] = find_variable_sequences(variable=session_vars['speeds'][:, 3],
                                                                            threshold_low=speed_threshold_low,
@@ -995,18 +994,18 @@ class Spikes:
 
         cluster_dict = {}
         for session_type in corr_input_dict.keys():
-            cluster_dict[session_type] = RatemapCharacteristics(pkl_sessions_dir=self.pkl_files_dir,
-                                                                area_filter=corr_input_dict[session_type]['area_filter'],
-                                                                animal_filter=corr_input_dict[session_type]['animal_filter'],
-                                                                profile_filter=corr_input_dict[session_type]['profile_filter'],
-                                                                session_id_filter=corr_input_dict[session_type]['session_id_filter'],
-                                                                session_non_filter=corr_input_dict[session_type]['session_non_filter'],
-                                                                session_type_filter=corr_input_dict[session_type]['session_type_filter'],
-                                                                cluster_type_filter=corr_input_dict[session_type]['cluster_type_filter'],
-                                                                cluster_groups_dir=self.cluster_groups_dir,
-                                                                sp_profiles_csv=self.sp_profiles_csv,
-                                                                specific_date=corr_input_dict[session_type]['specific_date']).file_finder(return_clusters=True,
-                                                                                                                                          sort_ch_num=True)
+            cluster_dict[session_type] = quantify_ratemaps.RatemapCharacteristics(pkl_sessions_dir=self.pkl_files_dir,
+                                                                                  area_filter=corr_input_dict[session_type]['area_filter'],
+                                                                                  animal_filter=corr_input_dict[session_type]['animal_filter'],
+                                                                                  profile_filter=corr_input_dict[session_type]['profile_filter'],
+                                                                                  session_id_filter=corr_input_dict[session_type]['session_id_filter'],
+                                                                                  session_non_filter=corr_input_dict[session_type]['session_non_filter'],
+                                                                                  session_type_filter=corr_input_dict[session_type]['session_type_filter'],
+                                                                                  cluster_type_filter=corr_input_dict[session_type]['cluster_type_filter'],
+                                                                                  cluster_groups_dir=self.cluster_groups_dir,
+                                                                                  sp_profiles_csv=self.sp_profiles_csv,
+                                                                                  specific_date=corr_input_dict[session_type]['specific_date']).file_finder(return_clusters=True,
+                                                                                                                                                            sort_ch_num=True)
         # get clusters that are present in both sessions
         acceptable_cluster_dict = {}
         for st_idx, session_type in enumerate(cluster_dict.keys()):

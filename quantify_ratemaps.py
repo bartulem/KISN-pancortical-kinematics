@@ -18,10 +18,8 @@ import scipy.io as sio
 from tqdm import tqdm
 from numba import njit
 from scipy.stats import spearmanr
-if 'select_clusters' not in sys.modules:
-    from select_clusters import ClusterFinder
-if 'neural_activity' not in sys.modules:
-    from neural_activity import Spikes
+import select_clusters
+import neural_activity
 
 # data[0, :] = xvals (bin centers)
 # data[1, :] = raw rate map (ratemap / no smoothing)
@@ -41,7 +39,7 @@ if 'neural_activity' not in sys.modules:
 
 
 def uncover_file_specifics(file_name):
-    animal_name = [name for name in ClusterFinder.probe_site_areas.keys() if name in file_name][0]
+    animal_name = [name for name in select_clusters.ClusterFinder.probe_site_areas.keys() if name in file_name][0]
     get_date_idx = [date.start() for date in re.finditer('20_s', file_name)][-1]
     recording_date = file_name[get_date_idx-4:get_date_idx+2]
     if animal_name == 'bruno':
@@ -258,14 +256,14 @@ class RatemapCharacteristics:
                             and (self.session_non_filter is True or self.session_non_filter not in pkl_file) \
                             and (self.session_type_filter is True or any(one_word in pkl_file for one_word in self.session_type_filter)) \
                             and (self.specific_date[animal] is True or any(one_date in pkl_file for one_date in self.specific_date[animal])):
-                        cluster_list = ClusterFinder(session=f'{self.pkl_sessions_dir}{os.sep}{pkl_file}',
-                                                     cluster_groups_dir=self.cluster_groups_dir,
-                                                     sp_profiles_csv=self.sp_profiles_csv).get_desired_clusters(filter_by_area=[self.area_filter],
-                                                                                                                filter_by_cluster_type=self.cluster_type_filter,
-                                                                                                                filter_by_spiking_profile=self.profile_filter,
-                                                                                                                filter_by_smi=self.smi_filter,
-                                                                                                                filter_by_lmi=self.lmi_filter,
-                                                                                                                sort_ch_num=sort_ch_num)
+                        cluster_list = select_clusters.ClusterFinder(session=f'{self.pkl_sessions_dir}{os.sep}{pkl_file}',
+                                                                     cluster_groups_dir=self.cluster_groups_dir,
+                                                                     sp_profiles_csv=self.sp_profiles_csv).get_desired_clusters(filter_by_area=[self.area_filter],
+                                                                                                                                filter_by_cluster_type=self.cluster_type_filter,
+                                                                                                                                filter_by_spiking_profile=self.profile_filter,
+                                                                                                                                filter_by_smi=self.smi_filter,
+                                                                                                                                filter_by_lmi=self.lmi_filter,
+                                                                                                                                sort_ch_num=sort_ch_num)
                         cluster_dict[animal][bank] = cluster_list
                         total_clusters += len(cluster_list)
                         break
@@ -283,7 +281,7 @@ class RatemapCharacteristics:
                             and (self.session_id_filter is True or self.session_id_filter in file_name) \
                             and (self.session_non_filter is True or self.session_non_filter not in file_name) \
                             and (self.session_type_filter is True or any(one_word in file_name for one_word in self.session_type_filter)):
-                        animal_id = [name for name in ClusterFinder.probe_site_areas.keys() if name in file_name][0]
+                        animal_id = [name for name in select_clusters.ClusterFinder.probe_site_areas.keys() if name in file_name][0]
                         if animal_id == 'bruno':
                             bank_id = 'distal'
                         else:
@@ -647,13 +645,13 @@ class RatemapCharacteristics:
                             weight_comparison[cl_num]['baseline_firing_rates'] = {}
                             for pkl_file in os.listdir(self.pkl_sessions_dir):
                                 if all(one_item in pkl_file for one_item in session_id.split('_')) and 'light' in pkl_file and first_session_id in pkl_file:
-                                    file_id, baseline_activity_dictionary = Spikes(input_file=f'{self.pkl_sessions_dir}{os.sep}{pkl_file}').get_baseline_firing_rates(get_clusters=[cl_id])
+                                    file_id, baseline_activity_dictionary = neural_activity.Spikes(input_file=f'{self.pkl_sessions_dir}{os.sep}{pkl_file}').get_baseline_firing_rates(get_clusters=[cl_id])
                                     weight_comparison[cl_num]['baseline_firing_rates']['light1'] = baseline_activity_dictionary[cl_id]
                                 elif all(one_item in pkl_file for one_item in session_id.split('_')) and session_2_type in pkl_file:
-                                    file_id_2, baseline_activity_dictionary_2 = Spikes(input_file=f'{self.pkl_sessions_dir}{os.sep}{pkl_file}').get_baseline_firing_rates(get_clusters=[cl_id])
+                                    file_id_2, baseline_activity_dictionary_2 = neural_activity.Spikes(input_file=f'{self.pkl_sessions_dir}{os.sep}{pkl_file}').get_baseline_firing_rates(get_clusters=[cl_id])
                                     weight_comparison[cl_num]['baseline_firing_rates'][session_2_type] = baseline_activity_dictionary_2[cl_id]
                                 elif all(one_item in pkl_file for one_item in session_id.split('_')) and 'light' in pkl_file and first_session_id not in pkl_file:
-                                    file_id_3, baseline_activity_dictionary_3 = Spikes(input_file=f'{self.pkl_sessions_dir}{os.sep}{pkl_file}').get_baseline_firing_rates(get_clusters=[cl_id])
+                                    file_id_3, baseline_activity_dictionary_3 = neural_activity.Spikes(input_file=f'{self.pkl_sessions_dir}{os.sep}{pkl_file}').get_baseline_firing_rates(get_clusters=[cl_id])
                                     weight_comparison[cl_num]['baseline_firing_rates']['light2'] = baseline_activity_dictionary_3[cl_id]
 
                         weight_comparison[cl_num]['features'][feature_id]['light1']['rm'] = list(valid_rm_revised)

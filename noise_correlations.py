@@ -17,12 +17,9 @@ from numba import njit
 from tqdm import tqdm
 from itertools import combinations
 from scipy.ndimage import gaussian_filter1d
-if 'sessions2load' not in sys.modules:
-    from sessions2load import Session
-if 'select_clusters' not in sys.modules:
-    from select_clusters import ClusterFinder
-if 'neural_activity' not in sys.modules:
-    from neural_activity import purge_spikes_beyond_tracking
+import sessions2load
+import select_clusters
+import neural_activity
 
 
 def get_firing_rate(cl_activity, bin_size,
@@ -111,16 +108,17 @@ class FunctionalConnectivity:
         sort_ch_num = kwargs['sort_ch_num'] if 'sort_ch_num' in kwargs.keys() and type(kwargs['sort_ch_num']) == bool else False
         combo_num = kwargs['combo_num'] if 'combo_num' in kwargs.keys() and type(kwargs['combo_num']) == int else 0
 
-        cluster_list = ClusterFinder(session=f'{self.pkl_sessions_dir}{os.sep}{self.pkl_file}',
-                                     cluster_groups_dir=self.cluster_groups_dir,
-                                     sp_profiles_csv=self.sp_profiles_csv).get_desired_clusters(filter_by_area=area_filter,
-                                                                                                filter_by_cluster_type=cluster_type_filter,
-                                                                                                filter_by_spiking_profile=profile_filter,
-                                                                                                sort_ch_num=sort_ch_num)
+        cluster_list = select_clusters.ClusterFinder(session=f'{self.pkl_sessions_dir}{os.sep}{self.pkl_file}',
+                                                     cluster_groups_dir=self.cluster_groups_dir,
+                                                     sp_profiles_csv=self.sp_profiles_csv).get_desired_clusters(filter_by_area=area_filter,
+                                                                                                                filter_by_cluster_type=cluster_type_filter,
+                                                                                                                filter_by_spiking_profile=profile_filter,
+                                                                                                                sort_ch_num=sort_ch_num)
 
 
         # get spike data in seconds and tracking start and end time
-        file_id, cluster_data = Session(session=f'{self.pkl_sessions_dir}{os.sep}{self.pkl_file}').data_loader(extract_clusters=cluster_list, extract_variables=['tracking_ts'])
+        file_id, cluster_data = sessions2load.Session(session=f'{self.pkl_sessions_dir}{os.sep}{self.pkl_file}').data_loader(extract_clusters=cluster_list,
+                                                                                                                             extract_variables=['tracking_ts'])
 
         # get all combinations of clusters
         cl_combinations = list(combinations(cluster_data['cluster_spikes'].keys(), 2))
@@ -132,8 +130,8 @@ class FunctionalConnectivity:
         act2 = cluster_data['cluster_spikes'][cl_combinations[combo_num][1]]
 
         # eliminate spikes that happen prior to and post tracking
-        act1 = purge_spikes_beyond_tracking(spike_train=act1, tracking_ts=cluster_data['tracking_ts'])
-        act2 = purge_spikes_beyond_tracking(spike_train=act2, tracking_ts=cluster_data['tracking_ts'])
+        act1 = neural_activity.purge_spikes_beyond_tracking(spike_train=act1, tracking_ts=cluster_data['tracking_ts'])
+        act2 = neural_activity.purge_spikes_beyond_tracking(spike_train=act2, tracking_ts=cluster_data['tracking_ts'])
 
         # get firing rates
         if to_jitter:

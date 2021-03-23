@@ -16,12 +16,9 @@ import numpy as np
 from numba import njit
 from sklearn import svm
 from tqdm import tqdm
-if 'neural_activity' not in sys.modules:
-    import neural_activity
-if 'select_clusters' not in sys.modules:
-    from select_clusters import ClusterFinder
-if 'sessions2load' not in sys.modules:
-    from sessions2load import Session
+import neural_activity
+import select_clusters
+import sessions2load
 
 @njit(parallel=False)
 def correlate_quickly(big_x, big_x_mean, big_y, big_y_mean):
@@ -79,11 +76,11 @@ def choose_012_clusters(the_input_012, cl_gr_dir, sp_prof_csv, cl_areas, cl_type
     extra_chosen_clusters = {0: [], 1: []}
     cluster_dict = {0: [], 1: [], 2: []}
     for session_idx, one_session in enumerate(the_input_012):
-        cluster_dict[session_idx] = ClusterFinder(session=one_session,
-                                                  cluster_groups_dir=cl_gr_dir,
-                                                  sp_profiles_csv=sp_prof_csv).get_desired_clusters(filter_by_area=cl_areas,
-                                                                                                    filter_by_cluster_type=cl_type,
-                                                                                                    filter_by_spiking_profile=desired_profiles)
+        cluster_dict[session_idx] = select_clusters.ClusterFinder(session=one_session,
+                                                                  cluster_groups_dir=cl_gr_dir,
+                                                                  sp_profiles_csv=sp_prof_csv).get_desired_clusters(filter_by_area=cl_areas,
+                                                                                                                    filter_by_cluster_type=cl_type,
+                                                                                                                    filter_by_spiking_profile=desired_profiles)
 
     # find clusters present in all 3 sessions
     for one_cl in list(set(cluster_dict[0]).intersection(cluster_dict[1], cluster_dict[2])):
@@ -204,12 +201,12 @@ class Decoder:
         animal_name = [name for name in self.animal_names if name in self.input_file][0]
 
         # choose clusters you'd like to decode with
-        chosen_clusters = ClusterFinder(session=self.input_file,
-                                        cluster_groups_dir=self.cluster_groups_dir,
-                                        sp_profiles_csv=self.sp_profiles_csv).get_desired_clusters(filter_by_area=self.cluster_areas,
-                                                                                                   filter_by_cluster_type=self.cluster_type)
+        chosen_clusters = select_clusters.ClusterFinder(session=self.input_file,
+                                                        cluster_groups_dir=self.cluster_groups_dir,
+                                                        sp_profiles_csv=self.sp_profiles_csv).get_desired_clusters(filter_by_area=self.cluster_areas,
+                                                                                                                   filter_by_cluster_type=self.cluster_type)
         # get total frame count and sound array
-        file_name, extracted_frame_info = Session(session=self.input_file).data_loader(extract_variables=['total_frame_num', 'imu_sound'])
+        file_name, extracted_frame_info = sessions2load.Session(session=self.input_file).data_loader(extract_variables=['total_frame_num', 'imu_sound'])
 
         # get activity dictionary
         file_id, activity_dictionary, purged_spikes_dict = neural_activity.Spikes(input_file=self.input_file).convert_activity_to_frames_with_shuffles(get_clusters=chosen_clusters,
@@ -362,9 +359,9 @@ class Decoder:
                                                                                                  desired_profiles=self.profiles_to_include)
 
         # get total frame count in each session
-        zero_ses_name, zero_extracted_frame_info = Session(session=self.input_012[0]).data_loader(extract_variables=['total_frame_num'])
-        first_ses_name, first_extracted_frame_info = Session(session=self.input_012[1]).data_loader(extract_variables=['total_frame_num'])
-        second_ses_name, second_extracted_frame_info = Session(session=self.input_012[2]).data_loader(extract_variables=['total_frame_num'])
+        zero_ses_name, zero_extracted_frame_info = sessions2load.Session(session=self.input_012[0]).data_loader(extract_variables=['total_frame_num'])
+        first_ses_name, first_extracted_frame_info = sessions2load.Session(session=self.input_012[1]).data_loader(extract_variables=['total_frame_num'])
+        second_ses_name, second_extracted_frame_info = sessions2load.Session(session=self.input_012[2]).data_loader(extract_variables=['total_frame_num'])
 
         # get total frame number in future array
         if self.condense:

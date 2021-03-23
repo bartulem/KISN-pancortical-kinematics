@@ -14,10 +14,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 from numba import njit
 from scipy.stats import sem
-if 'sessions2load' not in sys.modules:
-    from sessions2load import Session
-if 'make_ratemaps' not in sys.modules:
-    from make_ratemaps import Ratemap
+import sessions2load
+import make_ratemaps
 
 
 @njit(parallel=False)
@@ -108,7 +106,7 @@ class Behavior:
             if variable != 'neck_elevation':
                 extract_variables.append(variable)
 
-        file_name, data = Session(session=data_file).data_loader(extract_variables=extract_variables)
+        file_name, data = sessions2load.Session(session=data_file).data_loader(extract_variables=extract_variables)
 
         if 'sorted_point_data' in self.variable_list:
             self.variable_list.remove('sorted_point_data')
@@ -199,7 +197,7 @@ class Behavior:
                 for variable in self.variable_list:
                     if variable != 'neck_elevation':
                         extract_variables.append(variable)
-                file_name, data = Session(session=file_loc).data_loader(extract_variables=extract_variables)
+                file_name, data = sessions2load.Session(session=file_loc).data_loader(extract_variables=extract_variables)
                 feature_dict[session_type][file_name] = {}
                 feature_dict[session_type][file_name]['examples'] = data
                 feature_dict[session_type][file_name]['occ'] = self.pull_occ_histograms(data_file=file_loc)
@@ -258,7 +256,7 @@ class Behavior:
         gs1 = fig.add_gridspec(nrows=5, ncols=12, left=.075,
                                right=.98, wspace=6.5, hspace=.5)
         for f_idx, feature in enumerate(['roll', 'pitch', 'azimuth', 'neck_elevation', 'speeds']):
-            f_color = [val for key, val in Ratemap.feature_colors.items() if feature in key][0]
+            f_color = [val for key, val in make_ratemaps.Ratemap.feature_colors.items() if feature in key][0]
             ax = fig.add_subplot(gs1[f_idx, :3])
             ax2 = fig.add_subplot(gs1[f_idx, 3:])
             if f_idx == 0:
