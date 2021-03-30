@@ -23,6 +23,7 @@ from scipy.stats import sem
 from scipy.stats import pearsonr
 import decode_events
 import sessions2load
+import make_ratemaps
 import neural_activity
 import select_clusters
 import define_spiking_profile
@@ -36,7 +37,7 @@ class PlotGroupResults:
                  bin_size_ms=50, window_size=10, smooth=False, smooth_sd=1, to_plot=False,
                  input_012_list=[], pkl_load_dir='', critical_p_value=.01,
                  profile_colors=None, modulation_indices_dir='',
-                 all_animals_012={}):
+                 all_animals_012={}, tuning_peaks_file='', occ_file=''):
         if relevant_areas is None:
             relevant_areas = ['A']
         if animal_ids is None:
@@ -65,6 +66,8 @@ class PlotGroupResults:
         self.profile_colors = profile_colors
         self.modulation_indices_dir = modulation_indices_dir
         self.all_animals_012 = all_animals_012
+        self.tuning_peaks_file = tuning_peaks_file
+        self.occ_file = occ_file
 
     def sound_modulation_summary(self, **kwargs):
         """
@@ -1000,4 +1003,92 @@ class PlotGroupResults:
                     print("Specified save directory doesn't exist. Try again.")
                     sys.exit()
             plt.show()
+
+    def tuning_peaks_by_occ(self, **kwargs):
+        """
+        Description
+        ----------
+        This method plots tuning peaks by occupancy for a given brain area.
+        ----------
+
+        Parameters
+        ----------
+        **kwargs (dictionary)
+        chosen_variables (list)
+            Variables of interest; defaults to ['Ego3_Head_pitch', 'Ego3_Head_roll', 'Ego3_Head_azimuth',
+                                                'Back_pitch', 'Back_azimuth', 'Neck_elevation'].
+        ----------
+
+        Returns
+        ----------
+        tuning_peaks_occ (fig)
+            A plot of the relationship between tuning peaks and occupancy.
+        ----------
+        """
+
+        chosen_variables = kwargs['chosen_variables'] if 'chosen_variables' in kwargs.keys() \
+                                                         and type(kwargs['chosen_variables']) == list else ['Ego3_Head_pitch', 'Ego3_Head_roll', 'Ego3_Head_azimuth',
+                                                                                                            'Back_pitch', 'Back_azimuth', 'Neck_elevation']
+
+        # load occupancy file and get data
+        if os.path.exists(self.occ_file):
+            with open(self.occ_file) as occ_file:
+                occ_json = json.load(occ_file)
+        else:
+            print("The occupancy file doesn't exist. Try again.")
+            sys.exit()
+
+        occ_data = {}
+        x_data = {}
+        for var in chosen_variables:
+            occ_data[var] = np.array(occ_json[var]['occ']) / np.sum(occ_json[var]['occ']) * 100
+            x_data[var] = np.array(occ_json[var]['xvals'])
+
+        # load tuning peaks file and get data
+        if os.path.exists(self.tuning_peaks_file):
+            with open(self.tuning_peaks_file) as tp_file:
+                tp_json = json.load(tp_file)
+        else:
+            print("The tuning peaks file doesn't exist. Try again.")
+            sys.exit()
+
+        tp_data_raw = {var: [] for var in chosen_variables}
+        for cl in tp_json.keys():
+            for var in chosen_variables:
+                if var in tp_json[cl]['features'].keys():
+                    tp_data_raw[var].append(tp_json[cl]['features'][var])
+
+        counted_tp_data = {var: {x_val: tp_data_raw[var].count(x_val) for x_val in x_data[var]} for var in chosen_variables}
+
+        tp_data = {}
+        for var in counted_tp_data.keys():
+            one_var = np.array(list(counted_tp_data[var].values()))
+            tp_data[var] = one_var / one_var.sum() * 100
+
+        # plot results
+        fig, ax = plt.subplots(nrows=1, ncols=len(chosen_variables),
+                               figsize=(6.4*len(chosen_variables), 4.8))
+        for var_idx, var in enumerate(chosen_variables):
+            feature_color = [val for key, val in make_ratemaps.Ratemap.feature_colors.items() if key in var][0]
+            ax = plt.subplot(1, len(chosen_variables), var_idx+1)
+            ax.set_title(var)
+            bool_arr = occ_data[var] > 1.
+            occ = occ_data[var][bool_arr]
+            tp = tp_data[var][bool_arr]
+            ax.scatter(x=occ, y=tp, color=feature_color, alpha=1, s=30)
+            ax.axvline(x=int(np.ceil(occ.max()))/2, ls='-.', color='#000000')
+            ax.set_xlabel('occupancy (% total)')
+            ax.set_xlim(0, int(np.ceil(occ.max())))
+            ax.set_xticks([0, int(np.ceil(occ.max()))])
+            ax.set_ylabel('cells tuned (%)')
+            ax.set_ylim(0, int(np.ceil(tp.max())))
+            ax.set_yticks([0, int(np.ceil(tp.max()))])
+        if self.save_fig:
+            if os.path.exists(self.save_dir):
+                fig.savefig(f'{self.save_dir}{os.sep}tuning_peaks_by_occ_{self.relevant_areas[0]}.{self.fig_format}', dpi=300)
+            else:
+                print("Specified save directory doesn't exist. Try again.")
+                sys.exit()
+        plt.show()
+
 
