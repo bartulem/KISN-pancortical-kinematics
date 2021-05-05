@@ -252,7 +252,8 @@ class RatemapCharacteristics:
             cluster_dict[animal] = {}
             for bank in self.areas_to_animals[self.area_filter][animal]:
                 for pkl_file in os.listdir(self.pkl_sessions_dir):
-                    if animal in pkl_file and bank in pkl_file and (self.session_id_filter is True or self.session_id_filter in pkl_file) \
+                    if animal in pkl_file and (self.animal_filter is True or any(one_animal in pkl_file for one_animal in self.animal_filter)) \
+                            and bank in pkl_file and (self.session_id_filter is True or self.session_id_filter in pkl_file) \
                             and (self.session_non_filter is True or self.session_non_filter not in pkl_file) \
                             and (self.session_type_filter is True or any(one_word in pkl_file for one_word in self.session_type_filter)) \
                             and (self.specific_date[animal] is True or any(one_date in pkl_file for one_date in self.specific_date[animal])):
@@ -464,7 +465,7 @@ class RatemapCharacteristics:
         if self.session_type_filter is True:
             session_type_file_name = 'light'
         else:
-            session_type_file_name = self.session_type_filter
+            session_type_file_name = self.session_type_filter[0]
         if not get_stability:
             with io.open(f'{self.save_dir}{os.sep}tuning_peak_locations_{self.area_filter}_{session_type_file_name}.json', 'w', encoding='utf-8') as to_save_file:
                 to_save_file.write(json.dumps(tuning_peak_locations, ensure_ascii=False, indent=4))

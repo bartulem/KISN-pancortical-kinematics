@@ -8,9 +8,12 @@ Calculate noise correlations.
 
 """
 
+import io
 import os
+import json
 import numpy as np
 import scipy.io as sio
+import matplotlib.pyplot as plt
 from scipy import sparse
 from numba import njit
 from tqdm import tqdm
@@ -192,12 +195,14 @@ def calculate_p_values(cch, slow_baseline):
 class FunctionalConnectivity:
 
     def __init__(self, pkl_sessions_dir='', cluster_groups_dir='',
-                 sp_profiles_csv='', pkl_file='', save_dir=''):
+                 sp_profiles_csv='', pkl_file='', save_dir='',
+                 mat_files_dir=''):
         self.pkl_sessions_dir = pkl_sessions_dir
         self.cluster_groups_dir = cluster_groups_dir
         self.sp_profiles_csv = sp_profiles_csv
         self.pkl_file = pkl_file
         self.save_dir=save_dir
+        self.mat_files_dir = mat_files_dir
 
     def noise_corr(self, **kwargs):
         """
@@ -370,10 +375,10 @@ class FunctionalConnectivity:
                         del y_sh, y_sh_mean
 
                 if to_jitter:
-                    output_dictionary[combo_name]['cch'] = data
-                    output_dictionary[combo_name]['jitter_cch'] = sh_data
+                    output_dictionary['cch'] = data
+                    output_dictionary['jitter_cch'] = sh_data
                 else:
-                    output_dictionary[combo_name]['cch'] = data
+                    output_dictionary['cch'] = data
             else:
                 output_array = np.zeros((all_bins.shape[0], 3))
                 cch = dot_product(big_x=big_x,
@@ -390,3 +395,139 @@ class FunctionalConnectivity:
 
         # save to file
         sio.savemat(f'{self.save_dir}{os.sep}cl{combo_start}-{combo_end}.mat', output_dictionary)
+
+    def analyze_corr(self, **kwargs):
+        """
+        Description
+        ----------
+        This method analyzes noise correlation results. Specifically, it (1) ...
+        ----------
+
+        Parameters
+        ----------
+        **kwargs (dictionary)
+        cch_time (float)
+            The one-sided time of the CCG; defaults to 20 (ms).
+        bin_num (float)
+            The one-sided number of bins for the CCG; defaults to 50.
+        relevant_cch_bounds (list)
+            The CCH boundaries to check for significance; defaults to [-10, 10] (ms).
+        filter_by_area (bool / list)
+            Areas of choice for the cluster pair; defaults to True (checks all pairs).
+        filter_by_cluster_type (list)
+            Cluster type to be included: 'good' or 'mua'; defaults to [True, True].
+        filter_by_spiking_profile (list)
+            Profile to be included: 'RS' or 'FS'; defaults to [True, True].
+        filter_by_smi (list)
+            Select clusters that have a significant SMI; defaults to [True, True].
+        filter_by_lmi (list)
+            Select clusters that have a significant LMI; defaults to [True, True].
+        p_alpha (float)
+            p-value boundary for accepting significance; defaults to .001.
+        ----------
+
+        Returns
+        ----------
+        noise_corrs (.mat file)
+            .mat files containing cross-correlations of data/jitters.
+        ----------
+        """
+
+        cch_time = kwargs['cch_time'] if 'cch_time' in kwargs.keys() and type(kwargs['cch_time']) == int else 20
+        bin_num = kwargs['bin_num'] if 'bin_num' in kwargs.keys() and type(kwargs['bin_num']) == int else 50
+        relevant_cch_bounds = kwargs['relevant_cch_bounds'] if 'relevant_cch_bounds' in kwargs.keys() and type(kwargs['relevant_cch_bounds']) == list else [-10, 10]
+        filter_by_area = kwargs['filter_by_area'] if 'filter_by_area' in kwargs.keys() and type(kwargs['filter_by_area']) == list else True
+        filter_by_cluster_type = kwargs['filter_by_cluster_type'] if 'filter_by_cluster_type' in kwargs.keys() and type(kwargs['filter_by_cluster_type']) == list else [True, True]
+        filter_by_spiking_profile = kwargs['filter_by_spiking_profile'] if 'filter_by_spiking_profile' in kwargs.keys() and type(kwargs['filter_by_spiking_profile']) == list else [True, True]
+        filter_by_smi = kwargs['filter_by_smi'] if 'filter_by_smi' in kwargs.keys() and type(kwargs['filter_by_smi']) == list else [True, True]
+        filter_by_lmi = kwargs['filter_by_lmi'] if 'filter_by_lmi' in kwargs.keys() and type(kwargs['filter_by_lmi']) == list else [True, True]
+        p_alpha = kwargs['p_alpha'] if 'p_alpha' in kwargs.keys() and type(kwargs['p_alpha']) == float else .001
+
+        # get relevant boundaries for calculating statistics
+        cch_total_range = np.around(np.linspace(-cch_time, cch_time, (bin_num*2)+1), decimals=1)
+        is_zero_in_arr = 0 in np.arange(relevant_cch_bounds[0], relevant_cch_bounds[1]+0.4, 0.4)
+        if is_zero_in_arr:
+            if relevant_cch_bounds[0] in cch_total_range:
+                start_bound_idx = np.where(cch_total_range == relevant_cch_bounds[0])[0]
+            else:
+                start_bound_idx = np.where(cch_total_range < relevant_cch_bounds[0])[0][-1]
+            if relevant_cch_bounds[1] in cch_total_range:
+                end_bound_idx = np.where(cch_total_range == relevant_cch_bounds[1])[0] + 1
+            else:
+                end_bound_idx = np.where(cch_total_range < relevant_cch_bounds[1])[0][-1] + 1
+        else:
+            if relevant_cch_bounds[0] in cch_total_range \
+                    and relevant_cch_bounds[1] in cch_total_range:
+                rel_cch_bounds_1 = relevant_cch_bounds[0]
+                rel_cch_bounds_2 = relevant_cch_bounds[1]
+            else:
+                rel_cch_bounds_1 = cch_total_range[cch_total_range < relevant_cch_bounds[0]][-1]
+                rel_cch_bounds_2 = cch_total_range[cch_total_range < relevant_cch_bounds[1]][-1]
+            all_cch_values = np.around(np.concatenate((np.arange(-rel_cch_bounds_2, -rel_cch_bounds_1+0.4, 0.4),
+                                                       np.arange(rel_cch_bounds_1, rel_cch_bounds_2+0.4, 0.4))), decimals=1)
+            idx_array = np.where((np.isin(cch_total_range, all_cch_values)))[0]
+
+        # find all clusters for brain areas of interest
+        if type(filter_by_area) == list:
+            cl_group_1 = select_clusters.ClusterFinder(session=f'{self.pkl_sessions_dir}{os.sep}{self.pkl_file}',
+                                                       cluster_groups_dir=self.cluster_groups_dir,
+                                                       sp_profiles_csv=self.sp_profiles_csv).get_desired_clusters(filter_by_area=[filter_by_area[0]],
+                                                                                                                  filter_by_cluster_type=filter_by_cluster_type[0],
+                                                                                                                  filter_by_spiking_profile=filter_by_spiking_profile[0],
+                                                                                                                  filter_by_lmi=filter_by_smi[0],
+                                                                                                                  filter_by_smi=filter_by_lmi[0])
+            cl_group_2 = select_clusters.ClusterFinder(session=f'{self.pkl_sessions_dir}{os.sep}{self.pkl_file}',
+                                                       cluster_groups_dir=self.cluster_groups_dir,
+                                                       sp_profiles_csv=self.sp_profiles_csv).get_desired_clusters(filter_by_area=[filter_by_area[1]],
+                                                                                                                  filter_by_cluster_type=filter_by_cluster_type[1],
+                                                                                                                  filter_by_spiking_profile=filter_by_spiking_profile[1],
+                                                                                                                  filter_by_lmi=filter_by_smi[1],
+                                                                                                                  filter_by_smi=filter_by_lmi[1])
+        # go through files and check whether there are any interesting CCH
+        total_pair_count = 0
+        excitatory_pairs = 0
+        inhibitory_pairs = 0
+        output_dict = {'excitatory_pairs': {}, 'inhibitory_pairs': {}}
+        for mat_file in tqdm(os.listdir(self.mat_files_dir)):
+            data = sio.loadmat(f'{self.mat_files_dir}{os.sep}{mat_file}')
+            output_dict['excitatory_pairs'][mat_file] = []
+            output_dict['inhibitory_pairs'][mat_file] = []
+
+            for cl_pair in data.keys():
+                pair_split = cl_pair.split('-')
+                if filter_by_area is True \
+                        or (pair_split[0] in cl_group_1 and pair_split[1] in cl_group_2) \
+                        or (pair_split[0] in cl_group_2 and pair_split[1] in cl_group_1):
+                    total_pair_count += 1
+                    baseline_subtracted_counts = data[cl_pair][:, 0] - data[cl_pair][:, 1]
+                    most_aberrant_value_idx = np.argmax(np.abs(baseline_subtracted_counts))
+
+                    if type(filter_by_area) == list:
+                        if pair_split[0] in cl_group_1 and pair_split[1] in cl_group_2:
+                            region_pair_one = 'A'
+                        elif pair_split[0] in cl_group_2 and pair_split[1] in cl_group_1:
+                            region_pair_one = 'V'
+                    if (is_zero_in_arr and start_bound_idx <= most_aberrant_value_idx < end_bound_idx) \
+                            or (not is_zero_in_arr and most_aberrant_value_idx in idx_array):
+                        if data[cl_pair][most_aberrant_value_idx, 2] < p_alpha:
+                            excitatory_pairs += 1
+                            if type(filter_by_area) == list:
+                                if region_pair_one == 'A':
+                                    e_peak_time = cch_total_range[most_aberrant_value_idx]
+                                else:
+                                    e_peak_time = -cch_total_range[most_aberrant_value_idx]
+                            output_dict['excitatory_pairs'][mat_file].append(f'{cl_pair} {e_peak_time}')
+
+                        elif (1 - data[cl_pair][most_aberrant_value_idx, 2]) < p_alpha:
+                            inhibitory_pairs += 1
+                            if type(filter_by_area) == list:
+                                if region_pair_one == 'A':
+                                    i_peak_time = cch_total_range[most_aberrant_value_idx]
+                                else:
+                                    i_peak_time = -cch_total_range[most_aberrant_value_idx]
+                                output_dict['inhibitory_pairs'][mat_file].append(f'{cl_pair} {i_peak_time}')
+
+        # print(total_pair_count, excitatory_pairs, excitatory_pairs/total_pair_count*100, inhibitory_pairs, inhibitory_pairs/total_pair_count*100)
+
+        with io.open(f'{self.save_dir}{os.sep}synaptic.json', 'w', encoding='utf-8') as to_save_file:
+            to_save_file.write(json.dumps(output_dict, ensure_ascii=False, indent=4))
