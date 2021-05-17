@@ -10,8 +10,10 @@ Calculate noise correlations.
 
 import io
 import os
+import sys
 import json
 import numpy as np
+import pandas as pd
 import scipy.io as sio
 import matplotlib.pyplot as plt
 from scipy import sparse
@@ -193,6 +195,17 @@ def calculate_p_values(cch, slow_baseline):
 
 
 class FunctionalConnectivity:
+
+    tuning_categories = {1: ['Z Position', 'C Body direction'],
+                         2: ['Z Self_motion', 'B Speeds', 'C Body_direction_1st_der'],
+                         3: ['K Ego3_Head_roll', 'M Ego3_Head_azimuth', 'L Ego3_Head_pitch'],
+                         4: ['K Ego3_Head_roll_1st_der', 'M Ego3_Head_azimuth_1st_der', 'L Ego3_Head_pitch_1st_der'],
+                         5: ['P Ego2_head_roll', 'D Allo_head_direction', 'Q Ego2_head_pitch'],
+                         6: ['P Ego2_head_roll_1st_der', 'D Allo_head_direction_1st_der', 'Q Ego2_head_pitch_1st_der'],
+                         7: ['O Back_azimuth', 'N Back_pitch'],
+                         8: ['O Back_azimuth_1st_der', 'N Back_pitch_1st_der'],
+                         9: ['G Neck_elevation'],
+                         10: ['G Neck_elevation_1st_der']}
 
     def __init__(self, pkl_sessions_dir='', cluster_groups_dir='',
                  sp_profiles_csv='', pkl_file='', save_dir='',
@@ -411,7 +424,7 @@ class FunctionalConnectivity:
         bin_num (float)
             The one-sided number of bins for the CCG; defaults to 50.
         relevant_cch_bounds (list)
-            The CCH boundaries to check for significance; defaults to [-10, 10] (ms).
+            The CCH boundaries to check for significance; defaults to [0.8, 2.8] (ms).
         filter_by_area (bool / list)
             Areas of choice for the cluster pair; defaults to True (checks all pairs).
         filter_by_cluster_type (list)
@@ -424,24 +437,27 @@ class FunctionalConnectivity:
             Select clusters that have a significant LMI; defaults to [True, True].
         p_alpha (float)
             p-value boundary for accepting significance; defaults to .001.
+        json_file_name (str)
+            The name of the json file containing putative synaptic connections
         ----------
 
         Returns
         ----------
-        noise_corrs (.mat file)
-            .mat files containing cross-correlations of data/jitters.
+        synaptic (.json file)
+            .json file containing all putative synaptic connections.
         ----------
         """
 
         cch_time = kwargs['cch_time'] if 'cch_time' in kwargs.keys() and type(kwargs['cch_time']) == int else 20
         bin_num = kwargs['bin_num'] if 'bin_num' in kwargs.keys() and type(kwargs['bin_num']) == int else 50
-        relevant_cch_bounds = kwargs['relevant_cch_bounds'] if 'relevant_cch_bounds' in kwargs.keys() and type(kwargs['relevant_cch_bounds']) == list else [-10, 10]
+        relevant_cch_bounds = kwargs['relevant_cch_bounds'] if 'relevant_cch_bounds' in kwargs.keys() and type(kwargs['relevant_cch_bounds']) == list else [0.8, 2.8]
         filter_by_area = kwargs['filter_by_area'] if 'filter_by_area' in kwargs.keys() and type(kwargs['filter_by_area']) == list else True
         filter_by_cluster_type = kwargs['filter_by_cluster_type'] if 'filter_by_cluster_type' in kwargs.keys() and type(kwargs['filter_by_cluster_type']) == list else [True, True]
         filter_by_spiking_profile = kwargs['filter_by_spiking_profile'] if 'filter_by_spiking_profile' in kwargs.keys() and type(kwargs['filter_by_spiking_profile']) == list else [True, True]
         filter_by_smi = kwargs['filter_by_smi'] if 'filter_by_smi' in kwargs.keys() and type(kwargs['filter_by_smi']) == list else [True, True]
         filter_by_lmi = kwargs['filter_by_lmi'] if 'filter_by_lmi' in kwargs.keys() and type(kwargs['filter_by_lmi']) == list else [True, True]
         p_alpha = kwargs['p_alpha'] if 'p_alpha' in kwargs.keys() and type(kwargs['p_alpha']) == float else .001
+        json_file_name = kwargs['json_file_name'] if 'json_file_name' in kwargs.keys() and type(kwargs['json_file_name']) == str else 'synaptic'
 
         # get relevant boundaries for calculating statistics
         cch_total_range = np.around(np.linspace(-cch_time, cch_time, (bin_num*2)+1), decimals=1)
@@ -483,6 +499,17 @@ class FunctionalConnectivity:
                                                                                                                   filter_by_spiking_profile=filter_by_spiking_profile[1],
                                                                                                                   filter_by_lmi=filter_by_smi[1],
                                                                                                                   filter_by_smi=filter_by_lmi[1])
+        # load profile data with GLM categories
+        if not os.path.exists(self.sp_profiles_csv):
+            print(f"Invalid location for file {self.sp_profiles_csv}. Please try again.")
+            sys.exit()
+        else:
+            profile_data = pd.read_csv(self.sp_profiles_csv)
+
+        # get session id
+        total_id_name = self.mat_files_dir.split('/')[-1]
+        sp_session_id = total_id_name.split('_')[0] + '_' + total_id_name.split('_')[1] + '_' + total_id_name.split('_')[3]
+
         # go through files and check whether there are any interesting CCH
         total_pair_count = 0
         excitatory_pairs = 0
@@ -507,27 +534,45 @@ class FunctionalConnectivity:
                             region_pair_one = 'A'
                         elif pair_split[0] in cl_group_2 and pair_split[1] in cl_group_1:
                             region_pair_one = 'V'
+
                     if (is_zero_in_arr and start_bound_idx <= most_aberrant_value_idx < end_bound_idx) \
                             or (not is_zero_in_arr and most_aberrant_value_idx in idx_array):
-                        if data[cl_pair][most_aberrant_value_idx, 2] < p_alpha:
-                            excitatory_pairs += 1
-                            if type(filter_by_area) == list:
-                                if region_pair_one == 'A':
-                                    e_peak_time = cch_total_range[most_aberrant_value_idx]
-                                else:
-                                    e_peak_time = -cch_total_range[most_aberrant_value_idx]
-                            output_dict['excitatory_pairs'][mat_file].append(f'{cl_pair} {e_peak_time}')
+                        excitation_p = data[cl_pair][most_aberrant_value_idx, 2] < p_alpha
+                        inhibition_p = (1 - data[cl_pair][most_aberrant_value_idx, 2]) < p_alpha
+                        if excitation_p or inhibition_p:
+                            pair_1_category = profile_data.loc[(profile_data['session_id'] == sp_session_id)
+                                                               & (profile_data['cluster_id'] == pair_split[0]), 'category'].values[0]
+                            pair_2_category = profile_data.loc[(profile_data['session_id'] == sp_session_id)
+                                                               & (profile_data['cluster_id'] == pair_split[1]), 'category'].values[0]
 
-                        elif (1 - data[cl_pair][most_aberrant_value_idx, 2]) < p_alpha:
-                            inhibitory_pairs += 1
+                            if excitation_p:
+                                excitatory_pairs += 1
+                            else:
+                                inhibitory_pairs += 1
+
                             if type(filter_by_area) == list:
                                 if region_pair_one == 'A':
-                                    i_peak_time = cch_total_range[most_aberrant_value_idx]
+                                    peak_time = cch_total_range[most_aberrant_value_idx]
                                 else:
-                                    i_peak_time = -cch_total_range[most_aberrant_value_idx]
-                                output_dict['inhibitory_pairs'][mat_file].append(f'{cl_pair} {i_peak_time}')
+                                    peak_time = -cch_total_range[most_aberrant_value_idx]
+
+                            if ~np.isnan(pair_1_category):
+                                category_one = self.tuning_categories[int(pair_1_category)]
+                            else:
+                                category_one = ['nan']
+
+                            if ~np.isnan(pair_2_category):
+                                category_two = self.tuning_categories[int(pair_2_category)]
+                            else:
+                                category_two = ['nan']
+
+                            if excitation_p:
+                                output_dict['excitatory_pairs'][mat_file].append(f'{cl_pair} {peak_time} {category_one} {category_two}')
+                            else:
+                                output_dict['inhibitory_pairs'][mat_file].append(f'{cl_pair} {peak_time} {category_one} {category_two}')
+
 
         # print(total_pair_count, excitatory_pairs, excitatory_pairs/total_pair_count*100, inhibitory_pairs, inhibitory_pairs/total_pair_count*100)
 
-        with io.open(f'{self.save_dir}{os.sep}synaptic.json', 'w', encoding='utf-8') as to_save_file:
+        with io.open(f'{self.save_dir}{os.sep}{json_file_name}.json', 'w', encoding='utf-8') as to_save_file:
             to_save_file.write(json.dumps(output_dict, ensure_ascii=False, indent=4))
