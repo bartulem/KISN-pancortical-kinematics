@@ -212,7 +212,7 @@ class RatemapCharacteristics:
             Profile to be included: 'RS' or 'FS'; defaults to True.
         session_id_filter (bool / str)
             The session number of interest; defaults to 's1'.
-        session_type_filter (bool / str)
+        session_type_filter (bool / list)
             The session type of interest; defaults to True.
         specific_date (dict)
             The date of interest (for animals that had recordings across days); defaults to True for most animals.
