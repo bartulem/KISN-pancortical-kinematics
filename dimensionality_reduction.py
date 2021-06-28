@@ -8,18 +8,22 @@ Dimensionality reduction on neural data.
 
 """
 
+import os
 import sys
 import numpy as np
 import matplotlib.pyplot as plt
-import umap.umap_ as umap
+# import umap.umap_ as umap
 import matplotlib.animation as animation
 from scipy.stats import pearsonr
 from scipy.stats import zscore
+from kneed import KneeLocator
 from sklearn.decomposition import PCA, FactorAnalysis
 from sklearn.manifold import TSNE, SpectralEmbedding
 import decode_events
 import neural_activity
 import sessions2load
+import select_clusters
+
 
 def get_condensed_features(behavioral_data, bin_size_ms=100):
     condensed = {}
@@ -54,10 +58,14 @@ def get_condensed_features(behavioral_data, bin_size_ms=100):
 
 class LatentSpace:
 
-    def __init__(self, input_dict, cluster_groups_dir, sp_profiles_csv):
+    def __init__(self, input_dict, cluster_groups_dir, sp_profiles_csv,
+                 save_fig=False, fig_format='png', save_dir=''):
         self.input_dict = input_dict
         self.cluster_groups_dir = cluster_groups_dir
         self.sp_profiles_csv = sp_profiles_csv
+        self.save_fig = save_fig
+        self.fig_format = fig_format
+        self.save_dir = save_dir
 
     def activity_pca(self, **kwargs):
         """
@@ -105,6 +113,13 @@ class LatentSpace:
                                                                                                                                 'neck_1st_der', 'allo_head_ang', 'body_direction']
         condense_bin_ms = kwargs['condense_bin_ms'] if 'condense_bin_ms' in kwargs.keys() and type(kwargs['condense_bin_ms']) == int else 100
         num_components = kwargs['num_components'] if 'num_components' in kwargs.keys() and type(kwargs['num_components']) == int else True
+
+        # find session info
+        session_id = self.input_dict['light1'][88:]
+        session_animal = [animal for animal in select_clusters.ClusterFinder.probe_site_areas.keys() if animal in session_id][0]
+        session_bank = [bank for bank in ['distal', 'intermediate'] if bank in session_id][0]
+        session_date = session_id[session_id.find('20') - 4:session_id.find('20') + 2]
+
 
         # choose clusters present in all sessions
         all_clusters, \
@@ -155,87 +170,49 @@ class LatentSpace:
         neural_data_all = zscore(neural_data_all, axis=1)
         shape_1 = neural_data[list(self.input_dict.keys())[0]].shape[1]
         shape_2 = neural_data[list(self.input_dict.keys())[1]].shape[1]
-        shape_3 = neural_data[list(self.input_dict.keys())[2]].shape[1]
+        # shape_3 = neural_data[list(self.input_dict.keys())[2]].shape[1]
 
         # rearrange array to shape (n_samples, n_features)
         input_arr = neural_data_all.T
 
-        frames = np.arange(93, 181, .5)
-        frames = frames[(frames < 149) | (frames > 153)]
-
         # do PCA
         pca = PCA(whiten=True)
-        embedding = pca.fit_transform(input_arr)
+        pc_embedding = pca.fit_transform(input_arr)
 
-        comp_1 = 0
-        comp_2 = 8
-        comp_3 = 34
-        fig = plt.figure()
-        ax = fig.add_subplot(1, 1, 1, projection='3d')
-        ax.scatter(embedding[:shape_1, comp_1], embedding[:shape_1, comp_2], embedding[:shape_1, comp_3], c='#EEC900', alpha=.5)
-        ax.scatter(embedding[shape_1:shape_1+shape_2, comp_1], embedding[shape_1:shape_1+shape_2, comp_2], embedding[shape_1:shape_1+shape_2, comp_3], c='#00008B', alpha=.5)
-        ax.scatter(embedding[shape_1+shape_2:, comp_1], embedding[shape_1+shape_2:, comp_2], embedding[shape_1+shape_2:, comp_3], c='#CD950C', alpha=.5)
-        ax.view_init(elev=10, azim=92)
-        ax.set_xlabel('PC1')
-        ax.set_ylabel('PC9')
-        ax.set_zlabel('PC35')
-        ax.xaxis.set_pane_color((1.0, 1.0, 1.0, 0.0))
-        ax.yaxis.set_pane_color((1.0, 1.0, 1.0, 0.0))
-        ax.zaxis.set_pane_color((1.0, 1.0, 1.0, 0.0))
-        ax.grid(False)
-        plt.show()
+        # find the knee/elbow in scree plot and keep only pcs before
+        pc_var_explained = pca.explained_variance_ratio_
+        kn = KneeLocator(list(range(len(pc_var_explained))), pc_var_explained, curve='convex', direction='decreasing')
+        pcs_to_keep = pc_embedding[:, :kn.knee]
 
-        # def animate(i):
-        #     ax.view_init(elev=10, azim=frames[i])
-        #
-        # ani = animation.FuncAnimation(fig=fig, func=animate, frames=frames.shape[0], interval=50, blit=False)
-        # ani.save('/home/bartulm/Downloads/yeyo.mp4', dpi=300)
-
-
-        # split data back to individual sessions
-        # if num_components is True:
-        #     num_components = x_new.shape[1]
-        # split_data = {}
-        # split_counts = [0] + list(np.cumsum(list(new_shapes.values())))
-        # for s_idx, session in enumerate(new_shapes.keys()):
-        #     split_data[session] = x_new[split_counts[s_idx]:split_counts[s_idx+1], :num_components]
-        #
-        # # plot correlations of PCs with beh. features
-        # plot_dict = {}
-        # for session in split_data.keys():
-        #     pc_corr = np.zeros((15, num_components))
-        #     variables = []
-        #     row = 0
-        #     for var in behavioral_data[session].keys():
-        #         if var == 'speeds' or var == 'neck_elevation' or var == 'body_direction' or var == 'neck_1st_der':
-        #             nas = np.isnan(behavioral_data[session][var])
-        #             for nc in range(num_components):
-        #                 x, y = split_data[session][:, nc], behavioral_data[session][var]
-        #                 pc_corr[row, nc] = pearsonr(x[~nas], y[~nas])[0]
-        #             variables.append(var)
-        #             row += 1
-        #         else:
-        #             for sub_var in behavioral_data[session][var].keys():
-        #                 nas = np.isnan(behavioral_data[session][var][sub_var])
-        #                 for nc in range(num_components):
-        #                     x, y = split_data[session][:, nc], behavioral_data[session][var][sub_var]
-        #                     pc_corr[row, nc] = pearsonr(x[~nas], y[~nas])[0]
-        #                 variables.append(f'{var}_{sub_var}')
-        #                 row += 1
-        #     plot_dict[session] = pc_corr
-        #
-        # fig, ax = plt.subplots(nrows=1, ncols=3, figsize=(15, 7))
-        # for s_idx, session in enumerate(plot_dict.keys()):
-        #     ax = plt.subplot(1, 3, s_idx+1)
-        #     ax.imshow(plot_dict[session], aspect='auto', cmap='seismic', vmin=-1, vmax=1)
-        #     ax.set_title(session)
-        #     if s_idx == 0:
-        #         ax.set_yticks(list(range(0, 15)))
-        #         ax.set_yticklabels(variables)
-        #     else:
-        #         ax.set_yticks(list(range(0, 15)))
-        #         ax.set_yticklabels([])
-        # plt.tight_layout(pad=1.08)
+        # plot the knee position
+        # fig, ax = plt.subplots(1, 1)
+        # ax.plot(pc_var_explained, color='#999999')
+        # ax.axvline(x=kn.knee, ls='--', color='#000000')
+        # ax.set_xlabel('PC')
+        # ax.set_xticks(list(range(0, len(pc_var_explained), 100)) + [kn.knee])
+        # ax.set_ylabel('% variance explained')
+        # ax.set_yticks([.005, .015, .025, .035])
+        # ax.set_yticklabels([.5, 1.5, 2.5, 3.5])
         # plt.show()
 
+        # do UMAP on reduced PC space
+        reducer = umap.UMAP(n_components=2, n_neighbors=20)
+        mapper = reducer.fit_transform(pcs_to_keep)
 
+        # plot results
+        fig2, ax2 = plt.subplots(1, 1)
+        ax2.scatter(mapper[:shape_1, 0], mapper[:shape_1, 1], s=.01, c='#EEC900', alpha=1, label='light1')
+        ax2.scatter(mapper[shape_1:shape_1+shape_2, 0], mapper[shape_1:shape_1+shape_2, 1], s=.01, c='#00008B', alpha=1, label='dark')
+        ax2.scatter(mapper[shape_1+shape_2:, 0], mapper[shape_1+shape_2:, 1], s=.01, c='#CD950C', alpha=1, label='light2')
+        ax2.set_xlim(-5, 7.5)
+        ax2.set_xlabel('UMAP1 (A.U.)')
+        ax2.set_ylabel('UMAP2 (A.U.)')
+        ax2.legend(markerscale=100)
+        ax2.set_title(f'{session_animal}_{session_date}_{session_bank}: {cluster_areas[0]}')
+        if self.save_fig:
+            if os.path.exists(self.save_dir):
+                fig2.savefig(f'{self.save_dir}{os.sep}UMAP_{session_animal}_{session_bank}_{cluster_areas[0]}.{self.fig_format}')
+            else:
+                print("Specified save directory doesn't exist. Try again.")
+                sys.exit()
+        plt.show()

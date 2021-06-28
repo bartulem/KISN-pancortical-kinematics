@@ -10,12 +10,12 @@ Decode events like sound stimulation or luminance/weight presence.
 
 import os
 import gc
-import sys
 import time
 import numpy as np
 from numba import njit
-from sklearn import svm
+# from sklearn import svm
 from tqdm import tqdm
+from scipy.stats import zscore
 import neural_activity
 import select_clusters
 import sessions2load
@@ -113,7 +113,7 @@ class Decoder:
                  number_of_decoding_per_run=10, decoding_cell_number_array=np.array([5, 10, 20, 50, 100]), fold_n=3, shuffle_num=1000,
                  to_smooth=False, smooth_sd=1, smooth_axis=0, condense=True,
                  cluster_areas=None, cluster_type=True, animal_names=None,
-                 profiles_to_include=True):
+                 profiles_to_include=True, to_zscore=False):
         if cluster_areas is None:
             cluster_areas = ['A']
         if input_012 is None:
@@ -137,6 +137,7 @@ class Decoder:
         self.cluster_type = cluster_type
         self.animal_names = animal_names
         self.profiles_to_include = profiles_to_include
+        self.to_zscore = to_zscore
 
     def decode_sound_stim(self, **kwargs):
         """
@@ -312,7 +313,7 @@ class Decoder:
             cluster_areas = ['V'] or ['A1']
             cluster_type = 'good'
             to_smooth = True
-            smooth_sd = 3
+            smooth_sd = 1
             condense = True
             decoding_cell_number_array = np.array([5, 10, 20, 35, 50])
             number_of_decoding_per_run = 100
@@ -426,6 +427,8 @@ class Decoder:
                                 temp_cl_arr = zero_first_second_activity[condition_type][selected_cluster]['activity'][-seq_len:].todense().astype(np.float32).copy()
                             if self.to_smooth:
                                 temp_cl_arr = neural_activity.gaussian_smoothing(array=temp_cl_arr, sigma=self.smooth_sd, axis=self.smooth_axis).astype(np.float32)
+                            if self.to_zscore:
+                                temp_cl_arr = zscore(temp_cl_arr)
                             clusters_array[fold_edges[condition_type]: fold_edges[condition_type+1], sc_idx] = temp_cl_arr
 
                 # prepare array for shuffling
@@ -461,32 +464,33 @@ class Decoder:
                     gc.collect()
 
                 else:
+                    continue
                     # this utilizes the SVM classifier for decoding
-                    test_arr = clusters_array[middle_change_point:, :].copy()
-                    train_arr = clusters_array[:middle_change_point, :].copy()
-                    decoding_event_array_reduced = decoding_event_array[:middle_change_point].copy()
-
-                    # train model and generate predictions
-                    condition_model = svm.SVC()
-                    condition_model.fit(X=train_arr, y=decoding_event_array_reduced)
-                    generated_predictions = condition_model.predict(test_arr)
-
-                    # calculate accuracy
-                    decoding_accuracy[ca_idx, decode_num] = ((generated_predictions-np.ones(total_frame_num-middle_change_point)) == 0).sum() / generated_predictions.shape[0]
-
-                    # same for shuffling
-                    if decode_num == 0:
-                        for sh_idx in range(self.shuffle_num):
-                            shuffled_test_arr = shuffled_clusters_array[sh_idx, middle_change_point:, :].copy()
-                            shuffled_train_arr = shuffled_clusters_array[sh_idx, :middle_change_point, :].copy()
-                            shuffled_decoding_event_array_reduced = decoding_event_array[:middle_change_point].copy()
-
-                            shuffled_condition_model = svm.SVC()
-                            shuffled_condition_model.fit(X=shuffled_train_arr, y=shuffled_decoding_event_array_reduced)
-                            shuffled_generated_predictions = shuffled_condition_model.predict(shuffled_test_arr)
-                            dea_randomized = np.ones(shuffled_generated_predictions.shape[0])
-
-                            shuffled_decoding_accuracy[ca_idx, sh_idx] = ((shuffled_generated_predictions-dea_randomized) == 0).sum() / shuffled_generated_predictions.shape[0]
+                    # test_arr = clusters_array[middle_change_point:, :].copy()
+                    # train_arr = clusters_array[:middle_change_point, :].copy()
+                    # decoding_event_array_reduced = decoding_event_array[:middle_change_point].copy()
+                    #
+                    # # train model and generate predictions
+                    # condition_model = svm.SVC()
+                    # condition_model.fit(X=train_arr, y=decoding_event_array_reduced)
+                    # generated_predictions = condition_model.predict(test_arr)
+                    #
+                    # # calculate accuracy
+                    # decoding_accuracy[ca_idx, decode_num] = ((generated_predictions-np.ones(total_frame_num-middle_change_point)) == 0).sum() / generated_predictions.shape[0]
+                    #
+                    # # same for shuffling
+                    # if decode_num == 0:
+                    #     for sh_idx in range(self.shuffle_num):
+                    #         shuffled_test_arr = shuffled_clusters_array[sh_idx, middle_change_point:, :].copy()
+                    #         shuffled_train_arr = shuffled_clusters_array[sh_idx, :middle_change_point, :].copy()
+                    #         shuffled_decoding_event_array_reduced = decoding_event_array[:middle_change_point].copy()
+                    #
+                    #         shuffled_condition_model = svm.SVC()
+                    #         shuffled_condition_model.fit(X=shuffled_train_arr, y=shuffled_decoding_event_array_reduced)
+                    #         shuffled_generated_predictions = shuffled_condition_model.predict(shuffled_test_arr)
+                    #         dea_randomized = np.ones(shuffled_generated_predictions.shape[0])
+                    #
+                    #         shuffled_decoding_accuracy[ca_idx, sh_idx] = ((shuffled_generated_predictions-dea_randomized) == 0).sum() / shuffled_generated_predictions.shape[0]
 
         # save results as .npy files
         np.save(f'{self.save_results_dir}{os.sep}{animal_name}_{decode_what}_decoding_accuracy_{self.cluster_areas[0]}_clusters', decoding_accuracy)

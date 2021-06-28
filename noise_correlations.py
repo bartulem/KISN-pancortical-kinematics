@@ -275,7 +275,7 @@ class FunctionalConnectivity:
         area_filter = kwargs['area_filter'] if 'area_filter' in kwargs.keys() and type(kwargs['area_filter']) == list else True
         cluster_type_filter = kwargs['cluster_type_filter'] if 'cluster_type_filter' in kwargs.keys() and type(kwargs['cluster_type_filter']) == str else True
         profile_filter = kwargs['profile_filter'] if 'profile_filter' in kwargs.keys() and type(kwargs['profile_filter']) == str else True
-        sort_ch_num = kwargs['sort_ch_num'] if 'sort_ch_num' in kwargs.keys() and type(kwargs['sort_ch_num']) == bool else False
+        sort_ch_num = kwargs['sort_ch_num'] if 'sort_ch_num' in kwargs.keys() and type(kwargs['sort_ch_num']) == bool else True
         combo_range = kwargs['combo_range'] if 'combo_range' in kwargs.keys() and type(kwargs['combo_range']) == list else True
         cross_corr = kwargs['cross_corr'] if 'cross_corr' in kwargs.keys() and type(kwargs['cross_corr']) == bool else False
         convolve_sigma = kwargs['convolve_sigma'] if 'convolve_sigma' in kwargs.keys() and type(kwargs['convolve_sigma']) == float else 0.01
