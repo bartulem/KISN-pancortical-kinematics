@@ -708,11 +708,11 @@ class PlotGroupResults:
                 file_dict[data_type][data_area].sort()
 
         # load the data
-        decoding_data = {'data': {areas[0]: {}, areas[1]: {}}, 'shuffled': {areas[1]: {}, areas[1]: {}}}
+        decoding_data = {'data': {areas[0]: {}, areas[1]: {}}, 'shuffled': {areas[0]: {}, areas[1]: {}}}
         for data_type in decoding_data.keys():
             for data_area in decoding_data[data_type].keys():
-                for file_idx, one_file in enumerate(file_dict[data_type][data_area]):
-                    animal_name = [animal for animal in self.animal_ids.keys() if animal in one_file[0]][0]
+                for one_file in file_dict[data_type][data_area]:
+                    animal_name = [animal for animal in self.animal_ids.keys() if animal in one_file][0]
                     decoding_data[data_type][data_area][animal_name] = np.load(f'{self.decoding_dir}{os.sep}{one_file}')
 
         # get data to plot
