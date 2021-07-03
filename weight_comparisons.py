@@ -108,6 +108,7 @@ def extract_json_data(json_file='', features=None,
                         weight_dict[key]['peaks'][test_session].append(json_data[cl_num]['features'][key][test_session]['x'][np.argmax(test_session_data)])
                         weight_dict[key]['peaks'][ref_dict['other_session']].append(json_data[cl_num]['features'][key][ref_dict['other_session']]['x'][np.argmax(other_session_data)])
 
+
                         weight_dict[key]['information_rates'][ref_dict['ref_session']].append(json_data[cl_num]['features'][key]['ICr-{}'.format(ref_dict['ref_session'])])
                         weight_dict[key]['information_rates'][test_session].append(json_data[cl_num]['features'][key]['ICr-{}'.format(test_session)])
                         weight_dict[key]['information_rates'][ref_dict['other_session']].append(json_data[cl_num]['features'][key]['ICr-{}'.format(ref_dict['other_session'])])
@@ -477,16 +478,17 @@ class WeightComparer:
                     else:
                         axes_list = [ax3, ax4]
                     chosen_feature_der = f'{chosen_feature}_{self.der}_der'
-                    feature_color = [val for key, val in make_ratemaps.Ratemap.feature_colors.items() if key in chosen_feature][0]
-                    for ax, specific_feature in zip(axes_list, [chosen_feature, chosen_feature_der]):
+                    feature_colors = [[val for key, val in make_ratemaps.Ratemap.feature_colors.items() if key == chosen_feature][0],
+                                      [val for key, val in make_ratemaps.Ratemap.feature_colors.items() if key == chosen_feature_der][0]]
+                    for color_idx, (ax, specific_feature) in enumerate(zip(axes_list, [chosen_feature, chosen_feature_der])):
                         if gs != 'stability':
                             ax.scatter(x=np.array(weight_dict[specific_feature][gs][self.ref_dict['ref_session']]),
                                        y=np.array(weight_dict[specific_feature][gs][self.test_session_type]),
-                                       color=feature_color, alpha=1, s=10)
+                                       color=feature_colors[color_idx], alpha=1, s=10)
                         else:
                             ax.scatter(x=np.array(weight_dict[chosen_feature][gs]['{}-{}'.format(self.ref_dict['ref_session'], self.ref_dict['other_session'])]),
                                        y=np.array(weight_dict[chosen_feature][gs]['{}-{}'.format(self.ref_dict['ref_session'], self.test_session_type)]),
-                                       color=feature_color, alpha=1, s=10)
+                                       color=feature_colors[color_idx], alpha=1, s=10)
                 for ax_idx, ax in enumerate([ax1, ax2, ax3, ax4]):
                     if ax_idx == 0:
                         ax.set_title(gs.replace('_', ' '))
@@ -524,17 +526,18 @@ class WeightComparer:
                         'back': [3, 4, 4], 'back_der': [9, 10, 10]}
                 for chosen_feature in self.chosen_features:
                     chosen_feature_der = f'{chosen_feature}_{self.der}_der'
-                    feature_color = [val for key, val in make_ratemaps.Ratemap.feature_colors.items() if key in chosen_feature][0]
+                    feature_colors = [[val for key, val in make_ratemaps.Ratemap.feature_colors.items() if key == chosen_feature][0],
+                                      [val for key, val in make_ratemaps.Ratemap.feature_colors.items() if key == chosen_feature_der][0]]
                     if 'head' in chosen_feature or 'Head' in chosen_feature:
                         ax2 = fig.add_subplot(gs1[gs_x['head'][head_count], head_count])
                         ax3 = fig.add_subplot(gs1[gs_x['head_der'][head_count], head_count])
                     else:
                         ax2 = fig.add_subplot(gs1[gs_x['back'][back_count], back_count])
                         ax3 = fig.add_subplot(gs1[gs_x['back_der'][back_count], back_count])
-                    for ax, specific_feature in zip([ax2, ax3], [chosen_feature, chosen_feature_der]):
+                    for color_idx, (ax, specific_feature) in enumerate(zip([ax2, ax3], [chosen_feature, chosen_feature_der])):
                         ax.scatter(x=np.array(weight_dict[specific_feature][gs][self.ref_dict['ref_session']]),
                                    y=np.array(weight_dict[specific_feature][gs][self.test_session_type]),
-                                   color=feature_color, alpha=1, s=10)
+                                   color=feature_colors[color_idx], alpha=1, s=10)
                         ax.tick_params(axis='both', which='major', length=1, labelsize=6, pad=.75)
                         if 'head' in chosen_feature or 'Head' in chosen_feature:
                             if 'der' not in specific_feature:
@@ -614,15 +617,16 @@ class WeightComparer:
                     row_list = [5, 11]
                     col = back_col
                 chosen_feature_der = f'{chosen_feature}_{self.der}_der'
-                feature_color = [val for key, val in make_ratemaps.Ratemap.feature_colors.items() if key in chosen_feature][0]
-                for row, specific_feature in zip(row_list, [chosen_feature, chosen_feature_der]):
+                feature_colors = [[val for key, val in make_ratemaps.Ratemap.feature_colors.items() if key == chosen_feature][0],
+                                  [val for key, val in make_ratemaps.Ratemap.feature_colors.items() if key == chosen_feature_der][0]]
+                for color_idx, (row, specific_feature) in enumerate(zip(row_list, [chosen_feature, chosen_feature_der])):
                     ax = fig.add_subplot(gs1[row, col])
                     ax.hist(shuffled_dict[specific_feature][gs]['null_differences'], bins=10,
                             histtype='stepfilled', color='#808080', edgecolor='#000000', alpha=.5)
                     ax.axvline(x=np.nanpercentile(shuffled_dict[specific_feature][gs]['null_differences'], 0.5), color='#000000', ls='-.', lw=.5)
                     ax.axvline(x=np.nanpercentile(shuffled_dict[specific_feature][gs]['null_differences'], 99.5), color='#000000', ls='-.', lw=.5)
                     ax.set_ylim(ymax=hist_max)
-                    ax.plot(shuffled_dict[specific_feature][gs]['true_difference'], 0+.05*hist_max, marker='o', color=feature_color, markersize=5)
+                    ax.plot(shuffled_dict[specific_feature][gs]['true_difference'], 0+.05*hist_max, marker='o', color=feature_colors[color_idx], markersize=5)
                     if col < 1:
                         ax.set_ylabel('Shuffled count', labelpad=.1, fontsize=6)
                         ax.set_yticks(np.arange(0, hist_max, hist_step))
@@ -723,12 +727,12 @@ class WeightComparer:
         cmap=plt.cm.seismic_r
         normal_range = plt.Normalize(vmin=-4, vmax=0)
         for idx, feature in enumerate(weight_stats_dict['features']['names']):
-            probabilities=np.log10([weight_stats_dict['features']['auc'][idx],
+            probabilities=np.log10([weight_stats_dict['features']['stability'][idx],
+                                    weight_stats_dict['features']['auc'][idx],
                                     weight_stats_dict['features']['information_rates'][idx],
-                                    weight_stats_dict['features']['stability'][idx],
+                                    weight_stats_dict['features_der']['stability'][idx],
                                     weight_stats_dict['features_der']['auc'][idx],
-                                    weight_stats_dict['features_der']['information_rates'][idx],
-                                    weight_stats_dict['features_der']['stability'][idx]])
+                                    weight_stats_dict['features_der']['information_rates'][idx]])
             colors = plt.cm.seismic_r(normal_range(probabilities))
             for y_idx, y_point in enumerate([1, 3]):
                 if y_idx == 0:

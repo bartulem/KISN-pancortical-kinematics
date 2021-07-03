@@ -32,22 +32,30 @@ import matplotlib.pyplot as plt
 # data[13, :] = occ_p2 (odd minutes occupancy / no smoothing)
 # data[14, :] = smocc_p2 (odd minutes occupancy / smoothed)
 
-
 class Ratemap:
-    feature_colors = {'head_pitch': '#C91517',
-                      'Head_pitch': '#C91517',
-                      'head_azimuth': '#ED6C6D',
-                      'Head_azimuth': '#ED6C6D',
-                      'head_roll': '#F1A6B1',
-                      'Head_roll': '#F1A6B1',
-                      'Back_pitch': '#3052A0',
-                      'Back_azimuth': '#77AEDF',
-                      'Neck_elevation': '#F07F00',
-                      'neck_elevation': '#F07F00',
-                      'Speeds': '#228B22',
-                      'speeds': '#228B22',
-                      'Body_direction': '#EEC900',
-                      'head_direction': '#8B7500'}
+    feature_colors = {'Ego2_head_pitch': '#6F3894',
+                      'Ego2_head_pitch_1st_der': '#C897C4',
+                      'Ego3_Head_pitch': '#AC2023',
+                      'Ego3_Head_pitch_1st_der': '#EE4E6F',
+                      'Ego2_head_azimuth': '#ED6C6D',
+                      'Ego3_Head_azimuth': '#CA2026',
+                      'Ego3_Head_azimuth_1st_der': '#F27170',
+                      'Ego2_head_roll': '#8D3A95',
+                      'Ego2_head_roll_1st_der': '#C07EB6',
+                      'Ego3_Head_roll': '#ED2A2C',
+                      'Ego3_Head_roll_1st_der': '#F38D9F',
+                      'Back_pitch': '#15489D',
+                      'Back_pitch_1st_der': '#5C8ECA',
+                      'Back_azimuth': '#2977B6',
+                      'Back_azimuth_1st_der': '#86D5F5',
+                      'Neck_elevation': '#F37827',
+                      'Neck_elevation_1st_der': '#F9AD74',
+                      'neck_elevation': '#F37827',
+                      'Speeds': '#14A049',
+                      'speeds': '#14A049',
+                      'Body_direction': '#64BC62',
+                      'Body_direction_1st_der': '#91C38F',
+                      'Allo_head_direction': '#8A267E'}
 
     def __init__(self, ratemap_mat_dir='', animals=None,
                  session_type_labels=None,
