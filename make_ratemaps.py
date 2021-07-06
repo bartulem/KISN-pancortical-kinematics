@@ -199,7 +199,7 @@ class Ratemap:
 
         # determine ratemap color
         for one_feature in self.feature_colors.keys():
-            if one_feature in self.feature_filter['feature']:
+            if one_feature == self.feature_filter['feature']:
                 designated_color = self.feature_colors[one_feature]
                 break
 
