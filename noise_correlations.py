@@ -393,7 +393,7 @@ class FunctionalConnectivity:
                 else:
                     output_dictionary['cch'] = data
             else:
-                output_array = np.zeros((all_bins.shape[0], 3))
+                output_array = np.zeros((all_bins.shape[0], 5))
                 cch = dot_product(big_x=big_x,
                                   small_y=y)
                 output_array[:, 0] = cch
@@ -403,6 +403,9 @@ class FunctionalConnectivity:
 
                 cch_probabilities = calculate_p_values(cch=cch, slow_baseline=cch_convolved)
                 output_array[:, 2] = cch_probabilities
+
+                output_array[0, 3] = act1.shape[0]
+                output_array[0, 4] = act2.shape[0]
 
                 output_dictionary[combo_name] = output_array
 
