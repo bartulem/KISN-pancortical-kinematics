@@ -66,13 +66,13 @@ def bin_spiking(cl_activity, bin_size, tracking_start, tracking_stop,
     """
 
     fr_arr = np.zeros(int(np.ceil((tracking_stop-tracking_start)/bin_size))).astype(np.float32)
-    fr_arr[np.round(cl_activity/bin_size).astype(np.int32)] = 1
+    fr_arr[np.floor(cl_activity/bin_size).astype(np.int32)] = 1
     jitter_arr = sparse.csr_matrix((jitter_n, fr_arr.shape[0]), dtype=np.float32)
     if to_jitter:
         for sh in range(jitter_n):
             jitter_spikes = cl_activity.copy() + ((2 * jitter_size * np.random.random(cl_activity.shape[0])) - jitter_size)
             jitter_spikes = jitter_spikes[jitter_spikes <= tracking_stop]
-            jitter_arr[sh, np.round(jitter_spikes/bin_size).astype(np.int32)] = 1
+            jitter_arr[sh, np.floor(jitter_spikes/bin_size).astype(np.int32)] = 1
     return fr_arr, jitter_arr
 
 @njit(parallel=False)
