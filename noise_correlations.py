@@ -180,7 +180,7 @@ def calculate_p_values(cch, slow_baseline):
     Parameters
     ----------
     cch : np.ndarray
-        The CCH array that should be smoothed.
+        The CCH array.
     slow_baseline : np.ndarray
         The convolved CCH array.
     ----------
@@ -188,7 +188,8 @@ def calculate_p_values(cch, slow_baseline):
     Returns
     ----------
     p_values : np.ndarray
-        The hollow-Gaussian convolved CCH.
+        The probability of obtaining an observed (or higher) synchrony count in the mth time lag of
+        the observed CCH, given the expected, low frequency baseline rate in the same bin.
     ----------
     """
     return np.abs(1 - poisson.cdf(k=cch - 1, mu=slow_baseline) - poisson.pmf(k=cch, mu=slow_baseline)*0.5)
