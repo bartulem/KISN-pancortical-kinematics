@@ -12,13 +12,10 @@ import os
 import sys
 import numpy as np
 import matplotlib.pyplot as plt
-# import umap.umap_ as umap
-import matplotlib.animation as animation
-from scipy.stats import pearsonr
+import umap.umap_ as umap
 from scipy.stats import zscore
 from kneed import KneeLocator
-from sklearn.decomposition import PCA, FactorAnalysis
-from sklearn.manifold import TSNE, SpectralEmbedding
+from sklearn.decomposition import PCA
 import decode_events
 import neural_activity
 import sessions2load

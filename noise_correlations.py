@@ -440,7 +440,7 @@ class FunctionalConnectivity:
         filter_by_lmi (list)
             Select clusters that have a significant LMI; defaults to [True, True].
         p_alpha (float)
-            p-value boundary for accepting significance; defaults to .001.
+            p-value boundary for accepting significance; defaults to .0001.
         json_file_name (str)
             The name of the json file containing putative synaptic connections
         ----------
@@ -454,13 +454,13 @@ class FunctionalConnectivity:
 
         cch_time = kwargs['cch_time'] if 'cch_time' in kwargs.keys() and type(kwargs['cch_time']) == int else 20
         bin_num = kwargs['bin_num'] if 'bin_num' in kwargs.keys() and type(kwargs['bin_num']) == int else 50
-        relevant_cch_bounds = kwargs['relevant_cch_bounds'] if 'relevant_cch_bounds' in kwargs.keys() and type(kwargs['relevant_cch_bounds']) == list else [0.8, 2.8]
+        relevant_cch_bounds = kwargs['relevant_cch_bounds'] if 'relevant_cch_bounds' in kwargs.keys() and type(kwargs['relevant_cch_bounds']) == list else [1.6, 5.2]
         filter_by_area = kwargs['filter_by_area'] if 'filter_by_area' in kwargs.keys() and type(kwargs['filter_by_area']) == list else True
         filter_by_cluster_type = kwargs['filter_by_cluster_type'] if 'filter_by_cluster_type' in kwargs.keys() and type(kwargs['filter_by_cluster_type']) == list else [True, True]
         filter_by_spiking_profile = kwargs['filter_by_spiking_profile'] if 'filter_by_spiking_profile' in kwargs.keys() and type(kwargs['filter_by_spiking_profile']) == list else [True, True]
         filter_by_smi = kwargs['filter_by_smi'] if 'filter_by_smi' in kwargs.keys() and type(kwargs['filter_by_smi']) == list else [True, True]
         filter_by_lmi = kwargs['filter_by_lmi'] if 'filter_by_lmi' in kwargs.keys() and type(kwargs['filter_by_lmi']) == list else [True, True]
-        p_alpha = kwargs['p_alpha'] if 'p_alpha' in kwargs.keys() and type(kwargs['p_alpha']) == float else .001
+        p_alpha = kwargs['p_alpha'] if 'p_alpha' in kwargs.keys() and type(kwargs['p_alpha']) == float else .0001
         json_file_name = kwargs['json_file_name'] if 'json_file_name' in kwargs.keys() and type(kwargs['json_file_name']) == str else 'synaptic'
 
         # get relevant boundaries for calculating statistics
@@ -541,8 +541,10 @@ class FunctionalConnectivity:
 
                     if (is_zero_in_arr and start_bound_idx <= most_aberrant_value_idx < end_bound_idx) \
                             or (not is_zero_in_arr and most_aberrant_value_idx in idx_array):
-                        excitation_p = data[cl_pair][most_aberrant_value_idx, 2] < p_alpha
-                        inhibition_p = (1 - data[cl_pair][most_aberrant_value_idx, 2]) < p_alpha
+                        excitation_p = data[cl_pair][most_aberrant_value_idx, 2] < p_alpha and \
+                                       (data[cl_pair][most_aberrant_value_idx-1, 2] < p_alpha or data[cl_pair][most_aberrant_value_idx+1, 2] < p_alpha)
+                        inhibition_p = (1 - data[cl_pair][most_aberrant_value_idx, 2]) < p_alpha and \
+                                       ((1 - data[cl_pair][most_aberrant_value_idx-1, 2]) < p_alpha or (1 - data[cl_pair][most_aberrant_value_idx+1, 2]) < p_alpha)
                         if excitation_p or inhibition_p:
                             pair_1_category = profile_data.loc[(profile_data['session_id'] == sp_session_id)
                                                                & (profile_data['cluster_id'] == pair_split[0]), 'category'].values[0]
