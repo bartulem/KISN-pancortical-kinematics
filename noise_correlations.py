@@ -144,7 +144,7 @@ def hollowed_gaussian_kernel(cch, sigma=1, fraction_hollowed=.6):
     sigma : int
         The sigma for smoothing (in bins); defaults to 1.
     fraction_hollowed : float
-        Tracking start relative to tracking start (should be 0).
+        Proportion-wise, the amount of window hollowed; defaults to .6.
     ----------
 
     Returns
@@ -171,7 +171,7 @@ def calculate_p_values(cch, slow_baseline):
     This function calculates the probabilities of obtaining an observed (or higher) synchrony count
     in the time lags of the observed CCG (in the offered range), given the expected, low frequency
     baseline rate in the same bins, estimated using the Poisson distribution (Fine-English et al.,
-    Neuron, 2009) with a continuity correction.
+    Neuron, 2017) with a continuity correction.
 
     Extra: The absolute function at the end is there because when the factorials get very large,
     the calculation yields negative values.
@@ -295,6 +295,7 @@ class FunctionalConnectivity:
 
         # get all combinations of clusters
         cl_combinations = list(combinations(cluster_data['cluster_spikes'].keys(), 2))
+        print(len(cl_combinations))
 
         if combo_range is True:
             combo_start = 0
@@ -454,7 +455,7 @@ class FunctionalConnectivity:
 
         cch_time = kwargs['cch_time'] if 'cch_time' in kwargs.keys() and type(kwargs['cch_time']) == int else 20
         bin_num = kwargs['bin_num'] if 'bin_num' in kwargs.keys() and type(kwargs['bin_num']) == int else 50
-        relevant_cch_bounds = kwargs['relevant_cch_bounds'] if 'relevant_cch_bounds' in kwargs.keys() and type(kwargs['relevant_cch_bounds']) == list else [1.6, 5.2]
+        relevant_cch_bounds = kwargs['relevant_cch_bounds'] if 'relevant_cch_bounds' in kwargs.keys() and type(kwargs['relevant_cch_bounds']) == list else [1.6, 4.0]
         filter_by_area = kwargs['filter_by_area'] if 'filter_by_area' in kwargs.keys() and type(kwargs['filter_by_area']) == list else True
         filter_by_cluster_type = kwargs['filter_by_cluster_type'] if 'filter_by_cluster_type' in kwargs.keys() and type(kwargs['filter_by_cluster_type']) == list else [True, True]
         filter_by_spiking_profile = kwargs['filter_by_spiking_profile'] if 'filter_by_spiking_profile' in kwargs.keys() and type(kwargs['filter_by_spiking_profile']) == list else [True, True]
