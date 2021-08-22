@@ -11,6 +11,7 @@ Locate single-units in 3D anatomical space (relative to bregma coordinates).
 import os
 import numpy as np
 import pandas as pd
+import matplotlib.pyplot as plt
 
 class ClusterLocator:
 
@@ -44,11 +45,12 @@ class ClusterLocator:
                                        'inserted_probe_len': 6.75}}}
 
     def __init__(self, probe_site_configuration, template_shapes_dir='', sp_profiles_csv='',
-                       channel_maps_dir=''):
+                       channel_maps_dir='', new_sp_profiles_csv=''):
         self.probe_site_configuration = probe_site_configuration
         self.template_shapes_dir = template_shapes_dir
         self.channel_maps_dir = channel_maps_dir
         self.sp_profiles_csv = sp_profiles_csv
+        self.new_sp_profiles_csv = new_sp_profiles_csv
 
     def find_cluster_location(self, **kwargs):
         """
@@ -62,11 +64,9 @@ class ClusterLocator:
         ----------
         **kwargs (dictionary)
         channel_window (int)
-            Max number of channels around either side of peak channel; defaults to 6.
+            Max number of channels around either side of peak channel; defaults to 20.
         peak_fraction (float)
-            The acceptable fraction of peak template amplitude; defaults to 0.1.
-        probe_nchan (int)
-            Number of channels used for recording on the probe; defaults to 384.
+            The acceptable fraction of peak template amplitude; defaults to 0.15.
         ----------
 
         Returns
@@ -76,9 +76,8 @@ class ClusterLocator:
         ----------
         """
 
-        channel_window = kwargs['channel_window'] if 'channel_window' in kwargs.keys() and type(kwargs['channel_window']) == int else 10
+        channel_window = kwargs['channel_window'] if 'channel_window' in kwargs.keys() and type(kwargs['channel_window']) == int else 20
         peak_fraction = kwargs['peak_fraction'] if 'peak_fraction' in kwargs.keys() and type(kwargs['peak_fraction']) == float else .15
-        probe_nchan = kwargs['nchan'] if 'nchan' in kwargs.keys() and type(kwargs['nchan']) == int else 384
 
         # load probe site layout
         probe_coords = np.load(self.probe_site_configuration)
@@ -114,16 +113,11 @@ class ClusterLocator:
                 c_min = np.max([0, peak_in_ch_map-channel_window])
                 c_max = np.min([peak_in_ch_map+channel_window, ch_map_file.shape[0]])
 
-                # get peak bin position
                 ts = template_shapes_dict[file_id][cl_id, :, peak_in_ch_map]
-                peak_bin_position = np.where(ts == np.max(ts)) \
-                    if np.max(ts) == np.max(np.abs(ts)) \
-                    else np.where(ts == np.min(ts))
-
                 # find actual borders of triangulation window
                 peak_bin_data = np.zeros(c_max-c_min)
                 for ch_idx, channel in enumerate(range(c_min, c_max)):
-                    peak_bin_data[ch_idx] = np.abs(template_shapes_dict[file_id][cl_id, peak_bin_position[0], channel])
+                    peak_bin_data[ch_idx] = np.max(np.abs(template_shapes_dict[file_id][cl_id, :, channel]))
                 min_max_arr = np.arange(c_min, c_max, 1)[peak_bin_data > np.max(np.abs(ts))*peak_fraction]
                 peak_bin_data = peak_bin_data[peak_bin_data > np.max(np.abs(ts))*peak_fraction]
 
@@ -132,50 +126,62 @@ class ClusterLocator:
                 chs_in_ch_map = ch_map_file[min_max_arr]
                 if 'distal' in file_id:
                     ch_data[:, 0:2] = probe_coords[chs_in_ch_map, :]
-                    # print(file_id, cl_name, chs_in_ch_map, probe_coords[cl_peak_channel])
                 else:
                     ch_data[:, 0:2] = (probe_coords+np.array([0, 3800.]))[chs_in_ch_map, :]
-                    # print(file_id, cl_name, chs_in_ch_map, (probe_coords+np.array([0, 3800.]))[cl_peak_channel])
                 ch_data[:, 2] = peak_bin_data
 
                 # calculate center of mass
                 com = np.average(ch_data[:, :2], axis=0, weights=ch_data[:, 2])
-                # print(com)
             else:
                 if 'distal' in file_id:
                     com = probe_coords[cl_peak_channel]
-                    # print(f'{cl_name} from {file_id} out of range!', com)
                 else:
                     com = (probe_coords+np.array([0, 3800.]))[cl_peak_channel]
-                    # print(f'{cl_name} from {file_id} out of range!', com)
 
             # compute DV, ML and AP(RC) for each cluster
             if animal_id in self.locator_dict['LH'].keys():
-                dv = np.cos(np.radians(self.locator_dict['LH'][animal_id]['alpha'])) \
+                ### here 0 is surface (result in mm)
+                dv = self.locator_dict['LH'][animal_id]['XYZ_start'][2] \
+                     - np.cos(np.radians(self.locator_dict['LH'][animal_id]['alpha'])) \
                      *(self.locator_dict['LH'][animal_id]['inserted_probe_len']-(com[1]/1000))
-                ml = np.sin(np.radians(self.locator_dict['LH'][animal_id]['alpha'])) \
+                ### ML and AP need to be corrected for the X component in the probe
+                first_step = 35-com[0]
+                extract_sign = 1 if first_step >= 0 else -1
+                second_step = ((2*first_step)**2)/2
+                final_correction = (extract_sign*np.sqrt(second_step))/1000
+                ml = self.locator_dict['LH'][animal_id]['XYZ_start'][1] \
+                     - np.sin(np.radians(self.locator_dict['LH'][animal_id]['alpha'])) \
                      * np.sin(np.radians(self.locator_dict['LH'][animal_id]['beta'])) \
-                     *(self.locator_dict['LH'][animal_id]['inserted_probe_len']-(com[1]/1000))
-                ap = np.cos(np.radians(self.locator_dict['LH'][animal_id]['beta'])) \
+                     *(self.locator_dict['LH'][animal_id]['inserted_probe_len']-(com[1]/1000)) \
+                     + final_correction
+                ap = self.locator_dict['LH'][animal_id]['XYZ_start'][0] \
+                     + np.cos(np.radians(self.locator_dict['LH'][animal_id]['beta'])) \
                      * np.sin(np.radians(self.locator_dict['LH'][animal_id]['alpha'])) \
-                     *(self.locator_dict['LH'][animal_id]['inserted_probe_len']-(com[1]/1000))
-                print(com, file_id, cl_name,
-                      self.locator_dict['LH'][animal_id]['XYZ_start'][2]-dv,
-                      self.locator_dict['LH'][animal_id]['XYZ_start'][1]-ml+(0.035-(com[0]/1000)),
-                      self.locator_dict['LH'][animal_id]['XYZ_start'][0]+ap+(0.035-(com[0]/1000)))
+                     *(self.locator_dict['LH'][animal_id]['inserted_probe_len']-(com[1]/1000)) \
+                     + final_correction
             else:
-                dv = np.cos(np.radians(self.locator_dict['RH'][animal_id]['alpha'])) \
+                dv = self.locator_dict['RH'][animal_id]['XYZ_start'][2] \
+                     - np.cos(np.radians(self.locator_dict['RH'][animal_id]['alpha'])) \
                      *(self.locator_dict['RH'][animal_id]['inserted_probe_len']-(com[1]/1000))
-                ml = np.cos(np.radians(self.locator_dict['RH'][animal_id]['beta'])) \
+                ### ML and AP need to be corrected for the X component in the probe
+                first_step = com[0]-35
+                extract_sign = 1 if first_step >= 0 else -1
+                second_step = ((2*first_step)**2)/2
+                final_correction = (extract_sign*np.sqrt(second_step))/1000
+                ml = self.locator_dict['RH'][animal_id]['XYZ_start'][1] \
+                     + np.cos(np.radians(self.locator_dict['RH'][animal_id]['beta'])) \
                      * np.sin(np.radians(self.locator_dict['RH'][animal_id]['alpha'])) \
-                     *(self.locator_dict['RH'][animal_id]['inserted_probe_len']-(com[1]/1000))
-                ap = np.sin(np.radians(self.locator_dict['RH'][animal_id]['alpha'])) \
+                     *(self.locator_dict['RH'][animal_id]['inserted_probe_len']-(com[1]/1000)) \
+                     + final_correction
+                ap = self.locator_dict['RH'][animal_id]['XYZ_start'][0] \
+                     - np.sin(np.radians(self.locator_dict['RH'][animal_id]['alpha'])) \
                      * np.sin(np.radians(self.locator_dict['RH'][animal_id]['beta'])) \
-                     *(self.locator_dict['RH'][animal_id]['inserted_probe_len']-(com[1]/1000))
-                print(com, file_id, cl_name,
-                      self.locator_dict['RH'][animal_id]['XYZ_start'][2]-dv,
-                      self.locator_dict['RH'][animal_id]['XYZ_start'][1]-ml+((com[0]/1000)-0.035),
-                      self.locator_dict['RH'][animal_id]['XYZ_start'][0]+ap+((com[0]/1000)-0.035))
+                     *(self.locator_dict['RH'][animal_id]['inserted_probe_len']-(com[1]/1000)) \
+                     + final_correction
+            row = cluster_data[(cluster_data['session_id'] == file_id) & (cluster_data['cluster_id'] == cl_name)].index
+            cluster_data.loc[row, 'AP'] = ap
+            cluster_data.loc[row, 'ML'] = ml
+            cluster_data.loc[row, 'DV'] = dv
 
-
-
+        # save df in csv file
+        cluster_data.to_csv(path_or_buf=self.new_sp_profiles_csv, sep='\t', index=False)
