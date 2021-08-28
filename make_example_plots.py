@@ -10,16 +10,28 @@ Make example plots.
 
 import os
 import sys
+import json
 import numpy as np
+import pandas as pd
 import matplotlib.pyplot as plt
+import matplotlib.colorbar as cbar
 from scipy.stats import sem
 import neural_activity
 
 
 class PlotExamples:
+
+    animal_ids = {'frank': '26473', 'johnjohn': '26471', 'kavorka': '26525',
+                  'roy': '26472', 'bruno': '26148', 'jacopo': '26504', 'crazyjoe': '26507'}
+
+    elev_azimuth_3d = {'frank': (40, 60), 'johnjohn': (10, 120), 'kavorka': (10, 120),
+                       'roy': (10, 120), 'bruno': (10, 120), 'jacopo': (10, 120), 'crazyjoe': (10, 120)}
+
     def __init__(self, session=0, cluster_name='', kilosort_output_dir='',
-                 save_fig=False, fig_format='png', save_dir='/home/bartulm/Downloads',
-                 input_012=['', '', ''], cl_brain_area=''):
+                 save_fig=False, fig_format='png', save_dir='',
+                 input_012=['', '', ''], cl_brain_area='', cch_data_dir='',
+                 area_file='', cell_pair_id='', sp_profiles_csv='',
+                 profile_colors=None):
         self.session = session
         self.input_012 = input_012
         self.cluster_name = cluster_name
@@ -28,6 +40,12 @@ class PlotExamples:
         self.fig_format = fig_format
         self.save_dir = save_dir
         self.cl_brain_area = cl_brain_area
+        self.cch_data_dir = cch_data_dir
+        self.area_file = area_file
+        self.cell_pair_id = cell_pair_id
+        self.sp_profiles_csv = sp_profiles_csv
+        if profile_colors is None:
+            self.profile_colors = {'RS': '#698B69', 'FS': '#9BCD9B'}
 
     def plot_peth(self, **kwargs):
         """
@@ -274,4 +292,146 @@ class PlotExamples:
         else:
             print("The specified kilosort directory doesn't exist. Try again.")
             sys.exit()
+
+
+    def plot_spiking_cch(self, **kwargs):
+        """
+        Description
+        ----------
+        Plot spiking cross-correlogram.
+        ----------
+
+        Parameters
+        ----------
+        **kwargs (dictionary)
+        add_prob (bool)
+            To add probabilities on plot; defaults to False.
+        prob_cmap (str)
+            Colormap for probabilities; defaults to 'seismic_r'.
+        size_of_choice (tuple)
+            Size choice for the CCH figure; defaults to (8, 6).
+        cch_color_alpha (dict)
+            The color and transparency of CCH; defaults to {'c': '#080808', 'alpha': .4}.
+        mid_vline (bool)
+            To include the mid CCH vertical line or not; defaults to True.
+        mid_vline_params (dict)
+            The parameters of the mid vertical line; defaults to {'ls': ':', 'lw': 1, 'c': '#000000', 'alpha': .4}.
+        to_normalize
+            To normalize the CCH by the number of spikes of the lower spiking unit; defaults to False.
+        plot_pair_position
+            Plot the anatomical positions of the cell pair in questions; defaults to False.
+        ----------
+
+        Returns
+        ----------
+        cch (fig)
+            A plot of CCH.
+        ----------
+        """
+
+        add_prob = kwargs['add_prob'] if 'add_prob' in kwargs.keys() and type(kwargs['add_prob']) == bool else False
+        prob_cmap = kwargs['prob_cmap'] if 'prob_cmap' in kwargs.keys() and type(kwargs['prob_cmap']) == str else 'seismic_r'
+        size_of_choice = kwargs['size_of_choice'] if 'size_of_choice' in kwargs.keys() and type(kwargs['size_of_choice']) == tuple else (8, 6)
+        cch_color_alpha = kwargs['cch_color_alpha'] if 'cch_color_alpha' in kwargs.keys() \
+                                                       and type(kwargs['cch_color_alpha']) == dict else {'c': '#080808', 'alpha': .4}
+        mid_vline = kwargs['mid_vline'] if 'mid_vline' in kwargs.keys() and type(kwargs['mid_vline']) == bool else True
+        mid_vline_params = kwargs['mid_vline_params'] if 'mid_vline_params' in kwargs.keys() \
+                                                       and type(kwargs['mid_vline_params']) == dict else {'ls': ':', 'lw': 1, 'c': '#000000', 'alpha': .4}
+        to_normalize = kwargs['to_normalize'] if 'to_normalize' in kwargs.keys() and type(kwargs['to_normalize']) == bool else False
+        plot_pair_position = kwargs['plot_pair_position'] if 'plot_pair_position' in kwargs.keys() and type(kwargs['plot_pair_position']) == bool else False
+
+        # find relevant information for plotting
+        with open(f'{self.cch_data_dir}{os.sep}{self.area_file}', 'r') as json_pairs_file:
+            data = json.load(json_pairs_file)
+            for animal_session in data.keys():
+                if self.cell_pair_id in data[animal_session].keys():
+                    as_id = animal_session
+                    rat_id = [rat for rat in self.animal_ids.keys() if rat in as_id][0]
+                    break
+            else:
+                print('The requested cell pair cannot be found in this file, try again!')
+                sys.exit()
+
+        n_spikes_1 = np.asarray(data[as_id][self.cell_pair_id]['data'], dtype=np.float32)[0, 3]
+        n_spikes_2 = np.asarray(data[as_id][self.cell_pair_id]['data'], dtype=np.float32)[0, 4]
+        print(f"Cell 1 had {n_spikes_1} spikes and cell 2 had {n_spikes_2} spikes")
+
+        if rat_id != 'johnjohn':
+            if 'distal' in as_id:
+                as_id_other_bank = as_id.replace('distal', 'intermediate')
+            else:
+                as_id_other_bank = as_id.replace('intermediate', 'distal')
+            print(as_id, as_id_other_bank, len(as_id_other_bank))
+
+        if to_normalize:
+            cch = np.asarray(data[as_id][self.cell_pair_id]['data'], dtype=np.float32)[:, 0] \
+                  / np.min([np.asarray(data[as_id][self.cell_pair_id]['data'], dtype=np.float32)[0, 3],
+                            np.asarray(data[as_id][self.cell_pair_id]['data'], dtype=np.float32)[0, 4]])
+        else:
+            cch = np.asarray(data[as_id][self.cell_pair_id]['data'], dtype=np.float32)[:, 0]
+
+        if add_prob:
+            normalize = plt.Normalize(vmin=-8, vmax=0)
+            cmap = plt.cm.get_cmap(prob_cmap)
+            if data[as_id][self.cell_pair_id]['excitatory']:
+                probabilities = np.asarray(data[as_id][self.cell_pair_id]['data'], dtype=np.float32)[:, 2]
+            else:
+                probabilities = 1 - np.asarray(data[as_id][self.cell_pair_id]['data'], dtype=np.float32)[:, 2]
+            log_probabilities = np.log10(probabilities)
+
+        fig = plt.figure(figsize=size_of_choice)
+        ax = fig.add_subplot(1, 1, 1)
+        if plot_pair_position:
+            spc = pd.read_csv(self.sp_profiles_csv)
+            filtered_spc = spc[(spc['session_id'] == as_id) | (spc['session_id'] == as_id_other_bank)
+                               & ~(spc['cluster_id'] == self.cell_pair_id.split('-')[0])
+                               & ~(spc['cluster_id'] == self.cell_pair_id.split('-')[1])].iloc[:, -3:]
+            corr_cls = spc[(spc['cluster_id'] == self.cell_pair_id.split('-')[0])
+                           | (spc['cluster_id'] == self.cell_pair_id.split('-')[1])]
+
+            unit1_position = corr_cls[corr_cls['cluster_id'] == self.cell_pair_id.split('-')[0]].iloc[:, -3:]
+            unit2_position = corr_cls[corr_cls['cluster_id'] == self.cell_pair_id.split('-')[1]].iloc[:, -3:]
+
+            color_1 = self.profile_colors[spc.loc[spc[(spc['session_id'] == as_id) & (spc['cluster_id'] == self.cell_pair_id.split('-')[0])].index, 'profile'].to_string()[-2:]]
+            color_2 = self.profile_colors[spc.loc[spc[(spc['session_id'] == as_id) & (spc['cluster_id'] == self.cell_pair_id.split('-')[1])].index, 'profile'].to_string()[-2:]]
+
+            inset_axes = fig.add_axes(rect=[.475, .475, .5, .5], projection='3d')
+            inset_axes.scatter(filtered_spc.iloc[:, 0], filtered_spc.iloc[:, 1], filtered_spc.iloc[:, 2], color='#808080', alpha=.1)
+            inset_axes.scatter(unit1_position.iloc[:, 0], unit1_position.iloc[:, 1], unit1_position.iloc[:, 2], color=color_1, alpha=1, s=30)
+            inset_axes.scatter(unit2_position.iloc[:, 0], unit2_position.iloc[:, 1], unit2_position.iloc[:, 2], color=color_2, alpha=1, s=30)
+            inset_axes.plot3D([unit1_position.iloc[0, 0], unit2_position.iloc[0, 0]],
+                              [unit1_position.iloc[0, 1], unit2_position.iloc[0, 1]],
+                              [unit1_position.iloc[0, 2], unit2_position.iloc[0, 2]], ls='-', c='#000000')
+            if rat_id in ['kavorka', 'frank', 'johnjohn']:
+                inset_axes.invert_xaxis()
+            inset_axes.set_xlabel('AP (mm)')
+            inset_axes.set_ylabel('ML (mm)')
+            inset_axes.set_zlabel('DV (mm)')
+            inset_axes.view_init(elev=self.elev_azimuth_3d[rat_id][0], azim=self.elev_azimuth_3d[rat_id][1])
+        ax.plot(list(range(cch.shape[0])), cch, drawstyle='steps-mid', color=cch_color_alpha['c'], alpha=cch_color_alpha['alpha'])
+        if add_prob:
+            for ii in range(cch.shape[0]):
+                ax.fill_between(x=[ii], y1=[0], y2=[cch[ii]], step='mid', color=cmap(normalize(log_probabilities[ii])))
+        if mid_vline:
+            ax.axvline(x=50, ls=mid_vline_params['ls'], lw=mid_vline_params['lw'], color=mid_vline_params['c'], alpha=mid_vline_params['alpha'])
+        ax.set_title(f'{as_id}_{self.cell_pair_id}')
+        ax.set_xticks(np.arange(0, 101, 25))
+        ax.set_xticklabels(np.arange(-20, 21, 10))
+        ax.set_xlabel('Time offset (ms)')
+        if to_normalize:
+            ax.set_ylabel('Normalized cross-correlation (A.U.)')
+        else:
+            ax.set_ylabel('Number of spike coincidences')
+        if plot_pair_position:
+            ax.spines['top'].set_visible(False)
+            ax.spines['right'].set_visible(False)
+        if add_prob:
+            cax, _ = cbar.make_axes(ax)
+            color_bar = cbar.ColorbarBase(cax, cmap=cmap, norm=normalize)
+            color_bar.set_label('log$_{10}$(p-value)')
+            color_bar.ax.tick_params(size=0)
+        if self.save_fig:
+            if os.path.exists(self.save_dir):
+                fig.savefig(f'{self.save_dir}{os.sep}{as_id}_{self.cell_pair_id}.{self.fig_format}', dpi=300)
+        plt.show()
 
