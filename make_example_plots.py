@@ -24,8 +24,8 @@ class PlotExamples:
     animal_ids = {'frank': '26473', 'johnjohn': '26471', 'kavorka': '26525',
                   'roy': '26472', 'bruno': '26148', 'jacopo': '26504', 'crazyjoe': '26507'}
 
-    elev_azimuth_3d = {'frank': (40, 60), 'johnjohn': (10, 120), 'kavorka': (10, 120),
-                       'roy': (10, 120), 'bruno': (10, 120), 'jacopo': (10, 120), 'crazyjoe': (10, 120)}
+    elev_azimuth_3d = {'frank': (40, 60), 'johnjohn': (40, 120), 'kavorka': (10, 120),
+                       'roy': (10, 120), 'jacopo': (10, 120), 'crazyjoe': (40, 0)}
 
     def __init__(self, session=0, cluster_name='', kilosort_output_dir='',
                  save_fig=False, fig_format='png', save_dir='',
@@ -308,7 +308,7 @@ class PlotExamples:
             To add probabilities on plot; defaults to False.
         prob_cmap (str)
             Colormap for probabilities; defaults to 'seismic_r'.
-        size_of_choice (tuple)
+        fig_size_of_choice (tuple)
             Size choice for the CCH figure; defaults to (8, 6).
         cch_color_alpha (dict)
             The color and transparency of CCH; defaults to {'c': '#080808', 'alpha': .4}.
@@ -331,7 +331,7 @@ class PlotExamples:
 
         add_prob = kwargs['add_prob'] if 'add_prob' in kwargs.keys() and type(kwargs['add_prob']) == bool else False
         prob_cmap = kwargs['prob_cmap'] if 'prob_cmap' in kwargs.keys() and type(kwargs['prob_cmap']) == str else 'seismic_r'
-        size_of_choice = kwargs['size_of_choice'] if 'size_of_choice' in kwargs.keys() and type(kwargs['size_of_choice']) == tuple else (8, 6)
+        fig_size_of_choice = kwargs['fig_size_of_choice'] if 'fig_size_of_choice' in kwargs.keys() and type(kwargs['fig_size_of_choice']) == tuple else (8, 6)
         cch_color_alpha = kwargs['cch_color_alpha'] if 'cch_color_alpha' in kwargs.keys() \
                                                        and type(kwargs['cch_color_alpha']) == dict else {'c': '#080808', 'alpha': .4}
         mid_vline = kwargs['mid_vline'] if 'mid_vline' in kwargs.keys() and type(kwargs['mid_vline']) == bool else True
@@ -356,12 +356,17 @@ class PlotExamples:
         n_spikes_2 = np.asarray(data[as_id][self.cell_pair_id]['data'], dtype=np.float32)[0, 4]
         print(f"Cell 1 had {n_spikes_1} spikes and cell 2 had {n_spikes_2} spikes")
 
-        if rat_id != 'johnjohn':
-            if 'distal' in as_id:
+
+        if 'distal' in as_id:
+            if rat_id != 'johnjohn':
                 as_id_other_bank = as_id.replace('distal', 'intermediate')
             else:
+                as_id_other_bank = 'johnjohn_230520_intermediate'
+        else:
+            if rat_id != 'johnjohn':
                 as_id_other_bank = as_id.replace('intermediate', 'distal')
-            print(as_id, as_id_other_bank, len(as_id_other_bank))
+            else:
+                as_id_other_bank =  'johnjohn_210520_distal'
 
         if to_normalize:
             cch = np.asarray(data[as_id][self.cell_pair_id]['data'], dtype=np.float32)[:, 0] \
@@ -379,7 +384,7 @@ class PlotExamples:
                 probabilities = 1 - np.asarray(data[as_id][self.cell_pair_id]['data'], dtype=np.float32)[:, 2]
             log_probabilities = np.log10(probabilities)
 
-        fig = plt.figure(figsize=size_of_choice)
+        fig = plt.figure(figsize=fig_size_of_choice)
         ax = fig.add_subplot(1, 1, 1)
         if plot_pair_position:
             spc = pd.read_csv(self.sp_profiles_csv)

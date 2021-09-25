@@ -8,13 +8,17 @@ Dimensionality reduction on neural data.
 
 """
 
+import io
 import os
 import sys
+import json
 import numpy as np
+import pandas as pd
 import matplotlib.pyplot as plt
 import umap.umap_ as umap
 from scipy.stats import zscore
 from kneed import KneeLocator
+from sklearn.preprocessing import StandardScaler
 from sklearn.decomposition import PCA
 import decode_events
 import neural_activity
@@ -53,23 +57,26 @@ def get_condensed_features(behavioral_data, bin_size_ms=100):
                                                                               sound=False)
     return condensed
 
+
 class LatentSpace:
 
-    def __init__(self, input_dict, cluster_groups_dir, sp_profiles_csv,
-                 save_fig=False, fig_format='png', save_dir=''):
+    def __init__(self, input_dict={}, cluster_groups_dir='', sp_profiles_csv='',
+                 save_fig=False, fig_format='png', save_dir='', cch_summary_file=''):
         self.input_dict = input_dict
         self.cluster_groups_dir = cluster_groups_dir
         self.sp_profiles_csv = sp_profiles_csv
         self.save_fig = save_fig
         self.fig_format = fig_format
         self.save_dir = save_dir
+        self.cch_summary_file = cch_summary_file
 
     def activity_pca(self, **kwargs):
         """
         Description
         ----------
         This method does PCA on neural activity concatenated across three different
-        sessions and correlates the latent variables with behavioral features.
+        sessions and correlates the latent variables with behavioral features, and
+        also low-dimensionality embedding of activity PCs with UMAP.
         ----------
 
         Parameters
@@ -213,3 +220,137 @@ class LatentSpace:
                 print("Specified save directory doesn't exist. Try again.")
                 sys.exit()
         plt.show()
+
+    def functional_subspaces_cch(self, **kwargs):
+        """
+        Description
+        ----------
+        This method uses GLM results and sensory tuning information to create
+        functional subspaces through PCA and low-dimensionality embedding (UMAP).
+        ----------
+
+        Parameters
+        ----------
+        **kwargs (dictionary)
+        df_pca_columns (list / bool)
+            Columns of the spiking profile csv file to be used for dimensionality reduction;
+            defaults to ['SMI', 'pSMI', 'LMI', 'pLMI', 'pLMIcheck',
+                         'B Speeds', 'C Body_direction', 'C Body_direction_1st_der',
+                         'D Allo_head_direction', 'D Allo_head_direction_1st_der',
+                         'G Neck_elevation', 'G Neck_elevation_1st_der', 'K Ego3_Head_roll',
+                         'K Ego3_Head_roll_1st_der', 'L Ego3_Head_pitch', 'L Ego3_Head_pitch_1st_der',
+                         'M Ego3_Head_azimuth',	'M Ego3_Head_azimuth_1st_der', 'N Back_pitch',
+                         'N Back_pitch_1st_der', 'O Back_azimuth', 'O Back_azimuth_1st_der',
+                         'P Ego2_head_roll', 'P Ego2_head_roll_1st_der', 'Q Ego2_head_pitch',
+                         'Q Ego2_head_pitch_1st_der', 'Z Position', 'Z Self_motion'].
+        pc_selection (str)
+            Has three options: 'knee' for inflexion in scree plot, 'all' for everything
+            and 'proportion' for variance explained proportion; defaults to 'knee'
+        var_explained_proportion (float)
+            Works only if above is 'proportion'; defaults to .9.
+        umap_parameters (dict)
+            User defined parameters; defaults to {'n_components'=2, 'n_neighbors'=5
+                                                  'min_dist': .1, 'metric':'euclidean'}
+        plot_scree (bool)
+            To show or not to show scree plot; defaults to False.
+        save_md (bool)
+            To save or not to save multi-dimensional functional distances; defaults to False.
+
+        Returns
+        ----------
+        functional_umap (.npy file)
+            An array with the UMAP 2-dimensional embedding of functional features.
+        ----------
+        """
+
+        df_pca_columns = kwargs['df_pca_columns'] if 'df_pca_columns' in kwargs.keys() and \
+                                                     type(kwargs['df_pca_columns']) == list else ['SMI', 'pSMI', 'LMI', 'pLMI', 'pLMIcheck',
+                                                                                                  'B Speeds', 'C Body_direction', 'C Body_direction_1st_der',
+                                                                                                  'D Allo_head_direction', 'D Allo_head_direction_1st_der',
+                                                                                                  'G Neck_elevation', 'G Neck_elevation_1st_der', 'K Ego3_Head_roll',
+                                                                                                  'K Ego3_Head_roll_1st_der', 'L Ego3_Head_pitch', 'L Ego3_Head_pitch_1st_der',
+                                                                                                  'M Ego3_Head_azimuth',	'M Ego3_Head_azimuth_1st_der', 'N Back_pitch',
+                                                                                                  'N Back_pitch_1st_der', 'O Back_azimuth', 'O Back_azimuth_1st_der',
+                                                                                                  'P Ego2_head_roll', 'P Ego2_head_roll_1st_der', 'Q Ego2_head_pitch',
+                                                                                                  'Q Ego2_head_pitch_1st_der', 'Z Position', 'Z Self_motion']
+        pc_selection = kwargs['pc_selection'] if 'pc_selection' in kwargs.keys() and kwargs['pc_selection'] in ['knee', 'all', 'proportion'] else 'knee'
+        var_explained_proportion = kwargs['var_explained_proportion'] if 'var_explained_proportion' in kwargs.keys() and type(kwargs['var_explained_proportion']) == float else .9
+        umap_parameters = kwargs['umap_parameters'] if 'umap_parameters' in kwargs.keys() and type(kwargs['umap_parameters']) == dict  \
+            else {'n_components': 2, 'n_neighbors': 5, 'min_dist': .1, 'metric':'euclidean'}
+        plot_scree = kwargs['plot_scree'] if 'plot_scree' in kwargs.keys() and type(kwargs['plot_scree']) == bool else False
+        save_md = kwargs['save_md'] if 'save_md' in kwargs.keys() and type(kwargs['save_md']) == bool else False
+
+        spc = pd.read_csv(self.sp_profiles_csv)
+
+        with open(self.cch_summary_file, 'r') as summary_file:
+            synaptic_data = json.load(summary_file)
+
+        # screen for first covariate nan values, so they can be excluded
+        non_nan_idx_list = spc.loc[~pd.isnull(spc.loc[:, 'first_covariate'])].index.tolist()
+
+        # select important columns, standardize and replace NANs
+        spc_filtered = spc.loc[non_nan_idx_list, df_pca_columns].values
+        spc_filtered = StandardScaler().fit_transform(spc_filtered)
+        np.nan_to_num(x=spc_filtered, copy=False, nan=0)
+
+        # before dim reduction, test there is a md distance between areas
+        if save_md:
+            pl_dict = {'VV': {'md_distance': []}, 'AA': {'md_distance': []},
+                       'MM': {'md_distance': []}, 'SS': {'md_distance': []}}
+            for area in synaptic_data.keys():
+                if area == 'VV' or area == 'AA':
+                    animal_list = ['kavorka', 'johnjohn', 'frank']
+                else:
+                    animal_list = ['jacopo', 'crazyjoe', 'roy']
+                for animal in animal_list:
+                    for animal_session in synaptic_data[area][animal].keys():
+                        for pair_idx, pair in enumerate(synaptic_data[area][animal][animal_session]['pairs']):
+                            cl1, cl2 = pair.split('-')
+                            spc_pos1 = spc[(spc['cluster_id'] == cl1) & (spc['session_id'] == animal_session)].index.tolist()[0]
+                            spc_pos2 = spc[(spc['cluster_id'] == cl2) & (spc['session_id'] == animal_session)].index.tolist()[0]
+                            if spc_pos1 in non_nan_idx_list and spc_pos2 in non_nan_idx_list:
+                                pos1 = non_nan_idx_list.index(spc_pos1)
+                                pos2 = non_nan_idx_list.index(spc_pos2)
+                                pl_dict[area]['md_distance'].append(np.abs(np.linalg.norm(spc_filtered[pos1, :] - spc_filtered[pos2, :])))
+            with io.open(f'{self.save_dir}{os.sep}md_distances.json', 'w', encoding='utf-8') as to_save_file:
+                to_save_file.write(json.dumps(pl_dict, ensure_ascii=False, indent=4))
+
+        # do PCA
+        pca = PCA(whiten=True)
+        pc_embedding = pca.fit_transform(spc_filtered)
+        pc_var_explained = pca.explained_variance_ratio_
+
+        # select the relevant PC loadings
+        if pc_selection == 'all':
+            pcs_to_keep = pc_embedding[:, :]
+            pc_cutoff = pc_embedding.shape[1]-1
+        elif pc_selection == 'knee':
+            kn = KneeLocator(list(range(len(pc_var_explained))), pc_var_explained, curve='convex', direction='decreasing')
+            pcs_to_keep = pc_embedding[:, :kn.knee+1]
+            pc_cutoff = kn.knee
+        else:
+            cumulative_var = 0
+            var_idx = 0
+            while cumulative_var < var_explained_proportion:
+                cumulative_var += pc_var_explained[var_idx]
+                var_idx += 1
+            pcs_to_keep = pc_embedding[:, :var_idx+1]
+            pc_cutoff = var_idx+1
+
+        # plot the selected PCs with variance explained
+        if plot_scree:
+            fig, ax = plt.subplots(1, 1)
+            ax.plot(pc_var_explained, color='#999999')
+            ax.axvline(x=pc_cutoff, ls='--', color='#000000')
+            ax.set_xlabel('PC')
+            ax.set_xticks(list(range(0, len(pc_var_explained), 100)) + [pc_cutoff])
+            ax.set_ylabel('% variance explained')
+            ax.set_yticks([.0, .10, .20, .30, .40])
+            ax.set_yticklabels([0, 10, 20, 30, 40])
+            plt.show()
+
+        # do UMAP on reduced PC space
+        umap_embedding = umap.UMAP(n_components=umap_parameters['n_components'], n_neighbors=umap_parameters['n_neighbors'],
+                                   min_dist=umap_parameters['min_dist'], metric=umap_parameters['metric'])
+        mapper = umap_embedding.fit_transform(pcs_to_keep)
+        np.save(f"{self.save_dir}{os.sep}UMAP_embedding_cluster_function_{pc_selection}_n{umap_parameters['n_neighbors']}_{umap_parameters['metric']}.npy", mapper)

@@ -196,6 +196,9 @@ def calculate_p_values(cch, slow_baseline):
 
 class FunctionalConnectivity:
 
+    animal_ids = {'frank': '26473', 'johnjohn': '26471', 'kavorka': '26525',
+                  'roy': '26472', 'bruno': '26148', 'jacopo': '26504', 'crazyjoe': '26507'}
+
     tuning_categories = {1: ['Z Position', 'C Body direction'],
                          2: ['Z Self_motion', 'B Speeds', 'C Body_direction_1st_der'],
                          3: ['K Ego3_Head_roll', 'M Ego3_Head_azimuth', 'L Ego3_Head_pitch'],
@@ -209,7 +212,7 @@ class FunctionalConnectivity:
 
     def __init__(self, pkl_sessions_dir='', cluster_groups_dir='',
                  sp_profiles_csv='', pkl_file='', pkl_files=[], save_dir='',
-                 mat_file_dirs=[]):
+                 mat_file_dirs=[], cch_data_dir=''):
         self.pkl_sessions_dir = pkl_sessions_dir
         self.cluster_groups_dir = cluster_groups_dir
         self.sp_profiles_csv = sp_profiles_csv
@@ -217,6 +220,7 @@ class FunctionalConnectivity:
         self.pkl_file = pkl_file
         self.save_dir=save_dir
         self.mat_file_dirs = mat_file_dirs
+        self.cch_data_dir = cch_data_dir
 
     def noise_corr(self, **kwargs):
         """
@@ -546,8 +550,8 @@ class FunctionalConnectivity:
                                 output_dict[sp_session_id][cl_pair] = {'peak_time': 'nan',
                                                                        'excitatory': True,
                                                                        'sp_profiles': ['nan', 'nan'],
-                                                                       'broad_category': ['nan', 'nan'],
-                                                                       'first_covariate': ['nan', 'nan'],
+                                                                       'broad_category': ['null', 'null'],
+                                                                       'first_covariate': ['null', 'null'],
                                                                        'original_mat_file': 'nan',
                                                                        'data': data[cl_pair].tolist()}
 
@@ -573,5 +577,158 @@ class FunctionalConnectivity:
                                     output_dict[sp_session_id][cl_pair]['first_covariate'][1] = profile_data.loc[(profile_data['session_id'] == sp_session_id)
                                                                                                                  & (profile_data['cluster_id'] == pair_split[1]), 'first_covariate'].values[0]
 
+
         with io.open(f'{self.save_dir}{os.sep}{json_file_name}.json', 'w', encoding='utf-8') as to_save_file:
             to_save_file.write(json.dumps(output_dict, ensure_ascii=False, indent=4))
+
+
+    def cross_correlations_summary(self, **kwargs):
+        """
+        Description
+        ----------
+        This method summarizes spiking cross-correlation results.
+        ----------
+
+        Parameters
+        ----------
+        **kwargs (dictionary)
+        cch_time (float)
+            The one-sided time of the CCG; defaults to 20 (ms).
+        bin_num (float)
+            The one-sided number of bins for the CCG; defaults to 50.
+        critical_p_value (float)
+            The p_value below something is considered statistically significant; defaults to 0.05
+        ----------
+
+        Returns
+        ----------
+        cch_summary (.json file)
+            A file with the CCH summary results.
+        ----------
+        """
+
+        cch_time = kwargs['cch_time'] if 'cch_time' in kwargs.keys() and type(kwargs['cch_time']) == int else 20
+        bin_num = kwargs['bin_num'] if 'bin_num' in kwargs.keys() and type(kwargs['bin_num']) == int else 50
+        critical_p_value = kwargs['critical_p_value'] if 'critical_p_value' in kwargs.keys() and type(kwargs['critical_p_value']) == float else .05
+
+        cch_total_range = np.around(np.linspace(-cch_time, cch_time, (bin_num*2)+1), decimals=1)
+
+        spc = pd.read_csv(self.sp_profiles_csv)
+
+        plotting_dict = {}
+        for one_file in os.listdir(f'{self.cch_data_dir}'):
+            if one_file[-6] == one_file[-7]:
+                pair_region_id = one_file[-7:-5]
+                plotting_dict[pair_region_id] = {'distances':[],
+                                                 'timing': [],
+                                                 'strength': [],
+                                                 'type': {'excitatory': 0, 'inhibitory': 0},
+                                                 'profile': {'RS': 0, 'FS': 0},
+                                                 'SMI': {'excited': 0,
+                                                         'suppressed': 0,
+                                                         'ns': 0},
+                                                 'LMI': {'excited': 0,
+                                                         'suppressed': 0,
+                                                         'ns': 0},
+                                                 'behavior': {'nan': 0,
+                                                              'null': 0,
+                                                              'Ego3_Head_roll_1st_der': 0,
+                                                              'Ego3_Head_azimuth_1st_der': 0,
+                                                              'Ego3_Head_pitch_1st_der': 0,
+                                                              'Ego3_Head_roll': 0,
+                                                              'Ego3_Head_azimuth': 0,
+                                                              'Ego3_Head_pitch': 0,
+                                                              'Ego2_head_roll_1st_der': 0,
+                                                              'Allo_head_direction_1st_der': 0,
+                                                              'Ego2_head_pitch_1st_der': 0,
+                                                              'Ego2_head_roll': 0,
+                                                              'Allo_head_direction': 0,
+                                                              'Ego2_head_pitch': 0,
+                                                              'Back_azimuth_1st_der': 0,
+                                                              'Back_pitch_1st_der': 0,
+                                                              'Back_azimuth': 0,
+                                                              'Back_pitch': 0,
+                                                              'Neck_elevation': 0,
+                                                              'Neck_elevation_1st_der': 0,
+                                                              'Position': 0,
+                                                              'Body_direction': 0,
+                                                              'Body_direction_1st_der': 0,
+                                                              'Speeds': 0,
+                                                              'Self_motion': 0}}
+                with open(f'{self.cch_data_dir}{os.sep}{one_file}', 'r') as json_pairs_file:
+                    data = json.load(json_pairs_file)
+                    for animal_session in data.keys():
+                        rat_id = [rat for rat in self.animal_ids.keys() if rat in animal_session][0]
+                        if rat_id not in plotting_dict[pair_region_id].keys():
+                            plotting_dict[pair_region_id][rat_id] = {}
+                        if animal_session not in plotting_dict[pair_region_id][rat_id].keys():
+                            plotting_dict[pair_region_id][rat_id][animal_session] = {'pairs': [],
+                                                                                     'directionality': [],
+                                                                                     'strength': [],
+                                                                                     'type': [],
+                                                                                     'clusters': {}}
+                        for pair_id in data[animal_session].keys():
+                            plotting_dict[pair_region_id][rat_id][animal_session]['pairs'].append(pair_id)
+                            plotting_dict[pair_region_id][rat_id][animal_session]['directionality'].append(np.sign(data[animal_session][pair_id]['peak_time']))
+                            if data[animal_session][pair_id]['excitatory'] is True:
+                                plotting_dict[pair_region_id]['type']['excitatory'] += 1
+                                plotting_dict[pair_region_id][rat_id][animal_session]['type'].append('excitatory')
+                            else:
+                                plotting_dict[pair_region_id]['type']['inhibitory'] += 1
+                                plotting_dict[pair_region_id][rat_id][animal_session]['type'].append('inhibitory')
+                            plotting_dict[pair_region_id]['distances'].append(np.abs(np.linalg.norm(np.array(spc.iloc[spc[(spc['cluster_id'] == pair_id.split('-')[0]) & (spc['session_id'] == animal_session)].index, -3:]).ravel()
+                                                                                                    - np.array(spc.iloc[spc[(spc['cluster_id'] == pair_id.split('-')[1]) & (spc['session_id'] == animal_session)].index, -3:]).ravel())))
+                            plotting_dict[pair_region_id]['timing'].append(np.abs(data[animal_session][pair_id]['peak_time']))
+                            idx_of_interest = np.where(cch_total_range == data[animal_session][pair_id]['peak_time'])[0][0]
+                            cross_corr_data = np.array(data[animal_session][pair_id]['data'])
+                            strength = np.abs((cross_corr_data[idx_of_interest, 0] - cross_corr_data[idx_of_interest, 1])/np.min([cross_corr_data[0, 3], cross_corr_data[0, 4]]))
+                            plotting_dict[pair_region_id]['strength'].append(strength)
+                            plotting_dict[pair_region_id][rat_id][animal_session]['strength'].append(strength)
+                            for cl_idx, cl in enumerate(pair_id.split('-')):
+                                if cl not in plotting_dict[pair_region_id][rat_id][animal_session]['clusters'].keys():
+                                    plotting_dict[pair_region_id][rat_id][animal_session]['clusters'][cl] = {'XYZ': 0,
+                                                                                                             'profile': 0,
+                                                                                                             'SMI': 'ns',
+                                                                                                             'LMI': 'ns',
+                                                                                                             'behavior': 0}
+                                    plotting_dict[pair_region_id][rat_id][animal_session]['clusters'][cl]['XYZ'] = \
+                                        list(np.array(spc.iloc[spc[(spc['cluster_id'] == cl) & (spc['session_id'] == animal_session)].index, -3:]).ravel())
+                                    plotting_dict[pair_region_id]['profile'][data[animal_session][pair_id]['sp_profiles'][cl_idx]] += 1
+                                    plotting_dict[pair_region_id][rat_id][animal_session]['clusters'][cl]['profile'] = \
+                                        data[animal_session][pair_id]['sp_profiles'][cl_idx]
+                                    smi_values = np.array(spc.iloc[spc[(spc['cluster_id'] == cl) & (spc['session_id'] == animal_session)].index, 8:10]).ravel()
+                                    if not np.isnan(smi_values).all():
+                                        if smi_values[1] > critical_p_value:
+                                            plotting_dict[pair_region_id][rat_id][animal_session]['clusters'][cl]['SMI'] = 'ns'
+                                            plotting_dict[pair_region_id]['SMI']['ns'] += 1
+                                        else:
+                                            if smi_values[0] > 0:
+                                                plotting_dict[pair_region_id][rat_id][animal_session]['clusters'][cl]['SMI'] = 'excited'
+                                                plotting_dict[pair_region_id]['SMI']['excited'] += 1
+                                            else:
+                                                plotting_dict[pair_region_id][rat_id][animal_session]['clusters'][cl]['SMI'] = 'suppressed'
+                                                plotting_dict[pair_region_id]['SMI']['suppressed'] += 1
+                                    else:
+                                        plotting_dict[pair_region_id][rat_id][animal_session]['clusters'][cl]['SMI'] = 'ns'
+                                        plotting_dict[pair_region_id]['SMI']['ns'] += 1
+
+                                    lmi_values = np.array(spc.iloc[spc[(spc['cluster_id'] == cl) & (spc['session_id'] == animal_session)].index, 10:13]).ravel()
+                                    if not np.isnan(lmi_values).all():
+                                        if lmi_values[1] < critical_p_value < lmi_values[2]:
+                                            if lmi_values[0] > 0:
+                                                plotting_dict[pair_region_id][rat_id][animal_session]['clusters'][cl]['LMI'] = 'excited'
+                                                plotting_dict[pair_region_id]['LMI']['excited'] += 1
+                                            else:
+                                                plotting_dict[pair_region_id][rat_id][animal_session]['clusters'][cl]['LMI'] = 'suppressed'
+                                                plotting_dict[pair_region_id]['LMI']['suppressed'] += 1
+                                        else:
+                                            plotting_dict[pair_region_id]['LMI']['ns'] += 1
+                                    else:
+                                        plotting_dict[pair_region_id]['LMI']['ns'] += 1
+
+                                    plotting_dict[pair_region_id]['behavior'][data[animal_session][pair_id]['first_covariate'][cl_idx]] += 1
+                                    plotting_dict[pair_region_id][rat_id][animal_session]['clusters'][cl]['behavior'] = data[animal_session][pair_id]['first_covariate'][cl_idx]
+
+        with io.open(f'{self.save_dir}{os.sep}cch_summary_synaptic.json', 'w', encoding='utf-8') as to_save_file:
+            to_save_file.write(json.dumps(plotting_dict, ensure_ascii=False, indent=4))
+

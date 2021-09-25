@@ -16,11 +16,17 @@ import json
 import pickle
 import numpy as np
 import matplotlib.pyplot as plt
+import seaborn as sns
+from mpl_toolkits.mplot3d.axes3d import Axes3D
+from matplotlib.patches import FancyArrowPatch
+from mpl_toolkits.mplot3d.proj3d import proj_transform
 import pandas as pd
 from tqdm import tqdm
+from random import gauss
 from scipy.stats import wilcoxon
 from scipy.stats import sem
 from scipy.stats import pearsonr
+from scipy.stats import mannwhitneyu
 import decode_events
 import sessions2load
 import make_ratemaps
@@ -28,8 +34,71 @@ import neural_activity
 import select_clusters
 import define_spiking_profile
 
+class Arrow3D(FancyArrowPatch):
+
+    def __init__(self, x, y, z, dx, dy, dz, *args, **kwargs):
+        super().__init__((0, 0), (0, 0), *args, **kwargs)
+        self._xyz = (x, y, z)
+        self._dxdydz = (dx, dy, dz)
+
+    def draw(self, renderer):
+        x1, y1, z1 = self._xyz
+        dx, dy, dz = self._dxdydz
+        x2, y2, z2 = (x1 + dx, y1 + dy, z1 + dz)
+
+        xs, ys, zs = proj_transform((x1, x2), (y1, y2), (z1, z2), self.axes.M)
+        self.set_positions((xs[0], ys[0]), (xs[1], ys[1]))
+        super().draw(renderer)
+
+def _arrow3D(ax, x, y, z, dx, dy, dz, *args, **kwargs):
+    arrow = Arrow3D(x, y, z, dx, dy, dz, *args, **kwargs)
+    ax.add_artist(arrow)
+
+setattr(Axes3D, 'arrow3D', _arrow3D)
+
 
 class PlotGroupResults:
+
+    mi_colors = {'excited': '#EEC900', 'suppressed': '#00008B', 'ns': '#DEDEDE'}
+
+    tuning_categories = {0: '#232323',  # unclassified
+                         1: '#C8D92B',  # position
+                         2: '#777831',  # self-motion, speeds
+                         3: '#CC2128',  # ego head position
+                         4: '#E28586',  # ego head movement
+                         5: '#6C2265',  # allo head position
+                         6: '#B799C8',  # allo head movement
+                         7: '#1B6AA0',  # back position
+                         8: '#569CB2',  # back movement
+                         9: '#F47927',  # neck_elevation
+                         10: '#FAAD73'}  # neck movement
+
+    feature_colors = {'Unclassified': '#232323',
+                      'Ego3_Head_roll_1st_der': '#F38D9F',
+                      'Ego3_Head_azimuth_1st_der': '#F27170',
+                      'Ego3_Head_pitch_1st_der': '#EE4E6F',
+                      'Ego3_Head_roll': '#ED2A2C',
+                      'Ego3_Head_azimuth': '#CA2026',
+                      'Ego3_Head_pitch': '#AC2023',
+                      'Ego2_head_roll_1st_der': '#BE88BB',
+                      'Allo_head_direction_1st_der': '#8D64AA',
+                      'Ego2_head_pitch_1st_der': '#C897C4',
+                      'Ego2_head_roll': '#8D3A95',
+                      'Allo_head_direction': '#8A267E',
+                      'Ego2_head_pitch': '#6F3894',
+                      'Back_azimuth_1st_der': '#86D5F5',
+                      'Back_pitch_1st_der': '#5C8ECA',
+                      'Back_azimuth': '#2977B6',
+                      'Back_pitch': '#15489D',
+                      'Neck_elevation': '#F37827',
+                      'Neck_elevation_1st_der': '#F9AD74',
+                      'Position': '#C8D92B',
+                      'Body_direction': '#64BC62',
+                      'Body_direction_1st_der': '#91C38F',
+                      'Speeds': '#14A049',
+                      'Self_motion': '#665E27',
+                       np.nan: '#000000'}
+
     def __init__(self, session_list=[], cluster_groups_dir='', sp_profiles_csv='',
                  save_fig=False, fig_format='png', save_dir='',
                  decoding_dir='', animal_ids=None,
@@ -37,7 +106,8 @@ class PlotGroupResults:
                  bin_size_ms=50, window_size=10, smooth=False, smooth_sd=1, to_plot=False,
                  input_012_list=[], pkl_load_dir='', critical_p_value=.01,
                  profile_colors=None, modulation_indices_dir='',
-                 all_animals_012={}, tuning_peaks_file='', occ_file=''):
+                 all_animals_012={}, tuning_peaks_file='', occ_file='', cch_summary_file='',
+                 md_distances_file=''):
         if relevant_areas is None:
             relevant_areas = ['A']
         if animal_ids is None:
@@ -68,6 +138,8 @@ class PlotGroupResults:
         self.all_animals_012 = all_animals_012
         self.tuning_peaks_file = tuning_peaks_file
         self.occ_file = occ_file
+        self.cch_summary_file = cch_summary_file
+        self.md_distances_file = md_distances_file
 
     def sound_modulation_summary(self, **kwargs):
         """
@@ -386,8 +458,8 @@ class PlotGroupResults:
             A "snake" plot of the sound stimulation effect.
         pie_chart (fig)
             A pie chart breakdown of sound modulation effects for RS and FS cells.
-        SMI_histogram (fig)
-            A histogram of the SMIs.
+        LMI_histogram (fig)
+            A histogram of the LMIs.
         ----------
         """
 
@@ -500,7 +572,7 @@ class PlotGroupResults:
                           'ns_rs': 0,
                           'ns_fs': 0}
 
-            significance_dict = {'kavorka': {'distal': {}, 'intermediate': {}}, 'johnjohn': {'distal': {}, 'intermediate': {}}, 'frank': {'distal': {}, 'intermediate': {}}}
+            significance_dict = {'crazyjoe': {'distal': {}, 'intermediate': {}}, 'jacopo': {'distal': {}, 'intermediate': {}}, 'roy': {'distal': {}, 'intermediate': {}}}
             for cluster in tqdm(statistics_dict.keys()):
                 session_id = statistics_dict[cluster]['session']
                 file_animal = [animal for animal in select_clusters.ClusterFinder.probe_site_areas.keys() if animal in session_id][0]
@@ -539,11 +611,11 @@ class PlotGroupResults:
                     else:
                         count_dict['ns_fs'] += 1
 
-            # save SMI-filled dataframe to .csv file
+            # save LMI-filled dataframe to .csv file
             profile_data.to_csv(path_or_buf=f'{self.sp_profiles_csv}', sep=';', index=False)
 
             if True:
-                with io.open(f'lmi_significant_{self.relevant_areas[0]}.json', 'w', encoding='utf-8') as mi_file:
+                with io.open(f'/home/bartulm/Downloads/lmi_significant_{self.relevant_areas[0]}.json', 'w', encoding='utf-8') as mi_file:
                     mi_file.write(json.dumps(significance_dict, ensure_ascii=False, indent=4))
 
             print(count_dict)
@@ -1090,5 +1162,440 @@ class PlotGroupResults:
                 print("Specified save directory doesn't exist. Try again.")
                 sys.exit()
         plt.show()
+
+    def plot_cch_summary(self, **kwargs):
+        """
+        Description
+        ----------
+        This method plots the CCH summary results for every brain area.
+        ----------
+
+        Parameters
+        ----------
+        **kwargs (dictionary)
+
+        ----------
+
+        Returns
+        ----------
+        cch_summary (fig)
+            A plot summarizing the CCH results across brain areas.
+        ----------
+        """
+
+        # load the data
+        with open(self.cch_summary_file, 'r') as summary_file:
+            plotting_dict = json.load(summary_file)
+
+        area_rats = {'VV': ['kavorka', 'johnjohn', 'frank'],
+                     'AA': ['kavorka', 'johnjohn', 'frank'],
+                     'MM': ['roy', 'crazyjoe', 'jacopo'],
+                     'SS': ['roy', 'crazyjoe', 'jacopo']}
+
+        # point_3d_dict = {}
+        # for area_area in plotting_dict.keys():
+        #     if area_area not in point_3d_dict.keys():
+        #         point_3d_dict[area_area] = {}
+        #     for animal in area_rats[area_area]:
+        #         if animal not in point_3d_dict[area_area].keys():
+        #             point_3d_dict[area_area][animal] = {'X': [], 'Y': [], 'Z': []}
+        #         for a_s in plotting_dict[area_area][animal].keys():
+        #             for cl in plotting_dict[area_area][animal][a_s]['clusters'].keys():
+        #                 point_3d_dict[area_area][animal]['X'].append(plotting_dict[area_area][animal][a_s]['clusters'][cl]['XYZ'][0])
+        #                 point_3d_dict[area_area][animal]['Y'].append(plotting_dict[area_area][animal][a_s]['clusters'][cl]['XYZ'][1])
+        #                 point_3d_dict[area_area][animal]['Z'].append(plotting_dict[area_area][animal][a_s]['clusters'][cl]['XYZ'][2])
+        #
+        # line_3d_dict = {}
+        # for area_area in plotting_dict.keys():
+        #     if area_area not in line_3d_dict.keys():
+        #         line_3d_dict[area_area] = {}
+        #     for animal in area_rats[area_area]:
+        #         if animal not in line_3d_dict[area_area].keys():
+        #             line_3d_dict[area_area][animal] = {}
+        #         for a_s in plotting_dict[area_area][animal].keys():
+        #             for pair_idx, pair in enumerate(plotting_dict[area_area][animal][a_s]['pairs']):
+        #                 cl1, cl2 = pair.split('-')
+        #                 direction = plotting_dict[area_area][animal][a_s]['directionality'][pair_idx]
+        #                 if direction == 1:
+        #                     line_3d_dict[area_area][animal][f'pair_{pair_idx}'] = [plotting_dict[area_area][animal][a_s]['clusters'][cl1]['XYZ'],
+        #                                                                            plotting_dict[area_area][animal][a_s]['clusters'][cl2]['XYZ'],
+        #                                                                            plotting_dict[area_area][animal][a_s]['strength'][pair_idx]]
+        #                 else:
+        #                     line_3d_dict[area_area][animal][f'pair_{pair_idx}'] = [plotting_dict[area_area][animal][a_s]['clusters'][cl2]['XYZ'],
+        #                                                                            plotting_dict[area_area][animal][a_s]['clusters'][cl1]['XYZ'],
+        #                                                                            plotting_dict[area_area][animal][a_s]['strength'][pair_idx]]
+        # fig = plt.figure(figsize=(4, 12), dpi=300)
+        # gs = fig.add_gridspec(9, 3)
+        # gs.update(wspace=1.5, hspace=1.5)
+        # ax1 = fig.add_subplot(gs[:3, :3], projection='3d')
+        # for pair in line_3d_dict['VV']['frank'].keys():
+        #     pair_data = line_3d_dict['VV']['frank'][pair]
+        #     ax1.arrow3D(pair_data[0][0], pair_data[0][1], pair_data[0][2],
+        #                 pair_data[1][0]-pair_data[0][0], pair_data[1][1]-pair_data[0][1], pair_data[1][2]-pair_data[0][2],
+        #                 mutation_scale=5,
+        #                 arrowstyle='-|>',
+        #                 ls='-',
+        #                 lw=.5+pair_data[2],
+        #                 color='#000000')
+        # ax1.scatter(point_3d_dict['VV']['frank']['X'], point_3d_dict['VV']['frank']['Y'], point_3d_dict['VV']['frank']['Z'], color='#FFFFFF', ec='#000000', alpha=1)
+        # ax1.view_init(elev=20, azim=120)
+        # ax1.set_title(f"#{self.animal_ids['frank']}", pad=0)
+        # ax1.set_xlabel('AP (mm)')
+        # ax1.set_ylabel('ML (mm)')
+        # ax1.set_zlabel('DV (mm)')
+        # ax2 = fig.add_subplot(gs[3:6, :3], projection='3d')
+        # for pair in line_3d_dict['VV']['kavorka'].keys():
+        #     pair_data = line_3d_dict['VV']['kavorka'][pair]
+        #     ax2.arrow3D(pair_data[0][0], pair_data[0][1], pair_data[0][2],
+        #                 pair_data[1][0]-pair_data[0][0], pair_data[1][1]-pair_data[0][1], pair_data[1][2]-pair_data[0][2],
+        #                 mutation_scale=5,
+        #                 arrowstyle='-|>',
+        #                 ls='-',
+        #                 lw=.5+pair_data[2],
+        #                 color='#000000')
+        # ax2.plot3D([-5.85, -5.86],
+        #            [6.0, 5.75],
+        #            [-2, -2], ls='-', color='#000000', lw=.5+.05)
+        # ax2.text(-5.86, 5.75, -2.05, s='5%',  size=8, color='#000000')
+        # ax2.plot3D([-5.85, -5.86],
+        #            [6.0, 5.75],
+        #            [-2.2, -2.2], ls='-', color='#000000', lw=.5+.5)
+        # ax2.text(-5.86, 5.75, -2.25, s='50%',  size=8, color='#000000')
+        # ax2.scatter(point_3d_dict['VV']['kavorka']['X'], point_3d_dict['VV']['kavorka']['Y'], point_3d_dict['VV']['kavorka']['Z'], color='#FFFFFF', ec='#000000', alpha=1)
+        # ax2.view_init(elev=20, azim=120)
+        # ax2.set_title(f"#{self.animal_ids['kavorka']}", pad=0)
+        # ax2.set_xlabel('AP (mm)')
+        # ax2.set_ylabel('ML (mm)')
+        # ax2.set_zlabel('DV (mm)')
+        # ax3 = fig.add_subplot(gs[6:9, :3], projection='3d')
+        # for pair in line_3d_dict['VV']['johnjohn'].keys():
+        #     pair_data = line_3d_dict['VV']['johnjohn'][pair]
+        #     ax3.arrow3D(pair_data[0][0], pair_data[0][1], pair_data[0][2],
+        #                 pair_data[1][0]-pair_data[0][0], pair_data[1][1]-pair_data[0][1], pair_data[1][2]-pair_data[0][2],
+        #                 mutation_scale=5,
+        #                 arrowstyle='-|>',
+        #                 ls='-',
+        #                 lw=.5+pair_data[2],
+        #                 color='#000000')
+        # ax3.scatter(point_3d_dict['VV']['johnjohn']['X'], point_3d_dict['VV']['johnjohn']['Y'], point_3d_dict['VV']['johnjohn']['Z'], color='#FFFFFF', ec='#000000', alpha=1)
+        # ax3.view_init(elev=20, azim=120)
+        # ax3.set_title(f"#{self.animal_ids['johnjohn']}", pad=0)
+        # ax3.set_xlabel('AP (mm)')
+        # ax3.set_ylabel('ML (mm)')
+        # ax3.set_zlabel('DV (mm)')
+        # plt.show()
+
+        # fig2, f_ax = plt.subplots(1, 1, figsize=(7, 6), dpi=400)
+        # sns.regplot(np.log10(plotting_dict['VV']['distances']), np.log10(plotting_dict['VV']['strength']), color='#000000', scatter_kws={'alpha':.3})
+        # f_ax.set_xlabel('log$_{10}$pair distance (mm)')
+        # f_ax.set_xlim(-3, .5)
+        # f_ax.set_xticks([-2.5, -2, -1.5, -1, -.5, 0])
+        # f_ax.set_ylabel('log$_{10}$synapse strength (A.U.)')
+        # f_ax.set_ylim(-2.75, -.25)
+        # f_ax.text(x=-2.85, y=-.55, s='r=-.1 (p=.07)', fontsize=16)
+        # h_bins = [1.4, 1.8, 2.2, 2.6, 3, 3.4, 3.8, 4.2]
+        # inset_axes = fig2.add_axes(rect=[.65, .65, .22, .20])
+        # inset_axes.hist(plotting_dict['VV']['timing'], bins=h_bins, color='#000000', alpha=.3)
+        # inset_axes.plot(np.median(plotting_dict['VV']['timing']), 5, marker='o', ms=5, c='#000000')
+        # inset_axes.set_xticks([1.6, 2, 2.4, 2.8, 3.2, 3.6, 4])
+        # inset_axes.set_xticklabels([1.6, 2, 2.4, 2.8, 3.2, 3.6, 4], fontsize=6)
+        # inset_axes.set_xlabel('CC offset (ms)')
+        # inset_axes.set_yticks([0, 50, 100, 150])
+        # inset_axes.set_yticklabels([0, 50, 100, 150], fontsize=6)
+        # inset_axes.set_ylabel('Number of pairs')
+        # plt.show()
+
+        fig3 = plt.figure(figsize=(5, 6), dpi=400)
+        gs = fig3.add_gridspec(3, 4)
+        gs.update(hspace=.5)
+        ff_ax1 = fig3.add_subplot(gs[0, 0])
+        ff_ax1.bar(x=[0, 1], height=[plotting_dict['VV']['profile']['RS'], plotting_dict['VV']['profile']['FS']], width=.9, color=['#698B69', '#9BCD9B'])
+        ff_ax1.set_xticks([0, 1])
+        ff_ax1.set_xticklabels(['RS', 'FS'], fontsize=8)
+        ff_ax1.set_xlabel('profile', fontsize=10)
+        ff_ax1.set_yticks([0, 125, 250])
+        ff_ax1.set_yticklabels([0, 125, 250], fontsize=8)
+        ff_ax1.set_ylabel('cell #', fontsize=10)
+        ff_ax2 = fig3.add_subplot(gs[1, 0])
+        ff_ax2.bar(x=[0, 1, 2], height=[plotting_dict['VV']['SMI']['excited'], plotting_dict['VV']['SMI']['suppressed'], plotting_dict['VV']['SMI']['ns']], width=.9, color=['#EEC900', '#00008B', '#DEDEDE'])
+        ff_ax2.set_xticks([0, 1, 2])
+        ff_ax2.set_xticklabels(['exc', 'sup', 'ns'], fontsize=8)
+        ff_ax2.set_xlabel('SM', fontsize=10)
+        ff_ax2.set_yticks([0, 100, 200, 300])
+        ff_ax2.set_yticklabels([0, 100, 200, 300], fontsize=8)
+        ff_ax2.set_ylabel('cell #', fontsize=10)
+        ff_ax3 = fig3.add_subplot(gs[2, 0])
+        ff_ax3.bar(x=[0, 1, 2], height=[plotting_dict['VV']['LMI']['excited'], plotting_dict['VV']['LMI']['suppressed'], plotting_dict['VV']['LMI']['ns']], width=.9, color=['#EEC900', '#00008B', '#DEDEDE'])
+        ff_ax3.set_xticks([0, 1, 2])
+        ff_ax3.set_xticklabels(['exc', 'sup', 'ns'], fontsize=8)
+        ff_ax3.set_xlabel('LM', fontsize=10)
+        ff_ax3.set_yticks([0, 125, 250])
+        ff_ax3.set_yticklabels([0, 125, 250], fontsize=8)
+        ff_ax3.set_ylabel('cell #', fontsize=10)
+        ff_ax4 = fig3.add_subplot(gs[:, 1:4])
+        ff_ax4.bar(x=list(range(24)), height=[plotting_dict['VV']['behavior']['null'],
+                                              plotting_dict['VV']['behavior']['Ego3_Head_roll_1st_der'],
+                                              plotting_dict['VV']['behavior']['Ego3_Head_azimuth_1st_der'],
+                                              plotting_dict['VV']['behavior']['Ego3_Head_pitch_1st_der'],
+                                              plotting_dict['VV']['behavior']['Ego3_Head_roll'],
+                                              plotting_dict['VV']['behavior']['Ego3_Head_azimuth'],
+                                              plotting_dict['VV']['behavior']['Ego3_Head_pitch'],
+                                              plotting_dict['VV']['behavior']['Ego2_head_roll_1st_der'],
+                                              plotting_dict['VV']['behavior']['Allo_head_direction_1st_der'],
+                                              plotting_dict['VV']['behavior']['Ego2_head_pitch_1st_der'],
+                                              plotting_dict['VV']['behavior']['Ego2_head_roll'],
+                                              plotting_dict['VV']['behavior']['Allo_head_direction'],
+                                              plotting_dict['VV']['behavior']['Ego2_head_pitch'],
+                                              plotting_dict['VV']['behavior']['Back_azimuth_1st_der'],
+                                              plotting_dict['VV']['behavior']['Back_pitch_1st_der'],
+                                              plotting_dict['VV']['behavior']['Back_azimuth'],
+                                              plotting_dict['VV']['behavior']['Back_pitch'],
+                                              plotting_dict['VV']['behavior']['Neck_elevation'],
+                                              plotting_dict['VV']['behavior']['Neck_elevation_1st_der'],
+                                              plotting_dict['VV']['behavior']['Position'],
+                                              plotting_dict['VV']['behavior']['Body_direction'],
+                                              plotting_dict['VV']['behavior']['Body_direction_1st_der'],
+                                              plotting_dict['VV']['behavior']['Speeds'],
+                                              plotting_dict['VV']['behavior']['Self_motion']], width=.9, color=[self.feature_colors[key] for key in self.feature_colors.keys()])
+        ff_ax4.yaxis.tick_right()
+        ff_ax4.yaxis.set_label_position('right')
+        ff_ax4.set_ylabel('cell #', fontsize=10)
+        ff_ax4.set_xlabel('Behavioral tuning', fontsize=10)
+        plt.tight_layout()
+        plt.show()
+
+    def plot_cch_functional(self, **kwargs):
+        """
+        Description
+        ----------
+        This method plots the CCH summary results for every brain area.
+        ----------
+
+        Parameters
+        ----------
+        **kwargs (dictionary)
+        umap_embedding_file (str)
+            File location of UMAP embedding file.
+        plot_raw_umap (bool)
+            Plots raw UMAP results with nothing else; defaults to False.
+        plot_connected_cl (bool)
+            Plots connected cluster pairs in all areas; defaults to False.
+        filter_unclassified (bool)
+            Remove GLM 'unclassified' clusters from the plot; defaults to False.
+        plot_sm (bool)
+            Use sensory modulation colors to plot; defaults to False.
+        sm (str)
+            Sensory modulation of interest: 'sound' or 'luminance'; defaults to 'sound.
+        df_pca_columns (list / bool)
+            Columns of the spiking profile csv file to be used for dimensionality reduction;
+            defaults to ['SMI', 'pSMI', 'LMI', 'pLMI', 'pLMIcheck',
+                         'B Speeds', 'C Body_direction', 'C Body_direction_1st_der',
+                         'D Allo_head_direction', 'D Allo_head_direction_1st_der',
+                         'G Neck_elevation', 'G Neck_elevation_1st_der', 'K Ego3_Head_roll',
+                         'K Ego3_Head_roll_1st_der', 'L Ego3_Head_pitch', 'L Ego3_Head_pitch_1st_der',
+                         'M Ego3_Head_azimuth',	'M Ego3_Head_azimuth_1st_der', 'N Back_pitch',
+                         'N Back_pitch_1st_der', 'O Back_azimuth', 'O Back_azimuth_1st_der',
+                         'P Ego2_head_roll', 'P Ego2_head_roll_1st_der', 'Q Ego2_head_pitch',
+                         'Q Ego2_head_pitch_1st_der', 'Z Position', 'Z Self_motion'].
+        ----------
+
+        Returns
+        ----------
+        cch_function (fig)
+            A plot summarizing the CCH results across brain areas.
+        ---
+        """
+        umap_embedding_file = kwargs['umap_embedding_file'] if 'umap_embedding_file' in kwargs.keys() and type(kwargs['umap_embedding_file']) == str else ''
+        plot_raw_umap = kwargs['plot_raw_umap'] if 'plot_raw_umap' in kwargs.keys() and type(kwargs['plot_raw_umap']) == bool else False
+        plot_connected_cl = kwargs['plot_connected_cl'] if 'plot_connected_cl' in kwargs.keys() and type(kwargs['plot_connected_cl']) == bool else False
+        filter_unclassified = kwargs['filter_unclassified'] if 'filter_unclassified' in kwargs.keys() and type(kwargs['filter_unclassified']) == bool else False
+        plot_sm = kwargs['plot_sm'] if 'plot_sm' in kwargs.keys() and type(kwargs['plot_sm']) == bool else False
+        sm = kwargs['sm'] if 'sm' in kwargs.keys() and kwargs['sm'] in ['sound', 'luminance'] else 'sound'
+        df_pca_columns = kwargs['df_pca_columns'] if 'df_pca_columns' in kwargs.keys() and \
+                                                     type(kwargs['df_pca_columns']) == list else ['SMI', 'pSMI', 'LMI', 'pLMI', 'pLMIcheck',
+                                                                                                  'B Speeds', 'C Body_direction', 'C Body_direction_1st_der',
+                                                                                                  'D Allo_head_direction', 'D Allo_head_direction_1st_der',
+                                                                                                  'G Neck_elevation', 'G Neck_elevation_1st_der', 'K Ego3_Head_roll',
+                                                                                                  'K Ego3_Head_roll_1st_der', 'L Ego3_Head_pitch', 'L Ego3_Head_pitch_1st_der',
+                                                                                                  'M Ego3_Head_azimuth', 'M Ego3_Head_azimuth_1st_der', 'N Back_pitch',
+                                                                                                  'N Back_pitch_1st_der', 'O Back_azimuth', 'O Back_azimuth_1st_der',
+                                                                                                  'P Ego2_head_roll', 'P Ego2_head_roll_1st_der', 'Q Ego2_head_pitch',
+                                                                                                  'Q Ego2_head_pitch_1st_der', 'Z Position', 'Z Self_motion']
+
+        # load the data
+        umap_data = np.load(umap_embedding_file)
+        spc = pd.read_csv(self.sp_profiles_csv)
+        with open(self.cch_summary_file, 'r') as summary_file:
+            synaptic_data = json.load(summary_file)
+        with open(self.md_distances_file, 'r') as md_file:
+            md_distances_data = json.load(md_file)
+
+        # screen for first covariate nan values, so they can be excluded
+        non_nan_idx_list = spc.loc[~pd.isnull(spc.loc[:, 'first_covariate'])].index.tolist()
+
+        # get colors for functional features
+        color_list = [self.tuning_categories[spc.loc[i, 'category']] for i in non_nan_idx_list]
+
+        if plot_sm:
+            color_list = []
+            for i in range(spc.shape[0]):
+                if i in non_nan_idx_list:
+                    if sm == 'sound':
+                        if spc.loc[i, 'pSMI'] < .05 and spc.loc[i, 'SMI'] < 0:
+                            color_list.append(self.mi_colors['suppressed'])
+                        elif spc.loc[i, 'pSMI'] < .05 and spc.loc[i, 'SMI'] > 0:
+                            color_list.append(self.mi_colors['excited'])
+                        else:
+                            color_list.append(self.mi_colors['ns'])
+                    elif sm == 'luminance':
+                        if spc.loc[i, 'pLMI'] < .05 < spc.loc[i, 'pLMIcheck'] and spc.loc[i, 'LMI'] < 0:
+                            color_list.append(self.mi_colors['suppressed'])
+                        elif spc.loc[i, 'pLMI'] < .05 < spc.loc[i, 'pLMIcheck'] and spc.loc[i, 'LMI'] > 0:
+                            color_list.append(self.mi_colors['excited'])
+                        else:
+                            color_list.append(self.mi_colors['ns'])
+
+        if filter_unclassified:
+            unclassified_idx_lst = []
+            for c_idx, c in enumerate(color_list):
+                if c == '#232323':
+                    unclassified_idx_lst.append(c_idx)
+            umap_data = np.delete(arr=umap_data, obj=unclassified_idx_lst, axis=0)
+            try:
+                while True:
+                    color_list.remove('#232323')
+            except ValueError:
+                pass
+
+        # plot raw UMAP results
+        if plot_raw_umap:
+            fig = plt.figure(dpi=400)
+            ax = fig.add_subplot()
+            ax.scatter(umap_data[:, 0], umap_data[:, 1], s=10, c=color_list, alpha=.5)
+            # ax.set_title('Sound modulation')
+            ax.set_xlabel('UMAP 1')
+            ax.set_ylabel('UMAP 2')
+            plt.show()
+
+        pl_dict = {'VV': {'points': [], 'pairs': [], 'strength': [], 'type': []}, 'AA': {'points': [], 'pairs': [], 'strength': [], 'type': []},
+                   'MM': {'points': [], 'pairs': [], 'strength': [], 'type': []}, 'SS': {'points': [], 'pairs': [], 'strength': [], 'type': []}}
+
+        for area in synaptic_data.keys():
+            if area == 'VV' or area == 'AA':
+                animal_list = ['kavorka', 'johnjohn', 'frank']
+            else:
+                animal_list = ['jacopo', 'crazyjoe', 'roy']
+            for animal in animal_list:
+                for animal_session in synaptic_data[area][animal].keys():
+                    for pair_idx, pair in enumerate(synaptic_data[area][animal][animal_session]['pairs']):
+                        cl1, cl2 = pair.split('-')
+                        spc_pos1 = spc[(spc['cluster_id'] == cl1) & (spc['session_id'] == animal_session)].index.tolist()[0]
+                        spc_pos2 = spc[(spc['cluster_id'] == cl2) & (spc['session_id'] == animal_session)].index.tolist()[0]
+                        if spc_pos1 in non_nan_idx_list and spc_pos2 in non_nan_idx_list:
+                            pos1 = non_nan_idx_list.index(spc_pos1)
+                            pos2 = non_nan_idx_list.index(spc_pos2)
+                            if pos1 not in pl_dict[area]['points']:
+                                pl_dict[area]['points'].append(pos1)
+                            if pos2 not in pl_dict[area]['points']:
+                                pl_dict[area]['points'].append(pos2)
+                            if synaptic_data[area][animal][animal_session]['directionality'][pair_idx] < 0:
+                                pl_dict[area]['pairs'].append((pos1, pos2))
+                            else:
+                                pl_dict[area]['pairs'].append((pos2, pos1))
+                            pl_dict[area]['strength'].append(synaptic_data[area][animal][animal_session]['strength'][pair_idx])
+                            if synaptic_data[area][animal][animal_session]['type'][pair_idx] == 'excitatory':
+                                pl_dict[area]['type'].append('-')
+                            elif synaptic_data[area][animal][animal_session]['type'][pair_idx] == 'inhibitory':
+                                pl_dict[area]['type'].append('-.')
+
+        # plot
+        if plot_connected_cl:
+            area_colors = {'VV': '#E79791', 'AA': '#5F847F', 'MM': '#EEB849', 'SS': '#7396C0'}
+            variables_dict = {'eu_distances': {'VV': [], 'AA': [], 'MM': [], 'SS': []}, 'synapse_strength': {'VV': [], 'AA': [], 'MM': [], 'SS': []}}
+            fig, ax = plt.subplots(2, 2, dpi=500)
+            for sub_idx, subplot in enumerate(['VV', 'AA', 'MM', 'SS']):
+                ax = plt.subplot(2, 2, sub_idx+1)
+                ax.scatter(umap_data[pl_dict[subplot]['points'], 0], umap_data[pl_dict[subplot]['points'], 1], s=2, c=area_colors[subplot], alpha=.5)
+                ax.set_title(f'{subplot} connections')
+                ax.set_xlabel('UMAP 1', fontsize=10)
+                ax.set_ylabel('UMAP 2', fontsize=10)
+                if subplot == 'VV' or subplot == 'AA':
+                    ax.set_xlim(-1, 12)
+                    ax.set_xticks([2, 4, 6, 8, 10])
+                    ax.set_ylim(-2, 11)
+                    ax.set_yticks([0, 2, 4, 6, 8, 10])
+                else:
+                    if subplot == 'MM':
+                        ax.set_xlim(-1, 9)
+                        ax.set_xticks([0, 2, 4, 6, 8])
+                    else:
+                        ax.set_xlim(1, 9)
+                        ax.set_xticks([2, 4, 6, 8])
+                    ax.set_ylim(-2, 9)
+                    ax.set_yticks([0, 2, 4, 6, 8])
+                for con_idx, connection in enumerate(pl_dict[subplot]['pairs']):
+                    variables_dict['eu_distances'][subplot] = md_distances_data[subplot]['md_distance']
+                    variables_dict['synapse_strength'][subplot].append(pl_dict[subplot]['strength'][con_idx])
+                    ax.plot([umap_data[connection[0], 0], umap_data[connection[1], 0]], [umap_data[connection[0], 1], umap_data[connection[1], 1]],
+                            lw=pl_dict[subplot]['strength'][con_idx]*3, ls=pl_dict[subplot]['type'][con_idx], c=area_colors[subplot])
+            plt.tight_layout()
+            plt.show()
+
+            for variable in variables_dict.keys():
+                fig2, ax2 = plt.subplots(1, 1, dpi=500)
+                xs = [[gauss(0.25*(ind+1), 0.015) for x in range(len(variables_dict[variable][area]))] for ind, area in enumerate(variables_dict[variable].keys())]
+                for sub_idx, subplot in enumerate(['VV', 'AA', 'MM', 'SS']):
+                    ax2.scatter(xs[sub_idx], variables_dict[variable][subplot], s=10, color=area_colors[subplot], alpha=.5)
+                    parts = ax2.violinplot(dataset=variables_dict[variable][subplot], positions=[np.mean(xs[sub_idx])+.1], vert=True, widths=.1, showmeans=False, showmedians=False, showextrema=False)
+                    for pc in parts['bodies']:
+                        pc.set_facecolor(area_colors[subplot])
+                        pc.set_edgecolor('#000000')
+                        pc.set_alpha(.4)
+                    quartile1, median, quartile3 = np.percentile(variables_dict[variable][subplot], [25, 50, 75])
+                    ax2.scatter([np.mean(xs[sub_idx])+.1], median, marker='o', color='#FFFFFF', s=20, zorder=3)
+                    ax2.vlines([np.mean(xs[sub_idx])+.1], quartile1, quartile3, color='#000000', linestyle='-', lw=2)
+                if variable == 'synapse_strength':
+                    ax2.set_ylabel('Synapse strength')
+                else:
+                    ax2.set_ylabel('Euclidean distance in "functional space"')
+                ax2.set_yscale('log')
+                ax2.set_xticks([])
+                plt.show()
+
+                print('VV', 'AA', mannwhitneyu(variables_dict[variable]['VV'], variables_dict[variable]['AA']))
+                print('VV', 'MM', mannwhitneyu(variables_dict[variable]['VV'], variables_dict[variable]['MM']))
+                print('VV', 'SS', mannwhitneyu(variables_dict[variable]['VV'], variables_dict[variable]['SS']))
+                print('AA', 'SS', mannwhitneyu(variables_dict[variable]['AA'], variables_dict[variable]['SS']))
+                print('AA', 'MM', mannwhitneyu(variables_dict[variable]['AA'], variables_dict[variable]['MM']))
+                print('MM', 'SS', mannwhitneyu(variables_dict[variable]['MM'], variables_dict[variable]['SS']))
+
+            fig3, ax3 = plt.subplots(2, 2, dpi=500)
+            for sub_idx, subplot in enumerate(['VV', 'AA', 'MM', 'SS']):
+                ax3 = plt.subplot(2, 2, sub_idx+1)
+                sns.regplot(np.log10(variables_dict['eu_distances'][subplot]), np.log10(variables_dict['synapse_strength'][subplot]), color=area_colors[subplot], scatter_kws={'alpha':.5})
+                print(subplot, pearsonr(np.log10(variables_dict['eu_distances'][subplot]), np.log10(variables_dict['synapse_strength'][subplot])),
+                      pearsonr(variables_dict['eu_distances'][subplot], variables_dict['synapse_strength'][subplot]))
+                ax3.set_title(subplot)
+                ax3.set_xlabel('log$_{10}$functional distances (A.U.)')
+                ax3.set_ylabel('log$_{10}$synapse strength (A.U.)')
+                if subplot == 'VV' or subplot == 'AA':
+                    ax3.set_xlim(-.6, 1.6)
+                    ax3.set_xticks([-.5, 0, .5, 1, 1.5])
+                    ax3.set_ylim(-2.75, -.15)
+                    ax3.set_yticks([-2.5, -2, -1.5, -1, -.5])
+                elif subplot == 'MM':
+                    ax3.set_xlim(-.4, 1.6)
+                    ax3.set_xticks([0, .5, 1, 1.5])
+                    ax3.set_ylim(-2.6, -.4)
+                    ax3.set_yticks([-2.5, -2, -1.5, -1, -.5])
+                else:
+                    ax3.set_xlim(-.6, 1.1)
+                    ax3.set_xticks([-.5, 0, .5, 1])
+                    ax3.set_ylim(-2.6, -.9)
+                    ax3.set_yticks([-2.5, -2, -1.5, -1])
+            plt.tight_layout()
+            plt.show()
+
+
 
 
