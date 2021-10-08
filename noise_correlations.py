@@ -199,7 +199,8 @@ class FunctionalConnectivity:
     animal_ids = {'frank': '26473', 'johnjohn': '26471', 'kavorka': '26525',
                   'roy': '26472', 'bruno': '26148', 'jacopo': '26504', 'crazyjoe': '26507'}
 
-    tuning_categories = {1: ['Z Position', 'C Body direction'],
+    tuning_categories = {0: ['Unclassified'],
+                         1: ['Z Position', 'C Body direction'],
                          2: ['Z Self_motion', 'B Speeds', 'C Body_direction_1st_der'],
                          3: ['K Ego3_Head_roll', 'M Ego3_Head_azimuth', 'L Ego3_Head_pitch'],
                          4: ['K Ego3_Head_roll_1st_der', 'M Ego3_Head_azimuth_1st_der', 'L Ego3_Head_pitch_1st_der'],
@@ -446,8 +447,8 @@ class FunctionalConnectivity:
             Select clusters that have a significant LMI; defaults to [True, True].
         p_alpha (float)
             p-value boundary for accepting significance; defaults to .0001.
-        json_file_name (str)
-            The name of the json file containing putative synaptic connections.
+        json_file_names (list)
+            The names of the json file containing putative synaptic connections/common input connections.
         ----------
 
         Returns
@@ -466,31 +467,22 @@ class FunctionalConnectivity:
         filter_by_smi = kwargs['filter_by_smi'] if 'filter_by_smi' in kwargs.keys() and type(kwargs['filter_by_smi']) == list else [True, True]
         filter_by_lmi = kwargs['filter_by_lmi'] if 'filter_by_lmi' in kwargs.keys() and type(kwargs['filter_by_lmi']) == list else [True, True]
         p_alpha = kwargs['p_alpha'] if 'p_alpha' in kwargs.keys() and type(kwargs['p_alpha']) == float else .0001
-        json_file_name = kwargs['json_file_name'] if 'json_file_name' in kwargs.keys() and type(kwargs['json_file_name']) == str else 'synaptic'
+        json_file_names = kwargs['json_file_names'] if 'json_file_names' in kwargs.keys() and type(kwargs['json_file_names']) == list else ['synaptic', 'common_input']
 
         # get relevant boundaries for calculating statistics
         cch_total_range = np.around(np.linspace(-cch_time, cch_time, (bin_num*2)+1), decimals=1)
-        is_zero_in_arr = 0 in np.arange(relevant_cch_bounds[0], relevant_cch_bounds[1]+0.4, 0.4)
-        if is_zero_in_arr:
-            if relevant_cch_bounds[0] in cch_total_range:
-                start_bound_idx = np.where(cch_total_range == relevant_cch_bounds[0])[0]
-            else:
-                start_bound_idx = np.where(cch_total_range < relevant_cch_bounds[0])[0][-1]
-            if relevant_cch_bounds[1] in cch_total_range:
-                end_bound_idx = np.where(cch_total_range == relevant_cch_bounds[1])[0] + 1
-            else:
-                end_bound_idx = np.where(cch_total_range < relevant_cch_bounds[1])[0][-1] + 1
+        if relevant_cch_bounds[0] in cch_total_range \
+                and relevant_cch_bounds[1] in cch_total_range:
+            rel_cch_bounds_1 = relevant_cch_bounds[0]
+            rel_cch_bounds_2 = relevant_cch_bounds[1]
         else:
-            if relevant_cch_bounds[0] in cch_total_range \
-                    and relevant_cch_bounds[1] in cch_total_range:
-                rel_cch_bounds_1 = relevant_cch_bounds[0]
-                rel_cch_bounds_2 = relevant_cch_bounds[1]
-            else:
-                rel_cch_bounds_1 = cch_total_range[cch_total_range < relevant_cch_bounds[0]][-1]
-                rel_cch_bounds_2 = cch_total_range[cch_total_range < relevant_cch_bounds[1]][-1]
-            all_cch_values = np.around(np.concatenate((np.arange(-rel_cch_bounds_2, -rel_cch_bounds_1+0.4, 0.4),
-                                                       np.arange(rel_cch_bounds_1, rel_cch_bounds_2+0.4, 0.4))), decimals=1)
-            idx_array = np.where((np.isin(cch_total_range, all_cch_values)))[0]
+            rel_cch_bounds_1 = cch_total_range[cch_total_range < relevant_cch_bounds[0]][-1]
+            rel_cch_bounds_2 = cch_total_range[cch_total_range < relevant_cch_bounds[1]][-1]
+        all_cch_values = np.around(np.concatenate((np.arange(-rel_cch_bounds_2, -rel_cch_bounds_1+0.4, 0.4),
+                                                   np.arange(rel_cch_bounds_1, rel_cch_bounds_2+0.4, 0.4))), decimals=1)
+        idx_array = np.where((np.isin(cch_total_range, all_cch_values)))[0]
+        negative_end_bound_idx = np.where(cch_total_range == round(-(rel_cch_bounds_1-.4), 1))[0][0]
+        positive_start_bound_idx = np.where(cch_total_range == round(rel_cch_bounds_1-.4, 1))[0][0]
 
         # load profile data with GLM categories
         if not os.path.exists(self.sp_profiles_csv):
@@ -500,7 +492,7 @@ class FunctionalConnectivity:
             profile_data = pd.read_csv(self.sp_profiles_csv)
 
         # find all clusters for brain areas of interest
-        output_dict = {}
+        output_dict = {'synaptic': {}, 'common_input': {}}
         for pkl_idx, pkl_file in enumerate(tqdm(self.pkl_files)):
             if type(filter_by_area) == list:
                 cl_group_1 = select_clusters.ClusterFinder(session=f'{self.pkl_sessions_dir}{os.sep}{pkl_file}',
@@ -521,7 +513,8 @@ class FunctionalConnectivity:
             # get session id
             total_id_name = self.mat_file_dirs[pkl_idx].split('/')[-1]
             sp_session_id = total_id_name.split('_')[0] + '_' + total_id_name.split('_')[1] + '_' + total_id_name.split('_')[3]
-            output_dict[sp_session_id] = {}
+            output_dict['synaptic'][sp_session_id] = {}
+            output_dict['common_input'][sp_session_id] = {}
 
             # go through files and check whether there are any interesting CCH
             for mat_file in os.listdir(self.mat_file_dirs[pkl_idx]):
@@ -535,52 +528,83 @@ class FunctionalConnectivity:
                         baseline_subtracted_counts = data[cl_pair][:, 0] - data[cl_pair][:, 1]
                         most_aberrant_value_idx = np.argmax(np.abs(baseline_subtracted_counts))
 
-                        if (is_zero_in_arr and start_bound_idx <= most_aberrant_value_idx < end_bound_idx) \
-                                or (not is_zero_in_arr and most_aberrant_value_idx in idx_array):
-                            excitation_p = data[cl_pair][most_aberrant_value_idx, 2] < p_alpha and \
-                                           (data[cl_pair][most_aberrant_value_idx-1, 2] < p_alpha or data[cl_pair][most_aberrant_value_idx+1, 2] < p_alpha)
-                            inhibition_p = (1 - data[cl_pair][most_aberrant_value_idx, 2]) < p_alpha and \
-                                           ((1 - data[cl_pair][most_aberrant_value_idx-1, 2]) < p_alpha or (1 - data[cl_pair][most_aberrant_value_idx+1, 2]) < p_alpha)
-                            if excitation_p or inhibition_p:
-                                pair_1_category = profile_data.loc[(profile_data['session_id'] == sp_session_id)
-                                                                   & (profile_data['cluster_id'] == pair_split[0]), 'category'].values[0]
-                                pair_2_category = profile_data.loc[(profile_data['session_id'] == sp_session_id)
-                                                                   & (profile_data['cluster_id'] == pair_split[1]), 'category'].values[0]
+                        common_input_peak = negative_end_bound_idx <= most_aberrant_value_idx < positive_start_bound_idx
+                        synaptic_peak = most_aberrant_value_idx in idx_array
+                        either_peak = synaptic_peak or common_input_peak
+                        inhibition_p = False
+                        excitation_p = False
+                        connection_type = 'null'
 
-                                output_dict[sp_session_id][cl_pair] = {'peak_time': 'nan',
-                                                                       'excitatory': True,
-                                                                       'sp_profiles': ['nan', 'nan'],
-                                                                       'broad_category': ['null', 'null'],
-                                                                       'first_covariate': ['null', 'null'],
-                                                                       'original_mat_file': 'nan',
-                                                                       'data': data[cl_pair].tolist()}
+                        if either_peak:
+                            if synaptic_peak:
+                                if data[cl_pair][most_aberrant_value_idx, 2] < p_alpha and \
+                                        (data[cl_pair][most_aberrant_value_idx-1, 2] < p_alpha or data[cl_pair][most_aberrant_value_idx+1, 2] < p_alpha):
+                                    if (data[cl_pair][negative_end_bound_idx+1:positive_start_bound_idx, 2] > p_alpha).all():
+                                        excitation_p = True
+                                        connection_type = 'synaptic'
+                                    else:
+                                        excitation_p = True
+                                        connection_type = 'common_input'
+                                elif (1 - data[cl_pair][most_aberrant_value_idx, 2]) < p_alpha and \
+                                               ((1 - data[cl_pair][most_aberrant_value_idx-1, 2]) < p_alpha or (1 - data[cl_pair][most_aberrant_value_idx+1, 2]) < p_alpha):
+                                    if (1 - data[cl_pair][negative_end_bound_idx+1:positive_start_bound_idx, 2] > p_alpha).all():
+                                        inhibition_p = True
+                                        connection_type = 'synaptic'
+                                    else:
+                                        inhibition_p = True
+                                        connection_type = 'common_input'
+                            else:
+                                if data[cl_pair][most_aberrant_value_idx, 2] < p_alpha and \
+                                        (data[cl_pair][most_aberrant_value_idx - 1, 2] < p_alpha or data[cl_pair][most_aberrant_value_idx + 1, 2] < p_alpha):
+                                    excitation_p = True
+                                    connection_type = 'common_input'
+                                elif (1 - data[cl_pair][most_aberrant_value_idx, 2]) < p_alpha and \
+                                               ((1 - data[cl_pair][most_aberrant_value_idx-1, 2]) < p_alpha or (1 - data[cl_pair][most_aberrant_value_idx+1, 2]) < p_alpha):
+                                    inhibition_p = True
+                                    connection_type = 'common_input'
 
-                                output_dict[sp_session_id][cl_pair]['original_mat_file'] = mat_file
+                        if excitation_p or inhibition_p:
+                            pair_1_category = profile_data.loc[(profile_data['session_id'] == sp_session_id)
+                                                               & (profile_data['cluster_id'] == pair_split[0]), 'category'].values[0]
+                            pair_2_category = profile_data.loc[(profile_data['session_id'] == sp_session_id)
+                                                               & (profile_data['cluster_id'] == pair_split[1]), 'category'].values[0]
 
-                                if not excitation_p:
-                                    output_dict[sp_session_id][cl_pair]['excitatory'] = False
+                            output_dict[connection_type][sp_session_id][cl_pair] = {'peak_time': 'nan',
+                                                                                    'excitatory': True,
+                                                                                    'sp_profiles': ['nan', 'nan'],
+                                                                                    'broad_category': ['null', 'null'],
+                                                                                    'first_covariate': ['null', 'null'],
+                                                                                    'original_mat_file': 'nan',
+                                                                                    'data': data[cl_pair].tolist()}
 
-                                output_dict[sp_session_id][cl_pair]['sp_profiles'][0] = profile_data.loc[(profile_data['session_id'] == sp_session_id)
-                                                                                                         & (profile_data['cluster_id'] == pair_split[0]), 'profile'].values[0]
-                                output_dict[sp_session_id][cl_pair]['sp_profiles'][1] = profile_data.loc[(profile_data['session_id'] == sp_session_id)
-                                                                                                         & (profile_data['cluster_id'] == pair_split[1]), 'profile'].values[0]
+                            output_dict[connection_type][sp_session_id][cl_pair]['original_mat_file'] = mat_file
 
-                                output_dict[sp_session_id][cl_pair]['peak_time'] = cch_total_range[most_aberrant_value_idx]
+                            if inhibition_p:
+                                output_dict[connection_type][sp_session_id][cl_pair]['excitatory'] = False
 
-                                if ~np.isnan(pair_1_category):
-                                    output_dict[sp_session_id][cl_pair]['broad_category'][0] = self.tuning_categories[int(pair_1_category)]
-                                    output_dict[sp_session_id][cl_pair]['first_covariate'][0] = profile_data.loc[(profile_data['session_id'] == sp_session_id)
-                                                                                                                 & (profile_data['cluster_id'] == pair_split[0]), 'first_covariate'].values[0]
+                            output_dict[connection_type][sp_session_id][cl_pair]['sp_profiles'][0] = profile_data.loc[(profile_data['session_id'] == sp_session_id)
+                                                                                                                      & (profile_data['cluster_id'] == pair_split[0]), 'profile'].values[0]
+                            output_dict[connection_type][sp_session_id][cl_pair]['sp_profiles'][1] = profile_data.loc[(profile_data['session_id'] == sp_session_id)
+                                                                                                                      & (profile_data['cluster_id'] == pair_split[1]), 'profile'].values[0]
 
-                                if ~np.isnan(pair_2_category):
-                                    output_dict[sp_session_id][cl_pair]['broad_category'][1] = self.tuning_categories[int(pair_2_category)]
-                                    output_dict[sp_session_id][cl_pair]['first_covariate'][1] = profile_data.loc[(profile_data['session_id'] == sp_session_id)
-                                                                                                                 & (profile_data['cluster_id'] == pair_split[1]), 'first_covariate'].values[0]
+                            output_dict[connection_type][sp_session_id][cl_pair]['peak_time'] = cch_total_range[most_aberrant_value_idx]
 
+                            if ~np.isnan(pair_1_category):
+                                output_dict[connection_type][sp_session_id][cl_pair]['broad_category'][0] = self.tuning_categories[int(pair_1_category)]
+                                output_dict[connection_type][sp_session_id][cl_pair]['first_covariate'][0] = profile_data.loc[(profile_data['session_id'] == sp_session_id)
+                                                                                                                              & (profile_data['cluster_id'] == pair_split[0]),
+                                                                                                                              'first_covariate'].values[0]
 
-        with io.open(f'{self.save_dir}{os.sep}{json_file_name}.json', 'w', encoding='utf-8') as to_save_file:
-            to_save_file.write(json.dumps(output_dict, ensure_ascii=False, indent=4))
+                            if ~np.isnan(pair_2_category):
+                                output_dict[connection_type][sp_session_id][cl_pair]['broad_category'][1] = self.tuning_categories[int(pair_2_category)]
+                                output_dict[connection_type][sp_session_id][cl_pair]['first_covariate'][1] = profile_data.loc[(profile_data['session_id'] == sp_session_id)
+                                                                                                                              & (profile_data['cluster_id'] == pair_split[1]),
+                                                                                                                              'first_covariate'].values[0]
+        with io.open(f'{self.save_dir}{os.sep}{json_file_names[0]}.json', 'w', encoding='utf-8') as to_save_file:
+            to_save_file.write(json.dumps(output_dict['synaptic'], ensure_ascii=False, indent=4))
 
+        with io.open(f'{self.save_dir}{os.sep}{json_file_names[1]}.json', 'w', encoding='utf-8') as to_save_file_1:
+            to_save_file_1.write(json.dumps(output_dict['common_input'], ensure_ascii=False, indent=4))
 
     def cross_correlations_summary(self, **kwargs):
         """
@@ -630,7 +654,7 @@ class FunctionalConnectivity:
                                                  'LMI': {'excited': 0,
                                                          'suppressed': 0,
                                                          'ns': 0},
-                                                 'behavior': {'nan': 0,
+                                                 'behavior': {'Unclassified': 0,
                                                               'null': 0,
                                                               'Ego3_Head_roll_1st_der': 0,
                                                               'Ego3_Head_azimuth_1st_der': 0,
