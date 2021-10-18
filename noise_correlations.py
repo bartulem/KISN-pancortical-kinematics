@@ -641,117 +641,116 @@ class FunctionalConnectivity:
 
         plotting_dict = {}
         for one_file in os.listdir(f'{self.cch_data_dir}'):
-            if one_file[-6] == one_file[-7]:
-                pair_region_id = one_file[-7:-5]
-                plotting_dict[pair_region_id] = {'distances':[],
-                                                 'timing': [],
-                                                 'strength': [],
-                                                 'type': {'excitatory': 0, 'inhibitory': 0},
-                                                 'profile': {'RS': 0, 'FS': 0},
-                                                 'SMI': {'excited': 0,
-                                                         'suppressed': 0,
-                                                         'ns': 0},
-                                                 'LMI': {'excited': 0,
-                                                         'suppressed': 0,
-                                                         'ns': 0},
-                                                 'behavior': {'Unclassified': 0,
-                                                              'null': 0,
-                                                              'Ego3_Head_roll_1st_der': 0,
-                                                              'Ego3_Head_azimuth_1st_der': 0,
-                                                              'Ego3_Head_pitch_1st_der': 0,
-                                                              'Ego3_Head_roll': 0,
-                                                              'Ego3_Head_azimuth': 0,
-                                                              'Ego3_Head_pitch': 0,
-                                                              'Ego2_head_roll_1st_der': 0,
-                                                              'Allo_head_direction_1st_der': 0,
-                                                              'Ego2_head_pitch_1st_der': 0,
-                                                              'Ego2_head_roll': 0,
-                                                              'Allo_head_direction': 0,
-                                                              'Ego2_head_pitch': 0,
-                                                              'Back_azimuth_1st_der': 0,
-                                                              'Back_pitch_1st_der': 0,
-                                                              'Back_azimuth': 0,
-                                                              'Back_pitch': 0,
-                                                              'Neck_elevation': 0,
-                                                              'Neck_elevation_1st_der': 0,
-                                                              'Position': 0,
-                                                              'Body_direction': 0,
-                                                              'Body_direction_1st_der': 0,
-                                                              'Speeds': 0,
-                                                              'Self_motion': 0}}
-                with open(f'{self.cch_data_dir}{os.sep}{one_file}', 'r') as json_pairs_file:
-                    data = json.load(json_pairs_file)
-                    for animal_session in data.keys():
-                        rat_id = [rat for rat in self.animal_ids.keys() if rat in animal_session][0]
-                        if rat_id not in plotting_dict[pair_region_id].keys():
-                            plotting_dict[pair_region_id][rat_id] = {}
-                        if animal_session not in plotting_dict[pair_region_id][rat_id].keys():
-                            plotting_dict[pair_region_id][rat_id][animal_session] = {'pairs': [],
-                                                                                     'directionality': [],
-                                                                                     'strength': [],
-                                                                                     'type': [],
-                                                                                     'clusters': {}}
-                        for pair_id in data[animal_session].keys():
-                            plotting_dict[pair_region_id][rat_id][animal_session]['pairs'].append(pair_id)
-                            plotting_dict[pair_region_id][rat_id][animal_session]['directionality'].append(np.sign(data[animal_session][pair_id]['peak_time']))
-                            if data[animal_session][pair_id]['excitatory'] is True:
-                                plotting_dict[pair_region_id]['type']['excitatory'] += 1
-                                plotting_dict[pair_region_id][rat_id][animal_session]['type'].append('excitatory')
-                            else:
-                                plotting_dict[pair_region_id]['type']['inhibitory'] += 1
-                                plotting_dict[pair_region_id][rat_id][animal_session]['type'].append('inhibitory')
-                            plotting_dict[pair_region_id]['distances'].append(np.abs(np.linalg.norm(np.array(spc.iloc[spc[(spc['cluster_id'] == pair_id.split('-')[0]) & (spc['session_id'] == animal_session)].index, -3:]).ravel()
-                                                                                                    - np.array(spc.iloc[spc[(spc['cluster_id'] == pair_id.split('-')[1]) & (spc['session_id'] == animal_session)].index, -3:]).ravel())))
-                            plotting_dict[pair_region_id]['timing'].append(np.abs(data[animal_session][pair_id]['peak_time']))
-                            idx_of_interest = np.where(cch_total_range == data[animal_session][pair_id]['peak_time'])[0][0]
-                            cross_corr_data = np.array(data[animal_session][pair_id]['data'])
-                            strength = np.abs((cross_corr_data[idx_of_interest, 0] - cross_corr_data[idx_of_interest, 1])/np.min([cross_corr_data[0, 3], cross_corr_data[0, 4]]))
-                            plotting_dict[pair_region_id]['strength'].append(strength)
-                            plotting_dict[pair_region_id][rat_id][animal_session]['strength'].append(strength)
-                            for cl_idx, cl in enumerate(pair_id.split('-')):
-                                if cl not in plotting_dict[pair_region_id][rat_id][animal_session]['clusters'].keys():
-                                    plotting_dict[pair_region_id][rat_id][animal_session]['clusters'][cl] = {'XYZ': 0,
-                                                                                                             'profile': 0,
-                                                                                                             'SMI': 'ns',
-                                                                                                             'LMI': 'ns',
-                                                                                                             'behavior': 0}
-                                    plotting_dict[pair_region_id][rat_id][animal_session]['clusters'][cl]['XYZ'] = \
-                                        list(np.array(spc.iloc[spc[(spc['cluster_id'] == cl) & (spc['session_id'] == animal_session)].index, -3:]).ravel())
-                                    plotting_dict[pair_region_id]['profile'][data[animal_session][pair_id]['sp_profiles'][cl_idx]] += 1
-                                    plotting_dict[pair_region_id][rat_id][animal_session]['clusters'][cl]['profile'] = \
-                                        data[animal_session][pair_id]['sp_profiles'][cl_idx]
-                                    smi_values = np.array(spc.iloc[spc[(spc['cluster_id'] == cl) & (spc['session_id'] == animal_session)].index, 8:10]).ravel()
-                                    if not np.isnan(smi_values).all():
-                                        if smi_values[1] > critical_p_value:
-                                            plotting_dict[pair_region_id][rat_id][animal_session]['clusters'][cl]['SMI'] = 'ns'
-                                            plotting_dict[pair_region_id]['SMI']['ns'] += 1
-                                        else:
-                                            if smi_values[0] > 0:
-                                                plotting_dict[pair_region_id][rat_id][animal_session]['clusters'][cl]['SMI'] = 'excited'
-                                                plotting_dict[pair_region_id]['SMI']['excited'] += 1
-                                            else:
-                                                plotting_dict[pair_region_id][rat_id][animal_session]['clusters'][cl]['SMI'] = 'suppressed'
-                                                plotting_dict[pair_region_id]['SMI']['suppressed'] += 1
-                                    else:
+            pair_region_id = one_file[-7:-5]
+            plotting_dict[pair_region_id] = {'distances':[],
+                                             'timing': [],
+                                             'strength': [],
+                                             'type': {'excitatory': 0, 'inhibitory': 0},
+                                             'profile': {'RS': 0, 'FS': 0},
+                                             'SMI': {'excited': 0,
+                                                     'suppressed': 0,
+                                                     'ns': 0},
+                                             'LMI': {'excited': 0,
+                                                     'suppressed': 0,
+                                                     'ns': 0},
+                                             'behavior': {'Unclassified': 0,
+                                                          'null': 0,
+                                                          'Ego3_Head_roll_1st_der': 0,
+                                                          'Ego3_Head_azimuth_1st_der': 0,
+                                                          'Ego3_Head_pitch_1st_der': 0,
+                                                          'Ego3_Head_roll': 0,
+                                                          'Ego3_Head_azimuth': 0,
+                                                          'Ego3_Head_pitch': 0,
+                                                          'Ego2_head_roll_1st_der': 0,
+                                                          'Allo_head_direction_1st_der': 0,
+                                                          'Ego2_head_pitch_1st_der': 0,
+                                                          'Ego2_head_roll': 0,
+                                                          'Allo_head_direction': 0,
+                                                          'Ego2_head_pitch': 0,
+                                                          'Back_azimuth_1st_der': 0,
+                                                          'Back_pitch_1st_der': 0,
+                                                          'Back_azimuth': 0,
+                                                          'Back_pitch': 0,
+                                                          'Neck_elevation': 0,
+                                                          'Neck_elevation_1st_der': 0,
+                                                          'Position': 0,
+                                                          'Body_direction': 0,
+                                                          'Body_direction_1st_der': 0,
+                                                          'Speeds': 0,
+                                                          'Self_motion': 0}}
+            with open(f'{self.cch_data_dir}{os.sep}{one_file}', 'r') as json_pairs_file:
+                data = json.load(json_pairs_file)
+                for animal_session in data.keys():
+                    rat_id = [rat for rat in self.animal_ids.keys() if rat in animal_session][0]
+                    if rat_id not in plotting_dict[pair_region_id].keys():
+                        plotting_dict[pair_region_id][rat_id] = {}
+                    if animal_session not in plotting_dict[pair_region_id][rat_id].keys():
+                        plotting_dict[pair_region_id][rat_id][animal_session] = {'pairs': [],
+                                                                                 'directionality': [],
+                                                                                 'strength': [],
+                                                                                 'type': [],
+                                                                                 'clusters': {}}
+                    for pair_id in data[animal_session].keys():
+                        plotting_dict[pair_region_id][rat_id][animal_session]['pairs'].append(pair_id)
+                        plotting_dict[pair_region_id][rat_id][animal_session]['directionality'].append(np.sign(data[animal_session][pair_id]['peak_time']))
+                        if data[animal_session][pair_id]['excitatory'] is True:
+                            plotting_dict[pair_region_id]['type']['excitatory'] += 1
+                            plotting_dict[pair_region_id][rat_id][animal_session]['type'].append('excitatory')
+                        else:
+                            plotting_dict[pair_region_id]['type']['inhibitory'] += 1
+                            plotting_dict[pair_region_id][rat_id][animal_session]['type'].append('inhibitory')
+                        plotting_dict[pair_region_id]['distances'].append(np.abs(np.linalg.norm(np.array(spc.iloc[spc[(spc['cluster_id'] == pair_id.split('-')[0]) & (spc['session_id'] == animal_session)].index, -3:]).ravel()
+                                                                                                - np.array(spc.iloc[spc[(spc['cluster_id'] == pair_id.split('-')[1]) & (spc['session_id'] == animal_session)].index, -3:]).ravel())))
+                        plotting_dict[pair_region_id]['timing'].append(np.abs(data[animal_session][pair_id]['peak_time']))
+                        idx_of_interest = np.where(cch_total_range == data[animal_session][pair_id]['peak_time'])[0][0]
+                        cross_corr_data = np.array(data[animal_session][pair_id]['data'])
+                        strength = np.abs((cross_corr_data[idx_of_interest, 0] - cross_corr_data[idx_of_interest, 1])/np.min([cross_corr_data[0, 3], cross_corr_data[0, 4]]))
+                        plotting_dict[pair_region_id]['strength'].append(strength)
+                        plotting_dict[pair_region_id][rat_id][animal_session]['strength'].append(strength)
+                        for cl_idx, cl in enumerate(pair_id.split('-')):
+                            if cl not in plotting_dict[pair_region_id][rat_id][animal_session]['clusters'].keys():
+                                plotting_dict[pair_region_id][rat_id][animal_session]['clusters'][cl] = {'XYZ': 0,
+                                                                                                         'profile': 0,
+                                                                                                         'SMI': 'ns',
+                                                                                                         'LMI': 'ns',
+                                                                                                         'behavior': 0}
+                                plotting_dict[pair_region_id][rat_id][animal_session]['clusters'][cl]['XYZ'] = \
+                                    list(np.array(spc.iloc[spc[(spc['cluster_id'] == cl) & (spc['session_id'] == animal_session)].index, -3:]).ravel())
+                                plotting_dict[pair_region_id]['profile'][data[animal_session][pair_id]['sp_profiles'][cl_idx]] += 1
+                                plotting_dict[pair_region_id][rat_id][animal_session]['clusters'][cl]['profile'] = \
+                                    data[animal_session][pair_id]['sp_profiles'][cl_idx]
+                                smi_values = np.array(spc.iloc[spc[(spc['cluster_id'] == cl) & (spc['session_id'] == animal_session)].index, 8:10]).ravel()
+                                if not np.isnan(smi_values).all():
+                                    if smi_values[1] > critical_p_value:
                                         plotting_dict[pair_region_id][rat_id][animal_session]['clusters'][cl]['SMI'] = 'ns'
                                         plotting_dict[pair_region_id]['SMI']['ns'] += 1
-
-                                    lmi_values = np.array(spc.iloc[spc[(spc['cluster_id'] == cl) & (spc['session_id'] == animal_session)].index, 10:13]).ravel()
-                                    if not np.isnan(lmi_values).all():
-                                        if lmi_values[1] < critical_p_value < lmi_values[2]:
-                                            if lmi_values[0] > 0:
-                                                plotting_dict[pair_region_id][rat_id][animal_session]['clusters'][cl]['LMI'] = 'excited'
-                                                plotting_dict[pair_region_id]['LMI']['excited'] += 1
-                                            else:
-                                                plotting_dict[pair_region_id][rat_id][animal_session]['clusters'][cl]['LMI'] = 'suppressed'
-                                                plotting_dict[pair_region_id]['LMI']['suppressed'] += 1
+                                    else:
+                                        if smi_values[0] > 0:
+                                            plotting_dict[pair_region_id][rat_id][animal_session]['clusters'][cl]['SMI'] = 'excited'
+                                            plotting_dict[pair_region_id]['SMI']['excited'] += 1
                                         else:
-                                            plotting_dict[pair_region_id]['LMI']['ns'] += 1
+                                            plotting_dict[pair_region_id][rat_id][animal_session]['clusters'][cl]['SMI'] = 'suppressed'
+                                            plotting_dict[pair_region_id]['SMI']['suppressed'] += 1
+                                else:
+                                    plotting_dict[pair_region_id][rat_id][animal_session]['clusters'][cl]['SMI'] = 'ns'
+                                    plotting_dict[pair_region_id]['SMI']['ns'] += 1
+
+                                lmi_values = np.array(spc.iloc[spc[(spc['cluster_id'] == cl) & (spc['session_id'] == animal_session)].index, 10:13]).ravel()
+                                if not np.isnan(lmi_values).all():
+                                    if lmi_values[1] < critical_p_value < lmi_values[2]:
+                                        if lmi_values[0] > 0:
+                                            plotting_dict[pair_region_id][rat_id][animal_session]['clusters'][cl]['LMI'] = 'excited'
+                                            plotting_dict[pair_region_id]['LMI']['excited'] += 1
+                                        else:
+                                            plotting_dict[pair_region_id][rat_id][animal_session]['clusters'][cl]['LMI'] = 'suppressed'
+                                            plotting_dict[pair_region_id]['LMI']['suppressed'] += 1
                                     else:
                                         plotting_dict[pair_region_id]['LMI']['ns'] += 1
+                                else:
+                                    plotting_dict[pair_region_id]['LMI']['ns'] += 1
 
-                                    plotting_dict[pair_region_id]['behavior'][data[animal_session][pair_id]['first_covariate'][cl_idx]] += 1
-                                    plotting_dict[pair_region_id][rat_id][animal_session]['clusters'][cl]['behavior'] = data[animal_session][pair_id]['first_covariate'][cl_idx]
+                                plotting_dict[pair_region_id]['behavior'][data[animal_session][pair_id]['first_covariate'][cl_idx]] += 1
+                                plotting_dict[pair_region_id][rat_id][animal_session]['clusters'][cl]['behavior'] = data[animal_session][pair_id]['first_covariate'][cl_idx]
 
         with io.open(f'{self.save_dir}{os.sep}cch_summary_synaptic.json', 'w', encoding='utf-8') as to_save_file:
             to_save_file.write(json.dumps(plotting_dict, ensure_ascii=False, indent=4))

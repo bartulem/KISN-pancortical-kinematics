@@ -34,6 +34,7 @@ import neural_activity
 import select_clusters
 import define_spiking_profile
 
+
 class Arrow3D(FancyArrowPatch):
 
     def __init__(self, x, y, z, dx, dy, dz, *args, **kwargs):
@@ -50,15 +51,8 @@ class Arrow3D(FancyArrowPatch):
         self.set_positions((xs[0], ys[0]), (xs[1], ys[1]))
         super().draw(renderer)
 
-def _arrow3D(ax, x, y, z, dx, dy, dz, *args, **kwargs):
-    arrow = Arrow3D(x, y, z, dx, dy, dz, *args, **kwargs)
-    ax.add_artist(arrow)
-
-setattr(Axes3D, 'arrow3D', _arrow3D)
-
 
 class PlotGroupResults:
-
     mi_colors = {'excited': '#EEC900', 'suppressed': '#00008B', 'ns': '#DEDEDE'}
 
     tuning_categories = {0: '#232323',  # unclassified
@@ -97,7 +91,7 @@ class PlotGroupResults:
                       'Body_direction_1st_der': '#91C38F',
                       'Speeds': '#14A049',
                       'Self_motion': '#665E27',
-                       np.nan: '#000000'}
+                      np.nan: '#000000'}
 
     def __init__(self, session_list=[], cluster_groups_dir='', sp_profiles_csv='',
                  save_fig=False, fig_format='png', save_dir='',
@@ -465,8 +459,10 @@ class PlotGroupResults:
 
         to_calculate = kwargs['to_calculate'] if 'to_calculate' in kwargs.keys() and type(kwargs['to_calculate']) == bool else False
         decode_what = kwargs['decode_what'] if 'decode_what' in kwargs.keys() and type(kwargs['decode_what']) == str else 'luminance'
-        speed_threshold_high = kwargs['speed_threshold_high'] if 'speed_threshold_high' in kwargs.keys() and (type(kwargs['speed_threshold_high']) == int or type(kwargs['speed_threshold_high']) == float) else 5.
-        speed_threshold_low = kwargs['speed_threshold_low'] if 'speed_threshold_low' in kwargs.keys() and (type(kwargs['speed_threshold_low']) == int or type(kwargs['speed_threshold_low']) == float) else 0.
+        speed_threshold_high = kwargs['speed_threshold_high'] if 'speed_threshold_high' in kwargs.keys() and (
+                type(kwargs['speed_threshold_high']) == int or type(kwargs['speed_threshold_high']) == float) else 5.
+        speed_threshold_low = kwargs['speed_threshold_low'] if 'speed_threshold_low' in kwargs.keys() and (
+                type(kwargs['speed_threshold_low']) == int or type(kwargs['speed_threshold_low']) == float) else 0.
         speed_min_seq_duration = kwargs['speed_min_seq_duration'] if 'speed_min_seq_duration' in kwargs.keys() \
                                                                      and (type(kwargs['speed_min_seq_duration']) == int or type(kwargs['speed_min_seq_duration']) == float) else 2.
 
@@ -550,7 +546,7 @@ class PlotGroupResults:
                 statistics_dict = pickle.load(pickle_file)
 
             # get total number of clusters in the dataset
-            total_cluster_number = len(statistics_dict.keys())-1
+            total_cluster_number = len(statistics_dict.keys()) - 1
 
             # get plot array and delete it from the dict
             plot_arr = statistics_dict['plot_array']
@@ -578,7 +574,7 @@ class PlotGroupResults:
                 file_animal = [animal for animal in select_clusters.ClusterFinder.probe_site_areas.keys() if animal in session_id][0]
                 file_bank = [bank for bank in ['distal', 'intermediate'] if bank in session_id][0]
                 get_date_idx = [date.start() for date in re.finditer('20', session_id)][-1]
-                file_date = session_id[get_date_idx-4:get_date_idx+2]
+                file_date = session_id[get_date_idx - 4:get_date_idx + 2]
                 for idx, row in profile_data.iterrows():
                     if row[0] == f'{file_animal}_{file_date}_{file_bank}' and row[1] == statistics_dict[cluster]['cell_id']:
                         cl_profile = row[7]
@@ -892,9 +888,9 @@ class PlotGroupResults:
 
                 for item in plot_modulation_data[data_type]:
                     if bank == 'distal':
-                        ch = int(item[item.index('ch')+2:])
+                        ch = int(item[item.index('ch') + 2:])
                     else:
-                        ch = int(item[item.index('ch')+2:]) + 384
+                        ch = int(item[item.index('ch') + 2:]) + 384
                     modulo = ch % 2
                     row = ch // 2
                     if modulo == 0:
@@ -910,7 +906,7 @@ class PlotGroupResults:
 
             for arr_name in plot_modulation_arrays:
                 for rr_idx, reduced_row in enumerate(range(0, 384, reduction_factor)):
-                    reduced_plot_modulation_arrays[arr_name][rr_idx, :] = plot_modulation_arrays[arr_name][reduced_row:reduced_row+reduction_factor, :].sum()
+                    reduced_plot_modulation_arrays[arr_name][rr_idx, :] = plot_modulation_arrays[arr_name][reduced_row:reduced_row + reduction_factor, :].sum()
 
             for arr_name in reduced_plot_modulation_arrays:
                 smoothed_arr = neural_activity.gaussian_smoothing(array=reduced_plot_modulation_arrays[arr_name],
@@ -970,8 +966,9 @@ class PlotGroupResults:
             for session_id, session in enumerate(self.all_animals_012[animal]):
                 clusters_across_sessions[animal][session_id] = select_clusters.ClusterFinder(session=session,
                                                                                              cluster_groups_dir=self.cluster_groups_dir,
-                                                                                             sp_profiles_csv=self.sp_profiles_csv).get_desired_clusters(filter_by_cluster_type=self.relevant_cluster_types,
-                                                                                                                                                        filter_by_area=self.relevant_areas)
+                                                                                             sp_profiles_csv=self.sp_profiles_csv).get_desired_clusters(
+                    filter_by_cluster_type=self.relevant_cluster_types,
+                    filter_by_area=self.relevant_areas)
 
             all_common_clusters[animal] = list(set(clusters_across_sessions[animal][0]).intersection(clusters_across_sessions[animal][1], clusters_across_sessions[animal][2]))
 
@@ -991,7 +988,7 @@ class PlotGroupResults:
             for animal in self.all_animals_012.keys():
                 file_bank = [bank for bank in ['distal', 'intermediate'] if bank in self.all_animals_012[animal][0]][0]
                 get_date_idx = [date.start() for date in re.finditer('20', self.all_animals_012[animal][0])][-1]
-                file_date = self.all_animals_012[animal][0][get_date_idx-4:get_date_idx+2]
+                file_date = self.all_animals_012[animal][0][get_date_idx - 4:get_date_idx + 2]
                 cluster_profiles[animal] = define_spiking_profile.get_cluster_spiking_profiles(cluster_list=all_common_clusters[animal],
                                                                                                recording_day=f'{animal}_{file_date}_{file_bank}',
                                                                                                sp_profiles_csv=self.sp_profiles_csv)
@@ -1030,7 +1027,7 @@ class PlotGroupResults:
                     data_entries_1, bins_1 = np.histogram(activity_0, bins=bins)
                     data_entries_2, bins_2 = np.histogram(activity_2, bins=bins)
                     data_entries_d, bins_d = np.histogram(activity_1, bins=bins)
-                    ax = plt.subplot(row_num, col_num, cl_idx+1)
+                    ax = plt.subplot(row_num, col_num, cl_idx + 1)
                     ax.plot(bin_centers, data_entries_d, color='#00008B', linewidth=1.5, alpha=.75)
                     ax.plot(bin_centers, data_entries_1, color='#EEC900', linewidth=1.5, alpha=.75)
                     ax.plot(bin_centers, data_entries_2, color='#CD950C', linewidth=1.5, alpha=.75)
@@ -1139,16 +1136,16 @@ class PlotGroupResults:
 
         # plot results
         fig, ax = plt.subplots(nrows=1, ncols=len(chosen_variables),
-                               figsize=(6.4*len(chosen_variables), 4.8))
+                               figsize=(6.4 * len(chosen_variables), 4.8))
         for var_idx, var in enumerate(chosen_variables):
             feature_color = [val for key, val in make_ratemaps.Ratemap.feature_colors.items() if key in var][0]
-            ax = plt.subplot(1, len(chosen_variables), var_idx+1)
+            ax = plt.subplot(1, len(chosen_variables), var_idx + 1)
             ax.set_title(var)
             bool_arr = occ_data[var] > 1.
             occ = occ_data[var][bool_arr]
             tp = tp_data[var][bool_arr]
             ax.scatter(x=occ, y=tp, color=feature_color, alpha=1, s=30)
-            ax.axvline(x=int(np.ceil(occ.max()))/2, ls='-.', color='#000000')
+            ax.axvline(x=int(np.ceil(occ.max())) / 2, ls='-.', color='#000000')
             ax.set_xlabel('occupancy (% total)')
             ax.set_xlim(0, int(np.ceil(occ.max())))
             ax.set_xticks([0, int(np.ceil(occ.max()))])
@@ -1187,104 +1184,6 @@ class PlotGroupResults:
         with open(self.cch_summary_file, 'r') as summary_file:
             plotting_dict = json.load(summary_file)
 
-        area_rats = {'VV': ['kavorka', 'johnjohn', 'frank'],
-                     'AA': ['kavorka', 'johnjohn', 'frank'],
-                     'MM': ['roy', 'crazyjoe', 'jacopo'],
-                     'SS': ['roy', 'crazyjoe', 'jacopo']}
-
-        # point_3d_dict = {}
-        # for area_area in plotting_dict.keys():
-        #     if area_area not in point_3d_dict.keys():
-        #         point_3d_dict[area_area] = {}
-        #     for animal in area_rats[area_area]:
-        #         if animal not in point_3d_dict[area_area].keys():
-        #             point_3d_dict[area_area][animal] = {'X': [], 'Y': [], 'Z': []}
-        #         for a_s in plotting_dict[area_area][animal].keys():
-        #             for cl in plotting_dict[area_area][animal][a_s]['clusters'].keys():
-        #                 point_3d_dict[area_area][animal]['X'].append(plotting_dict[area_area][animal][a_s]['clusters'][cl]['XYZ'][0])
-        #                 point_3d_dict[area_area][animal]['Y'].append(plotting_dict[area_area][animal][a_s]['clusters'][cl]['XYZ'][1])
-        #                 point_3d_dict[area_area][animal]['Z'].append(plotting_dict[area_area][animal][a_s]['clusters'][cl]['XYZ'][2])
-        #
-        # line_3d_dict = {}
-        # for area_area in plotting_dict.keys():
-        #     if area_area not in line_3d_dict.keys():
-        #         line_3d_dict[area_area] = {}
-        #     for animal in area_rats[area_area]:
-        #         if animal not in line_3d_dict[area_area].keys():
-        #             line_3d_dict[area_area][animal] = {}
-        #         for a_s in plotting_dict[area_area][animal].keys():
-        #             for pair_idx, pair in enumerate(plotting_dict[area_area][animal][a_s]['pairs']):
-        #                 cl1, cl2 = pair.split('-')
-        #                 direction = plotting_dict[area_area][animal][a_s]['directionality'][pair_idx]
-        #                 if direction == 1:
-        #                     line_3d_dict[area_area][animal][f'pair_{pair_idx}'] = [plotting_dict[area_area][animal][a_s]['clusters'][cl1]['XYZ'],
-        #                                                                            plotting_dict[area_area][animal][a_s]['clusters'][cl2]['XYZ'],
-        #                                                                            plotting_dict[area_area][animal][a_s]['strength'][pair_idx]]
-        #                 else:
-        #                     line_3d_dict[area_area][animal][f'pair_{pair_idx}'] = [plotting_dict[area_area][animal][a_s]['clusters'][cl2]['XYZ'],
-        #                                                                            plotting_dict[area_area][animal][a_s]['clusters'][cl1]['XYZ'],
-        #                                                                            plotting_dict[area_area][animal][a_s]['strength'][pair_idx]]
-        # fig = plt.figure(figsize=(4, 12), dpi=300)
-        # gs = fig.add_gridspec(9, 3)
-        # gs.update(wspace=1.5, hspace=1.5)
-        # ax1 = fig.add_subplot(gs[:3, :3], projection='3d')
-        # for pair in line_3d_dict['VV']['frank'].keys():
-        #     pair_data = line_3d_dict['VV']['frank'][pair]
-        #     ax1.arrow3D(pair_data[0][0], pair_data[0][1], pair_data[0][2],
-        #                 pair_data[1][0]-pair_data[0][0], pair_data[1][1]-pair_data[0][1], pair_data[1][2]-pair_data[0][2],
-        #                 mutation_scale=5,
-        #                 arrowstyle='-|>',
-        #                 ls='-',
-        #                 lw=.5+pair_data[2],
-        #                 color='#000000')
-        # ax1.scatter(point_3d_dict['VV']['frank']['X'], point_3d_dict['VV']['frank']['Y'], point_3d_dict['VV']['frank']['Z'], color='#FFFFFF', ec='#000000', alpha=1)
-        # ax1.view_init(elev=20, azim=120)
-        # ax1.set_title(f"#{self.animal_ids['frank']}", pad=0)
-        # ax1.set_xlabel('AP (mm)')
-        # ax1.set_ylabel('ML (mm)')
-        # ax1.set_zlabel('DV (mm)')
-        # ax2 = fig.add_subplot(gs[3:6, :3], projection='3d')
-        # for pair in line_3d_dict['VV']['kavorka'].keys():
-        #     pair_data = line_3d_dict['VV']['kavorka'][pair]
-        #     ax2.arrow3D(pair_data[0][0], pair_data[0][1], pair_data[0][2],
-        #                 pair_data[1][0]-pair_data[0][0], pair_data[1][1]-pair_data[0][1], pair_data[1][2]-pair_data[0][2],
-        #                 mutation_scale=5,
-        #                 arrowstyle='-|>',
-        #                 ls='-',
-        #                 lw=.5+pair_data[2],
-        #                 color='#000000')
-        # ax2.plot3D([-5.85, -5.86],
-        #            [6.0, 5.75],
-        #            [-2, -2], ls='-', color='#000000', lw=.5+.05)
-        # ax2.text(-5.86, 5.75, -2.05, s='5%',  size=8, color='#000000')
-        # ax2.plot3D([-5.85, -5.86],
-        #            [6.0, 5.75],
-        #            [-2.2, -2.2], ls='-', color='#000000', lw=.5+.5)
-        # ax2.text(-5.86, 5.75, -2.25, s='50%',  size=8, color='#000000')
-        # ax2.scatter(point_3d_dict['VV']['kavorka']['X'], point_3d_dict['VV']['kavorka']['Y'], point_3d_dict['VV']['kavorka']['Z'], color='#FFFFFF', ec='#000000', alpha=1)
-        # ax2.view_init(elev=20, azim=120)
-        # ax2.set_title(f"#{self.animal_ids['kavorka']}", pad=0)
-        # ax2.set_xlabel('AP (mm)')
-        # ax2.set_ylabel('ML (mm)')
-        # ax2.set_zlabel('DV (mm)')
-        # ax3 = fig.add_subplot(gs[6:9, :3], projection='3d')
-        # for pair in line_3d_dict['VV']['johnjohn'].keys():
-        #     pair_data = line_3d_dict['VV']['johnjohn'][pair]
-        #     ax3.arrow3D(pair_data[0][0], pair_data[0][1], pair_data[0][2],
-        #                 pair_data[1][0]-pair_data[0][0], pair_data[1][1]-pair_data[0][1], pair_data[1][2]-pair_data[0][2],
-        #                 mutation_scale=5,
-        #                 arrowstyle='-|>',
-        #                 ls='-',
-        #                 lw=.5+pair_data[2],
-        #                 color='#000000')
-        # ax3.scatter(point_3d_dict['VV']['johnjohn']['X'], point_3d_dict['VV']['johnjohn']['Y'], point_3d_dict['VV']['johnjohn']['Z'], color='#FFFFFF', ec='#000000', alpha=1)
-        # ax3.view_init(elev=20, azim=120)
-        # ax3.set_title(f"#{self.animal_ids['johnjohn']}", pad=0)
-        # ax3.set_xlabel('AP (mm)')
-        # ax3.set_ylabel('ML (mm)')
-        # ax3.set_zlabel('DV (mm)')
-        # plt.show()
-
         # fig2, f_ax = plt.subplots(1, 1, figsize=(7, 6), dpi=400)
         # sns.regplot(np.log10(plotting_dict['VV']['distances']), np.log10(plotting_dict['VV']['strength']), color='#000000', scatter_kws={'alpha':.3})
         # f_ax.set_xlabel('log$_{10}$pair distance (mm)')
@@ -1317,7 +1216,8 @@ class PlotGroupResults:
         ff_ax1.set_yticklabels([0, 125, 250], fontsize=8)
         ff_ax1.set_ylabel('cell #', fontsize=10)
         ff_ax2 = fig3.add_subplot(gs[1, 0])
-        ff_ax2.bar(x=[0, 1, 2], height=[plotting_dict['VV']['SMI']['excited'], plotting_dict['VV']['SMI']['suppressed'], plotting_dict['VV']['SMI']['ns']], width=.9, color=['#EEC900', '#00008B', '#DEDEDE'])
+        ff_ax2.bar(x=[0, 1, 2], height=[plotting_dict['VV']['SMI']['excited'], plotting_dict['VV']['SMI']['suppressed'], plotting_dict['VV']['SMI']['ns']], width=.9,
+                   color=['#EEC900', '#00008B', '#DEDEDE'])
         ff_ax2.set_xticks([0, 1, 2])
         ff_ax2.set_xticklabels(['exc', 'sup', 'ns'], fontsize=8)
         ff_ax2.set_xlabel('SM', fontsize=10)
@@ -1325,7 +1225,8 @@ class PlotGroupResults:
         ff_ax2.set_yticklabels([0, 100, 200, 300], fontsize=8)
         ff_ax2.set_ylabel('cell #', fontsize=10)
         ff_ax3 = fig3.add_subplot(gs[2, 0])
-        ff_ax3.bar(x=[0, 1, 2], height=[plotting_dict['VV']['LMI']['excited'], plotting_dict['VV']['LMI']['suppressed'], plotting_dict['VV']['LMI']['ns']], width=.9, color=['#EEC900', '#00008B', '#DEDEDE'])
+        ff_ax3.bar(x=[0, 1, 2], height=[plotting_dict['VV']['LMI']['excited'], plotting_dict['VV']['LMI']['suppressed'], plotting_dict['VV']['LMI']['ns']], width=.9,
+                   color=['#EEC900', '#00008B', '#DEDEDE'])
         ff_ax3.set_xticks([0, 1, 2])
         ff_ax3.set_xticklabels(['exc', 'sup', 'ns'], fontsize=8)
         ff_ax3.set_xlabel('LM', fontsize=10)
@@ -1514,7 +1415,7 @@ class PlotGroupResults:
             variables_dict = {'eu_distances': {'VV': [], 'AA': [], 'MM': [], 'SS': []}, 'synapse_strength': {'VV': [], 'AA': [], 'MM': [], 'SS': []}}
             fig, ax = plt.subplots(2, 2, dpi=500)
             for sub_idx, subplot in enumerate(['VV', 'AA', 'MM', 'SS']):
-                ax = plt.subplot(2, 2, sub_idx+1)
+                ax = plt.subplot(2, 2, sub_idx + 1)
                 ax.scatter(umap_data[pl_dict[subplot]['points'], 0], umap_data[pl_dict[subplot]['points'], 1], s=2, c=area_colors[subplot], alpha=.5)
                 ax.set_title(f'{subplot} connections')
                 ax.set_xlabel('UMAP 1', fontsize=10)
@@ -1537,23 +1438,24 @@ class PlotGroupResults:
                     variables_dict['eu_distances'][subplot] = md_distances_data[subplot]['md_distance']
                     variables_dict['synapse_strength'][subplot].append(pl_dict[subplot]['strength'][con_idx])
                     ax.plot([umap_data[connection[0], 0], umap_data[connection[1], 0]], [umap_data[connection[0], 1], umap_data[connection[1], 1]],
-                            lw=pl_dict[subplot]['strength'][con_idx]*3, ls=pl_dict[subplot]['type'][con_idx], c=area_colors[subplot])
+                            lw=pl_dict[subplot]['strength'][con_idx] * 3, ls=pl_dict[subplot]['type'][con_idx], c=area_colors[subplot])
             plt.tight_layout()
             plt.show()
 
             for variable in variables_dict.keys():
                 fig2, ax2 = plt.subplots(1, 1, dpi=500)
-                xs = [[gauss(0.25*(ind+1), 0.015) for x in range(len(variables_dict[variable][area]))] for ind, area in enumerate(variables_dict[variable].keys())]
+                xs = [[gauss(0.25 * (ind + 1), 0.015) for x in range(len(variables_dict[variable][area]))] for ind, area in enumerate(variables_dict[variable].keys())]
                 for sub_idx, subplot in enumerate(['VV', 'AA', 'MM', 'SS']):
                     ax2.scatter(xs[sub_idx], variables_dict[variable][subplot], s=10, color=area_colors[subplot], alpha=.5)
-                    parts = ax2.violinplot(dataset=variables_dict[variable][subplot], positions=[np.mean(xs[sub_idx])+.1], vert=True, widths=.1, showmeans=False, showmedians=False, showextrema=False)
+                    parts = ax2.violinplot(dataset=variables_dict[variable][subplot], positions=[np.mean(xs[sub_idx]) + .1], vert=True, widths=.1, showmeans=False, showmedians=False,
+                                           showextrema=False)
                     for pc in parts['bodies']:
                         pc.set_facecolor(area_colors[subplot])
                         pc.set_edgecolor('#000000')
                         pc.set_alpha(.4)
                     quartile1, median, quartile3 = np.percentile(variables_dict[variable][subplot], [25, 50, 75])
-                    ax2.scatter([np.mean(xs[sub_idx])+.1], median, marker='o', color='#FFFFFF', s=20, zorder=3)
-                    ax2.vlines([np.mean(xs[sub_idx])+.1], quartile1, quartile3, color='#000000', linestyle='-', lw=2)
+                    ax2.scatter([np.mean(xs[sub_idx]) + .1], median, marker='o', color='#FFFFFF', s=20, zorder=3)
+                    ax2.vlines([np.mean(xs[sub_idx]) + .1], quartile1, quartile3, color='#000000', linestyle='-', lw=2)
                 if variable == 'synapse_strength':
                     ax2.set_ylabel('Synapse strength')
                 else:
@@ -1571,8 +1473,8 @@ class PlotGroupResults:
 
             fig3, ax3 = plt.subplots(2, 2, dpi=500)
             for sub_idx, subplot in enumerate(['VV', 'AA', 'MM', 'SS']):
-                ax3 = plt.subplot(2, 2, sub_idx+1)
-                sns.regplot(np.log10(variables_dict['eu_distances'][subplot]), np.log10(variables_dict['synapse_strength'][subplot]), color=area_colors[subplot], scatter_kws={'alpha':.5})
+                ax3 = plt.subplot(2, 2, sub_idx + 1)
+                sns.regplot(np.log10(variables_dict['eu_distances'][subplot]), np.log10(variables_dict['synapse_strength'][subplot]), color=area_colors[subplot], scatter_kws={'alpha': .5})
                 print(subplot, pearsonr(np.log10(variables_dict['eu_distances'][subplot]), np.log10(variables_dict['synapse_strength'][subplot])),
                       pearsonr(variables_dict['eu_distances'][subplot], variables_dict['synapse_strength'][subplot]))
                 ax3.set_title(subplot)
@@ -1595,7 +1497,3 @@ class PlotGroupResults:
                     ax3.set_yticks([-2.5, -2, -1.5, -1])
             plt.tight_layout()
             plt.show()
-
-
-
-

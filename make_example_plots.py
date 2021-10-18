@@ -17,21 +17,36 @@ import matplotlib.pyplot as plt
 import matplotlib.colorbar as cbar
 from scipy.stats import sem
 import neural_activity
+import select_clusters
 
 
 class PlotExamples:
-
     animal_ids = {'frank': '26473', 'johnjohn': '26471', 'kavorka': '26525',
                   'roy': '26472', 'bruno': '26148', 'jacopo': '26504', 'crazyjoe': '26507'}
 
     elev_azimuth_3d = {'frank': (40, 60), 'johnjohn': (40, 120), 'kavorka': (10, 120),
                        'roy': (10, 120), 'jacopo': (10, 120), 'crazyjoe': (40, 0)}
 
+    area_rats = {'VV': ['kavorka', 'johnjohn', 'frank'],
+                 'AA': ['kavorka', 'johnjohn', 'frank'],
+                 'AV': ['kavorka', 'johnjohn', 'frank'],
+                 'MM': ['roy', 'crazyjoe', 'jacopo'],
+                 'SS': ['roy', 'crazyjoe', 'jacopo'],
+                 'MS': ['roy', 'crazyjoe', 'jacopo']}
+
+    areas_by_rat = {'kavorka': ['A', 'V'],
+                    'johnjohn': ['A', 'V'],
+                    'frank': ['A', 'V'],
+                    'roy': ['M', 'S'],
+                    'crazyjoe': ['M', 'S'],
+                    'jacopo': ['M', 'S']}
+
     def __init__(self, session=0, cluster_name='', kilosort_output_dir='',
                  save_fig=False, fig_format='png', save_dir='',
                  input_012=['', '', ''], cl_brain_area='', cch_data_dir='',
-                 area_file='', cell_pair_id='', sp_profiles_csv='',
-                 profile_colors=None):
+                 area_file='', cell_pair_id='', sp_profiles_csv='', cluster_groups_dir='',
+                 profile_colors=None, area_colors=None, cch_summary_file='',
+                 data_file_dir=''):
         self.session = session
         self.input_012 = input_012
         self.cluster_name = cluster_name
@@ -44,8 +59,13 @@ class PlotExamples:
         self.area_file = area_file
         self.cell_pair_id = cell_pair_id
         self.sp_profiles_csv = sp_profiles_csv
+        self.cluster_groups_dir = cluster_groups_dir
+        self.data_file_dir = data_file_dir
         if profile_colors is None:
             self.profile_colors = {'RS': '#698B69', 'FS': '#9BCD9B'}
+        if area_colors is None:
+            self.area_colors = {'V': '#E79791', 'A': '#5F847F', 'M': '#EEB849', 'S': '#7396C0'}
+        self.cch_summary_file = cch_summary_file
 
     def plot_peth(self, **kwargs):
         """
@@ -98,7 +118,7 @@ class PlotExamples:
         # ax3 = fig.add_subplot(111, label='3', frame_on=False)
         ax1.eventplot(raster[self.cluster_name], colors=raster_color, lineoffsets=1, linelengths=1, linewidths=.1)
         ax2.plot(range(peth[self.cluster_name]['peth'].shape[1]), peth_mean, color=peth_color)
-        ax2.fill_between(range(peth[self.cluster_name]['peth'].shape[1]), peth_mean+peth_sem, peth_mean-peth_sem, color=peth_color, alpha=.3)
+        ax2.fill_between(range(peth[self.cluster_name]['peth'].shape[1]), peth_mean + peth_sem, peth_mean - peth_sem, color=peth_color, alpha=.3)
         ax2.axvspan(200, 300, alpha=0.2, color=raster_color)
         # ax3.plot(range(peth_beh.shape[1]), beh_mean, color=beh_color)
         # ax3.fill_between(range(peth_beh.shape[1]), beh_mean+beh_sem, beh_mean-beh_sem, color=beh_color, alpha=.3)
@@ -170,7 +190,8 @@ class PlotExamples:
         ax2 = fig.add_subplot(111, label='2', frame_on=False)
         ax1.eventplot(discontinuous_raster[self.cluster_name], colors=raster_color, lineoffsets=1, linelengths=1, linewidths=.1)
         ax2.plot(range(discontinuous_peth[self.cluster_name]['discontinuous_peth'].shape[1]), discontinuous_peth_mean, color=peth_color)
-        ax2.fill_between(range(discontinuous_peth[self.cluster_name]['discontinuous_peth'].shape[1]), discontinuous_peth_mean+peth_sem, discontinuous_peth_mean-peth_sem, color=peth_color, alpha=.3)
+        ax2.fill_between(range(discontinuous_peth[self.cluster_name]['discontinuous_peth'].shape[1]), discontinuous_peth_mean + peth_sem, discontinuous_peth_mean - peth_sem, color=peth_color,
+                         alpha=.3)
         ax2.axvspan(40, 80, alpha=0.2, color=raster_color)
         ax1.set_xlim(0, 6)
         ax1.set_xticks([])
@@ -264,9 +285,9 @@ class PlotExamples:
                         waveforms[wv_idx, :, :] = raw_data[:, start:end] * bit_volts
 
                     # get mean waveforms for peak channel and N channels around it
-                    mean_waveforms = np.zeros(((n_channels*2)+1, sample_num))
-                    for idx, ch in enumerate(range(-n_channels, n_channels+1)):
-                        mean_waveforms[idx, :] = waveforms[:, peak_ch+ch, :].mean(axis=0)
+                    mean_waveforms = np.zeros(((n_channels * 2) + 1, sample_num))
+                    for idx, ch in enumerate(range(-n_channels, n_channels + 1)):
+                        mean_waveforms[idx, :] = waveforms[:, peak_ch + ch, :].mean(axis=0)
 
                     # plot (nb: currently only works for 2 channels around peak!)
                     acceptable_subplots = [(0, 0), (1, 1), (2, 0), (3, 1), (4, 0)]
@@ -293,7 +314,6 @@ class PlotExamples:
             print("The specified kilosort directory doesn't exist. Try again.")
             sys.exit()
 
-
     def plot_spiking_cch(self, **kwargs):
         """
         Description
@@ -316,10 +336,12 @@ class PlotExamples:
             To include the mid CCH vertical line or not; defaults to True.
         mid_vline_params (dict)
             The parameters of the mid vertical line; defaults to {'ls': ':', 'lw': 1, 'c': '#000000', 'alpha': .4}.
-        to_normalize
+        to_normalize (bool)
             To normalize the CCH by the number of spikes of the lower spiking unit; defaults to False.
-        plot_pair_position
+        plot_pair_position (bool)
             Plot the anatomical positions of the cell pair in questions; defaults to False.
+        plot_cch_convolved (bool)
+            Plot the convolved CCH; defaults to False.
         ----------
 
         Returns
@@ -336,9 +358,10 @@ class PlotExamples:
                                                        and type(kwargs['cch_color_alpha']) == dict else {'c': '#080808', 'alpha': .4}
         mid_vline = kwargs['mid_vline'] if 'mid_vline' in kwargs.keys() and type(kwargs['mid_vline']) == bool else True
         mid_vline_params = kwargs['mid_vline_params'] if 'mid_vline_params' in kwargs.keys() \
-                                                       and type(kwargs['mid_vline_params']) == dict else {'ls': ':', 'lw': 1, 'c': '#000000', 'alpha': .4}
+                                                         and type(kwargs['mid_vline_params']) == dict else {'ls': ':', 'lw': 1, 'c': '#000000', 'alpha': .4}
         to_normalize = kwargs['to_normalize'] if 'to_normalize' in kwargs.keys() and type(kwargs['to_normalize']) == bool else False
         plot_pair_position = kwargs['plot_pair_position'] if 'plot_pair_position' in kwargs.keys() and type(kwargs['plot_pair_position']) == bool else False
+        plot_cch_convolved = kwargs['plot_cch_convolved'] if 'plot_cch_convolved' in kwargs.keys() and type(kwargs['plot_cch_convolved']) == bool else False
 
         # find relevant information for plotting
         with open(f'{self.cch_data_dir}{os.sep}{self.area_file}', 'r') as json_pairs_file:
@@ -356,7 +379,6 @@ class PlotExamples:
         n_spikes_2 = np.asarray(data[as_id][self.cell_pair_id]['data'], dtype=np.float32)[0, 4]
         print(f"Cell 1 had {n_spikes_1} spikes and cell 2 had {n_spikes_2} spikes")
 
-
         if 'distal' in as_id:
             if rat_id != 'johnjohn':
                 as_id_other_bank = as_id.replace('distal', 'intermediate')
@@ -366,14 +388,18 @@ class PlotExamples:
             if rat_id != 'johnjohn':
                 as_id_other_bank = as_id.replace('intermediate', 'distal')
             else:
-                as_id_other_bank =  'johnjohn_210520_distal'
+                as_id_other_bank = 'johnjohn_210520_distal'
 
         if to_normalize:
             cch = np.asarray(data[as_id][self.cell_pair_id]['data'], dtype=np.float32)[:, 0] \
                   / np.min([np.asarray(data[as_id][self.cell_pair_id]['data'], dtype=np.float32)[0, 3],
                             np.asarray(data[as_id][self.cell_pair_id]['data'], dtype=np.float32)[0, 4]])
+            cch_convolved = np.asarray(data[as_id][self.cell_pair_id]['data'], dtype=np.float32)[:, 1] \
+                            / np.min([np.asarray(data[as_id][self.cell_pair_id]['data'], dtype=np.float32)[0, 3],
+                                      np.asarray(data[as_id][self.cell_pair_id]['data'], dtype=np.float32)[0, 4]])
         else:
             cch = np.asarray(data[as_id][self.cell_pair_id]['data'], dtype=np.float32)[:, 0]
+            cch_convolved = np.asarray(data[as_id][self.cell_pair_id]['data'], dtype=np.float32)[:, 1]
 
         if add_prob:
             normalize = plt.Normalize(vmin=-8, vmax=0)
@@ -414,6 +440,8 @@ class PlotExamples:
             inset_axes.set_zlabel('DV (mm)')
             inset_axes.view_init(elev=self.elev_azimuth_3d[rat_id][0], azim=self.elev_azimuth_3d[rat_id][1])
         ax.plot(list(range(cch.shape[0])), cch, drawstyle='steps-mid', color=cch_color_alpha['c'], alpha=cch_color_alpha['alpha'])
+        if plot_cch_convolved:
+            ax.plot(list(range(cch.shape[0])), cch_convolved, color=cch_color_alpha['c'], alpha=cch_color_alpha['alpha'])
         if add_prob:
             for ii in range(cch.shape[0]):
                 ax.fill_between(x=[ii], y1=[0], y2=[cch[ii]], step='mid', color=cmap(normalize(log_probabilities[ii])))
@@ -439,4 +467,125 @@ class PlotExamples:
             if os.path.exists(self.save_dir):
                 fig.savefig(f'{self.save_dir}{os.sep}{as_id}_{self.cell_pair_id}.{self.fig_format}', dpi=300)
         plt.show()
+
+    def plot_cch_pairs_anatomically(self, **kwargs):
+        """
+        Description
+        ----------
+        Plot anatomical distribution of all significant CCH pairs in one animal.
+        ----------
+
+        Parameters
+        ----------
+        **kwargs (dictionary)
+        chosen_rat (str)
+            The animal to plot the cell pairs for; defaults to 'kavorka'.
+        special_pairs (list / bool)
+            Special pairs to be plotted; defaults to False.
+        ----------
+
+        Returns
+        ----------
+        anatomical_cch_distribution (fig)
+            A plot of of the CCH pairs anatomical positions.
+        ----------
+        """
+
+        chosen_rat = kwargs['chosen_rat'] if 'chosen_rat' in kwargs.keys() and kwargs['chosen_rat'] in self.animal_ids.keys() else 'kavorka'
+        special_pairs = kwargs['special_pairs'] if 'special_pairs' in kwargs.keys() and type(kwargs['special_pairs']) == list else False
+
+        if type(special_pairs) == list:
+            special_pairs_split = []
+            for pair in special_pairs:
+                for one_cl in pair.split('-'):
+                    special_pairs_split.append(one_cl)
+
+        # load the data
+        with open(self.cch_summary_file, 'r') as summary_file:
+            cch_summary_dict = json.load(summary_file)
+
+        point_3d_dict = {'other': {area: {'cl': [], 'X': [], 'Y': [], 'Z': []} for area in self.areas_by_rat[chosen_rat]},
+                         'special': {area: {'cl': [], 'X': [], 'Y': [], 'Z': []} for area in self.areas_by_rat[chosen_rat]}}
+        line_3d_dict = {}
+
+        for area_area in cch_summary_dict.keys():
+            cl_areas = [area_area[:len(area_area)//2], area_area[len(area_area)//2:]]
+            if chosen_rat in self.area_rats[area_area]:
+                for a_s in cch_summary_dict[area_area][chosen_rat].keys():
+                    a_s_split = a_s.split('_')
+                    if cl_areas[0] != cl_areas[1]:
+                        correct_session_name = ''
+                        for num in range(1, 5):
+                            if os.path.exists(f'{self.data_file_dir}{os.sep}clean_data_{a_s_split[0]}_{a_s_split[1]}_s{num}_{a_s_split[2]}_dark_reheaded_XYZeuler_notricks.pkl'):
+                                correct_session_name = f'{self.data_file_dir}{os.sep}clean_data_{a_s_split[0]}_{a_s_split[1]}_s{num}_{a_s_split[2]}_dark_reheaded_XYZeuler_notricks.pkl'
+                                break
+
+                        cat1_cl = select_clusters.ClusterFinder(session=correct_session_name,
+                                                                cluster_groups_dir=self.cluster_groups_dir,
+                                                                sp_profiles_csv=self.sp_profiles_csv).get_desired_clusters(filter_by_area=[cl_areas[0]],
+                                                                                                                           filter_by_cluster_type='good')
+                    for cl in cch_summary_dict[area_area][chosen_rat][a_s]['clusters'].keys():
+                        if type(special_pairs) == list and cl in special_pairs_split:
+                            dict_of_choice = 'special'
+                        else:
+                            dict_of_choice = 'other'
+                        if cl_areas[0] == cl_areas[1]:
+                            cl_area = cl_areas[0]
+                        else:
+                            if cl in cat1_cl:
+                                cl_area = cl_areas[0]
+                            else:
+                                cl_area = cl_areas[1]
+                        if cl not in point_3d_dict[dict_of_choice][cl_area]['cl']:
+                            point_3d_dict[dict_of_choice][cl_area]['cl'].append(cl)
+                            point_3d_dict[dict_of_choice][cl_area]['X'].append(cch_summary_dict[area_area][chosen_rat][a_s]['clusters'][cl]['XYZ'][0])
+                            point_3d_dict[dict_of_choice][cl_area]['Y'].append(cch_summary_dict[area_area][chosen_rat][a_s]['clusters'][cl]['XYZ'][1])
+                            point_3d_dict[dict_of_choice][cl_area]['Z'].append(cch_summary_dict[area_area][chosen_rat][a_s]['clusters'][cl]['XYZ'][2])
+
+        for area_area in cch_summary_dict.keys():
+            if chosen_rat in self.area_rats[area_area]:
+                for a_s in cch_summary_dict[area_area][chosen_rat].keys():
+                    for pair_idx, pair in enumerate(cch_summary_dict[area_area][chosen_rat][a_s]['pairs']):
+                        cl1, cl2 = pair.split('-')
+                        direction = cch_summary_dict[area_area][chosen_rat][a_s]['directionality'][pair_idx]
+                        if direction == -1:
+                            direction_cls = [cl1, cl2]
+                        else:
+                            direction_cls = [cl2, cl1]
+                        line_3d_dict[pair] = [cch_summary_dict[area_area][chosen_rat][a_s]['clusters'][direction_cls[0]]['XYZ'],
+                                              cch_summary_dict[area_area][chosen_rat][a_s]['clusters'][direction_cls[1]]['XYZ'],
+                                              cch_summary_dict[area_area][chosen_rat][a_s]['strength'][pair_idx],
+                                              cch_summary_dict[area_area][chosen_rat][a_s]['type'][pair_idx]]
+
+        line_types = {'excitatory': '-', 'inhibitory': '-.'}
+        fig = plt.figure(figsize=(6, 8), dpi=500)
+        ax = fig.add_subplot(projection='3d')
+        for pair in line_3d_dict.keys():
+            pair_data = line_3d_dict[pair]
+            ax.plot([pair_data[0][0], pair_data[1][0]], [pair_data[0][1], pair_data[1][1]], [pair_data[0][2], pair_data[1][2]],
+                    ls=line_types[pair_data[3]], lw=pair_data[2]*3, color='#000000')
+        for area in point_3d_dict['other'].keys():
+            ax.scatter(point_3d_dict['other'][area]['X'], point_3d_dict['other'][area]['Y'], point_3d_dict['other'][area]['Z'],
+                       color=self.area_colors[area], alpha=.8)
+        for area in point_3d_dict['special'].keys():
+            if len(point_3d_dict['special'][area]['cl']) > 0:
+                ax.scatter(point_3d_dict['special'][area]['X'], point_3d_dict['special'][area]['Y'], point_3d_dict['special'][area]['Z'],
+                           color=self.area_colors[area], ec='#000000', alpha=1)
+        ax.view_init(elev=self.elev_azimuth_3d[chosen_rat][0], azim=self.elev_azimuth_3d[chosen_rat][1])
+        ax.set_title(f'#{self.animal_ids[chosen_rat]}', pad=0)
+        ax.invert_xaxis()
+        ax.xaxis.set_pane_color((1.0, 1.0, 1.0, 1.0))
+        ax.yaxis.set_pane_color((1.0, 1.0, 1.0, 1.0))
+        ax.zaxis.set_pane_color((1.0, 1.0, 1.0, 1.0))
+        ax.set_xlabel('AP (mm)')
+        ax.set_ylabel('ML (mm)')
+        ax.set_zlabel('DV (mm)')
+        ax.grid(False)
+        plt.show()
+        if self.save_fig:
+            if os.path.exists(self.save_dir):
+                fig.savefig(f'{self.save_dir}{os.sep}cch_anatomical_{chosen_rat}.{self.fig_format}', dpi=500)
+            else:
+                print("Specified save directory doesn't exist. Try again.")
+                sys.exit()
 
