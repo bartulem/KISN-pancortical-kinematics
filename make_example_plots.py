@@ -19,6 +19,8 @@ from scipy.stats import sem
 import neural_activity
 import select_clusters
 
+plt.rcParams['font.sans-serif'] = ['Helvetica']
+
 
 class PlotExamples:
     animal_ids = {'frank': '26473', 'johnjohn': '26471', 'kavorka': '26525',
