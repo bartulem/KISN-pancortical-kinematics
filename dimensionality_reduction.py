@@ -298,20 +298,21 @@ class LatentSpace:
             pl_dict = {'VV': {'md_distance': []}, 'AA': {'md_distance': []},
                        'MM': {'md_distance': []}, 'SS': {'md_distance': []}}
             for area in synaptic_data.keys():
-                if area == 'VV' or area == 'AA':
-                    animal_list = ['kavorka', 'johnjohn', 'frank']
-                else:
-                    animal_list = ['jacopo', 'crazyjoe', 'roy']
-                for animal in animal_list:
-                    for animal_session in synaptic_data[area][animal].keys():
-                        for pair_idx, pair in enumerate(synaptic_data[area][animal][animal_session]['pairs']):
-                            cl1, cl2 = pair.split('-')
-                            spc_pos1 = spc[(spc['cluster_id'] == cl1) & (spc['session_id'] == animal_session)].index.tolist()[0]
-                            spc_pos2 = spc[(spc['cluster_id'] == cl2) & (spc['session_id'] == animal_session)].index.tolist()[0]
-                            if spc_pos1 in non_nan_idx_list and spc_pos2 in non_nan_idx_list:
-                                pos1 = non_nan_idx_list.index(spc_pos1)
-                                pos2 = non_nan_idx_list.index(spc_pos2)
-                                pl_dict[area]['md_distance'].append(np.abs(np.linalg.norm(spc_filtered[pos1, :] - spc_filtered[pos2, :])))
+                if area in pl_dict.keys():
+                    if area == 'VV' or area == 'AA':
+                        animal_list = ['kavorka', 'johnjohn', 'frank']
+                    else:
+                        animal_list = ['jacopo', 'crazyjoe', 'roy']
+                    for animal in animal_list:
+                        for animal_session in synaptic_data[area][animal].keys():
+                            for pair_idx, pair in enumerate(synaptic_data[area][animal][animal_session]['pairs']):
+                                cl1, cl2 = pair.split('-')
+                                spc_pos1 = spc[(spc['cluster_id'] == cl1) & (spc['session_id'] == animal_session)].index.tolist()[0]
+                                spc_pos2 = spc[(spc['cluster_id'] == cl2) & (spc['session_id'] == animal_session)].index.tolist()[0]
+                                if spc_pos1 in non_nan_idx_list and spc_pos2 in non_nan_idx_list:
+                                    pos1 = non_nan_idx_list.index(spc_pos1)
+                                    pos2 = non_nan_idx_list.index(spc_pos2)
+                                    pl_dict[area]['md_distance'].append(np.abs(np.linalg.norm(spc_filtered[pos1, :] - spc_filtered[pos2, :])))
             with io.open(f'{self.save_dir}{os.sep}md_distances.json', 'w', encoding='utf-8') as to_save_file:
                 to_save_file.write(json.dumps(pl_dict, ensure_ascii=False, indent=4))
 

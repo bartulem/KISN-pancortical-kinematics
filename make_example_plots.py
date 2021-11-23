@@ -565,14 +565,14 @@ class PlotExamples:
         for pair in line_3d_dict.keys():
             pair_data = line_3d_dict[pair]
             ax.plot([pair_data[0][0], pair_data[1][0]], [pair_data[0][1], pair_data[1][1]], [pair_data[0][2], pair_data[1][2]],
-                    ls=line_types[pair_data[3]], lw=pair_data[2]*3, color='#000000')
+                    ls=line_types[pair_data[3]], lw=pair_data[2]*20, color='#000000')
         for area in point_3d_dict['other'].keys():
             ax.scatter(point_3d_dict['other'][area]['X'], point_3d_dict['other'][area]['Y'], point_3d_dict['other'][area]['Z'],
-                       color=self.area_colors[area], alpha=.8)
+                       color=self.area_colors[area], alpha=.8, s=40)
         for area in point_3d_dict['special'].keys():
             if len(point_3d_dict['special'][area]['cl']) > 0:
                 ax.scatter(point_3d_dict['special'][area]['X'], point_3d_dict['special'][area]['Y'], point_3d_dict['special'][area]['Z'],
-                           color=self.area_colors[area], ec='#000000', alpha=1)
+                           color=self.area_colors[area], ec='#000000', alpha=1, s=40)
         ax.view_init(elev=self.elev_azimuth_3d[chosen_rat][0], azim=self.elev_azimuth_3d[chosen_rat][1])
         ax.set_title(f'#{self.animal_ids[chosen_rat]}', pad=0)
         ax.invert_xaxis()

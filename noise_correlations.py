@@ -12,6 +12,7 @@ import io
 import os
 import sys
 import json
+import pickle
 import numpy as np
 import pandas as pd
 import scipy.io as sio
@@ -19,11 +20,13 @@ from scipy import sparse
 from numba import njit
 from tqdm import tqdm
 from itertools import combinations
+from random import shuffle
 from scipy.ndimage import gaussian_filter1d
 from scipy.stats import poisson
 import sessions2load
 import select_clusters
 import neural_activity
+import quantify_ratemaps
 
 
 def bin_spiking(cl_activity, bin_size, tracking_start, tracking_stop,
@@ -64,15 +67,16 @@ def bin_spiking(cl_activity, bin_size, tracking_start, tracking_stop,
     ----------
     """
 
-    fr_arr = np.zeros(int(np.ceil((tracking_stop-tracking_start)/bin_size))).astype(np.float32)
-    fr_arr[np.floor(cl_activity/bin_size).astype(np.int32)] = 1
+    fr_arr = np.zeros(int(np.ceil((tracking_stop - tracking_start) / bin_size))).astype(np.float32)
+    fr_arr[np.floor(cl_activity / bin_size).astype(np.int32)] = 1
     jitter_arr = sparse.csr_matrix((jitter_n, fr_arr.shape[0]), dtype=np.float32)
     if to_jitter:
         for sh in range(jitter_n):
             jitter_spikes = cl_activity.copy() + ((2 * jitter_size * np.random.random(cl_activity.shape[0])) - jitter_size)
             jitter_spikes = jitter_spikes[jitter_spikes <= tracking_stop]
-            jitter_arr[sh, np.floor(jitter_spikes/bin_size).astype(np.int32)] = 1
+            jitter_arr[sh, np.floor(jitter_spikes / bin_size).astype(np.int32)] = 1
     return fr_arr, jitter_arr
+
 
 @njit(parallel=False)
 def cross_correlate(big_x, big_x_mean, small_y, small_y_mean):
@@ -96,10 +100,11 @@ def cross_correlate(big_x, big_x_mean, small_y, small_y_mean):
     ----------
     """
 
-    r_num = np.sum((big_x-big_x_mean)*(small_y-small_y_mean), axis=1)
-    r_den = np.sqrt(np.sum((big_x-big_x_mean)**2, axis=1)*np.sum((small_y-small_y_mean)**2))
-    r = r_num/r_den
+    r_num = np.sum((big_x - big_x_mean) * (small_y - small_y_mean), axis=1)
+    r_den = np.sqrt(np.sum((big_x - big_x_mean) ** 2, axis=1) * np.sum((small_y - small_y_mean) ** 2))
+    r = r_num / r_den
     return r
+
 
 @njit(parallel=False)
 def dot_product(big_x, small_y):
@@ -122,6 +127,7 @@ def dot_product(big_x, small_y):
     for row in range(big_x.shape[0]):
         r[row] = np.dot(big_x[row, :], small_y)
     return r
+
 
 @njit(parallel=False)
 def hollowed_gaussian_kernel(cch, sigma=1, fraction_hollowed=.6):
@@ -153,15 +159,16 @@ def hollowed_gaussian_kernel(cch, sigma=1, fraction_hollowed=.6):
     ----------
     """
 
-    smoothed_cch = np.zeros(cch.shape[0]*3)
+    smoothed_cch = np.zeros(cch.shape[0] * 3)
     input_array_reflected = np.concatenate((cch[::-1], cch, cch[::-1]))
     x_v = np.arange(smoothed_cch.shape[0])
     for idx in x_v:
         kernel_idx = np.exp(-(x_v - idx) ** 2 / (2 * sigma ** 2))
-        kernel_idx[int(np.floor(kernel_idx.shape[0]/2))] = kernel_idx[int(np.floor(kernel_idx.shape[0]/2))] * (1-fraction_hollowed)
+        kernel_idx[int(np.floor(kernel_idx.shape[0] / 2))] = kernel_idx[int(np.floor(kernel_idx.shape[0] / 2))] * (1 - fraction_hollowed)
         kernel_idx = kernel_idx / kernel_idx.sum()
         smoothed_cch[idx] = np.dot(kernel_idx, input_array_reflected)
-    return smoothed_cch[cch.shape[0]:cch.shape[0]*2]
+    return smoothed_cch[cch.shape[0]:cch.shape[0] * 2]
+
 
 def calculate_p_values(cch, slow_baseline):
     """
@@ -191,11 +198,10 @@ def calculate_p_values(cch, slow_baseline):
         the observed CCH, given the expected, low frequency baseline rate in the same bin.
     ----------
     """
-    return np.abs(1 - poisson.cdf(k=cch - 1, mu=slow_baseline) - poisson.pmf(k=cch, mu=slow_baseline)*0.5)
+    return np.abs(1 - poisson.cdf(k=cch - 1, mu=slow_baseline) - poisson.pmf(k=cch, mu=slow_baseline) * 0.5)
 
 
 class FunctionalConnectivity:
-
     animal_ids = {'frank': '26473', 'johnjohn': '26471', 'kavorka': '26525',
                   'roy': '26472', 'bruno': '26148', 'jacopo': '26504', 'crazyjoe': '26507'}
 
@@ -219,7 +225,7 @@ class FunctionalConnectivity:
         self.sp_profiles_csv = sp_profiles_csv
         self.pkl_files = pkl_files
         self.pkl_file = pkl_file
-        self.save_dir=save_dir
+        self.save_dir = save_dir
         self.mat_file_dirs = mat_file_dirs
         self.cch_data_dir = cch_data_dir
 
@@ -324,48 +330,48 @@ class FunctionalConnectivity:
             # get firing rates
             if to_jitter:
                 fr1, sh1 = bin_spiking(cl_activity=act1, bin_size=bin_size,
-                                       tracking_start=cluster_data['tracking_ts'][0]-cluster_data['tracking_ts'][0],
-                                       tracking_stop=cluster_data['tracking_ts'][1]-cluster_data['tracking_ts'][0],
+                                       tracking_start=cluster_data['tracking_ts'][0] - cluster_data['tracking_ts'][0],
+                                       tracking_stop=cluster_data['tracking_ts'][1] - cluster_data['tracking_ts'][0],
                                        jitter_size=jitter_size, jitter_n=num_jitters)
 
                 fr2, sh2 = bin_spiking(cl_activity=act2, bin_size=bin_size,
-                                       tracking_start=cluster_data['tracking_ts'][0]-cluster_data['tracking_ts'][0],
-                                       tracking_stop=cluster_data['tracking_ts'][1]-cluster_data['tracking_ts'][0],
+                                       tracking_start=cluster_data['tracking_ts'][0] - cluster_data['tracking_ts'][0],
+                                       tracking_stop=cluster_data['tracking_ts'][1] - cluster_data['tracking_ts'][0],
                                        jitter_size=jitter_size, jitter_n=num_jitters)
 
                 if smooth_fr:
-                    fr1 = gaussian_filter1d(input=fr1, sigma=int(round(std_smooth/bin_size)))
-                    sh1 = gaussian_filter1d(input=sh1.todense(), sigma=int(round(std_smooth/bin_size)), axis=1)
-                    fr2 = gaussian_filter1d(input=fr2, sigma=int(round(std_smooth/bin_size)))
-                    sh2 = gaussian_filter1d(input=sh2.todense(), sigma=int(round(std_smooth/bin_size)), axis=1)
+                    fr1 = gaussian_filter1d(input=fr1, sigma=int(round(std_smooth / bin_size)))
+                    sh1 = gaussian_filter1d(input=sh1.todense(), sigma=int(round(std_smooth / bin_size)), axis=1)
+                    fr2 = gaussian_filter1d(input=fr2, sigma=int(round(std_smooth / bin_size)))
+                    sh2 = gaussian_filter1d(input=sh2.todense(), sigma=int(round(std_smooth / bin_size)), axis=1)
             else:
                 fr1, sh1 = bin_spiking(cl_activity=act1, bin_size=bin_size,
-                                       tracking_start=cluster_data['tracking_ts'][0]-cluster_data['tracking_ts'][0],
-                                       tracking_stop=cluster_data['tracking_ts'][1]-cluster_data['tracking_ts'][0],
+                                       tracking_start=cluster_data['tracking_ts'][0] - cluster_data['tracking_ts'][0],
+                                       tracking_stop=cluster_data['tracking_ts'][1] - cluster_data['tracking_ts'][0],
                                        to_jitter=False, jitter_n=1)
 
                 fr2, sh2 = bin_spiking(cl_activity=act2, bin_size=bin_size,
-                                       tracking_start=cluster_data['tracking_ts'][0]-cluster_data['tracking_ts'][0],
-                                       tracking_stop=cluster_data['tracking_ts'][1]-cluster_data['tracking_ts'][0],
+                                       tracking_start=cluster_data['tracking_ts'][0] - cluster_data['tracking_ts'][0],
+                                       tracking_stop=cluster_data['tracking_ts'][1] - cluster_data['tracking_ts'][0],
                                        to_jitter=False, jitter_n=1)
 
                 if smooth_fr:
-                    fr1 = gaussian_filter1d(input=fr1, sigma=int(round(std_smooth/bin_size)))
-                    fr2 = gaussian_filter1d(input=fr2, sigma=int(round(std_smooth/bin_size)))
+                    fr1 = gaussian_filter1d(input=fr1, sigma=int(round(std_smooth / bin_size)))
+                    fr2 = gaussian_filter1d(input=fr2, sigma=int(round(std_smooth / bin_size)))
 
             # cross-correlate
-            all_bins = np.arange(-bin_num, bin_num+1, 1)
+            all_bins = np.arange(-bin_num, bin_num + 1, 1)
             fr1_shape = fr1.shape[0]
             y_start = int(round(bin_num))
-            y_end = int(round(fr1_shape-bin_num))
+            y_end = int(round(fr1_shape - bin_num))
 
             x_bool = np.zeros((all_bins.shape[0], fr1_shape), dtype=bool)
             for bin_idx, one_bin in enumerate(all_bins):
-                x_bool[bin_idx, int(round(bin_num+one_bin)):int(round(fr1_shape-bin_num+one_bin))] = True
+                x_bool[bin_idx, int(round(bin_num + one_bin)):int(round(fr1_shape - bin_num + one_bin))] = True
 
             big_x = np.tile(A=fr1, reps=(all_bins.shape[0], 1))
-            big_x = big_x[x_bool].reshape(all_bins.shape[0], y_end-y_start)
-            big_x_mean=np.reshape(big_x.mean(axis=1), (big_x.shape[0], 1))
+            big_x = big_x[x_bool].reshape(all_bins.shape[0], y_end - y_start)
+            big_x_mean = np.reshape(big_x.mean(axis=1), (big_x.shape[0], 1))
             y = fr2[y_start:y_end]
             y_mean = y.mean()
 
@@ -381,7 +387,7 @@ class FunctionalConnectivity:
                     sh_data = np.zeros((num_jitters, all_bins.shape[0]))
                     for sh in range(num_jitters):
                         big_x_sh = np.tile(A=sh1[sh, :], reps=(all_bins.shape[0], 1))
-                        big_x_sh = big_x_sh[x_bool].reshape(all_bins.shape[0], y_end-y_start)
+                        big_x_sh = big_x_sh[x_bool].reshape(all_bins.shape[0], y_end - y_start)
                         big_x_sh_mean = np.reshape(big_x_sh.mean(axis=1), (big_x_sh.shape[0], 1))
                         y_sh = sh2[sh, y_start:y_end]
                         y_sh_mean = y_sh.mean()
@@ -403,16 +409,16 @@ class FunctionalConnectivity:
                                   small_y=y)
                 output_array[:, 0] = cch
 
-                cch_convolved = hollowed_gaussian_kernel(cch=cch, sigma=int(round(convolve_sigma/bin_size)))
+                cch_convolved = hollowed_gaussian_kernel(cch=cch, sigma=int(round(convolve_sigma / bin_size)))
                 output_array[:, 1] = cch_convolved
 
                 cch_probabilities = calculate_p_values(cch=cch, slow_baseline=cch_convolved)
                 output_array[:, 2] = cch_probabilities
 
                 output_array[0, 3] = act1.shape[0]
-                output_array[1, 3] = cluster_data['tracking_ts'][1]-cluster_data['tracking_ts'][0]
+                output_array[1, 3] = cluster_data['tracking_ts'][1] - cluster_data['tracking_ts'][0]
                 output_array[0, 4] = act2.shape[0]
-                output_array[1, 4] = cluster_data['tracking_ts'][1]-cluster_data['tracking_ts'][0]
+                output_array[1, 4] = cluster_data['tracking_ts'][1] - cluster_data['tracking_ts'][0]
 
                 output_dictionary[combo_name] = output_array
 
@@ -470,7 +476,7 @@ class FunctionalConnectivity:
         json_file_names = kwargs['json_file_names'] if 'json_file_names' in kwargs.keys() and type(kwargs['json_file_names']) == list else ['synaptic', 'common_input']
 
         # get relevant boundaries for calculating statistics
-        cch_total_range = np.around(np.linspace(-cch_time, cch_time, (bin_num*2)+1), decimals=1)
+        cch_total_range = np.around(np.linspace(-cch_time, cch_time, (bin_num * 2) + 1), decimals=1)
         if relevant_cch_bounds[0] in cch_total_range \
                 and relevant_cch_bounds[1] in cch_total_range:
             rel_cch_bounds_1 = relevant_cch_bounds[0]
@@ -478,11 +484,11 @@ class FunctionalConnectivity:
         else:
             rel_cch_bounds_1 = cch_total_range[cch_total_range < relevant_cch_bounds[0]][-1]
             rel_cch_bounds_2 = cch_total_range[cch_total_range < relevant_cch_bounds[1]][-1]
-        all_cch_values = np.around(np.concatenate((np.arange(-rel_cch_bounds_2, -rel_cch_bounds_1+0.4, 0.4),
-                                                   np.arange(rel_cch_bounds_1, rel_cch_bounds_2+0.4, 0.4))), decimals=1)
+        all_cch_values = np.around(np.concatenate((np.arange(-rel_cch_bounds_2, -rel_cch_bounds_1 + 0.4, 0.4),
+                                                   np.arange(rel_cch_bounds_1, rel_cch_bounds_2 + 0.4, 0.4))), decimals=1)
         idx_array = np.where((np.isin(cch_total_range, all_cch_values)))[0]
-        negative_end_bound_idx = np.where(cch_total_range == round(-(rel_cch_bounds_1-.4), 1))[0][0]
-        positive_start_bound_idx = np.where(cch_total_range == round(rel_cch_bounds_1-.4, 1))[0][0]
+        negative_end_bound_idx = np.where(cch_total_range == round(-(rel_cch_bounds_1 - .4), 1))[0][0]
+        positive_start_bound_idx = np.where(cch_total_range == round(rel_cch_bounds_1 - .4, 1))[0][0]
 
         # load profile data with GLM categories
         if not os.path.exists(self.sp_profiles_csv):
@@ -538,16 +544,16 @@ class FunctionalConnectivity:
                         if either_peak:
                             if synaptic_peak:
                                 if data[cl_pair][most_aberrant_value_idx, 2] < p_alpha and \
-                                        (data[cl_pair][most_aberrant_value_idx-1, 2] < p_alpha or data[cl_pair][most_aberrant_value_idx+1, 2] < p_alpha):
-                                    if (data[cl_pair][negative_end_bound_idx+1:positive_start_bound_idx, 2] > p_alpha).all():
+                                        (data[cl_pair][most_aberrant_value_idx - 1, 2] < p_alpha or data[cl_pair][most_aberrant_value_idx + 1, 2] < p_alpha):
+                                    if (data[cl_pair][negative_end_bound_idx + 1:positive_start_bound_idx, 2] > p_alpha).all():
                                         excitation_p = True
                                         connection_type = 'synaptic'
                                     else:
                                         excitation_p = True
                                         connection_type = 'common_input'
                                 elif (1 - data[cl_pair][most_aberrant_value_idx, 2]) < p_alpha and \
-                                               ((1 - data[cl_pair][most_aberrant_value_idx-1, 2]) < p_alpha or (1 - data[cl_pair][most_aberrant_value_idx+1, 2]) < p_alpha):
-                                    if (1 - data[cl_pair][negative_end_bound_idx+1:positive_start_bound_idx, 2] > p_alpha).all():
+                                        ((1 - data[cl_pair][most_aberrant_value_idx - 1, 2]) < p_alpha or (1 - data[cl_pair][most_aberrant_value_idx + 1, 2]) < p_alpha):
+                                    if (1 - data[cl_pair][negative_end_bound_idx + 1:positive_start_bound_idx, 2] > p_alpha).all():
                                         inhibition_p = True
                                         connection_type = 'synaptic'
                                     else:
@@ -559,7 +565,7 @@ class FunctionalConnectivity:
                                     excitation_p = True
                                     connection_type = 'common_input'
                                 elif (1 - data[cl_pair][most_aberrant_value_idx, 2]) < p_alpha and \
-                                               ((1 - data[cl_pair][most_aberrant_value_idx-1, 2]) < p_alpha or (1 - data[cl_pair][most_aberrant_value_idx+1, 2]) < p_alpha):
+                                        ((1 - data[cl_pair][most_aberrant_value_idx - 1, 2]) < p_alpha or (1 - data[cl_pair][most_aberrant_value_idx + 1, 2]) < p_alpha):
                                     inhibition_p = True
                                     connection_type = 'common_input'
 
@@ -635,14 +641,14 @@ class FunctionalConnectivity:
         bin_num = kwargs['bin_num'] if 'bin_num' in kwargs.keys() and type(kwargs['bin_num']) == int else 50
         critical_p_value = kwargs['critical_p_value'] if 'critical_p_value' in kwargs.keys() and type(kwargs['critical_p_value']) == float else .05
 
-        cch_total_range = np.around(np.linspace(-cch_time, cch_time, (bin_num*2)+1), decimals=1)
+        cch_total_range = np.around(np.linspace(-cch_time, cch_time, (bin_num * 2) + 1), decimals=1)
 
         spc = pd.read_csv(self.sp_profiles_csv)
 
         plotting_dict = {}
         for one_file in os.listdir(f'{self.cch_data_dir}'):
             pair_region_id = one_file[-7:-5]
-            plotting_dict[pair_region_id] = {'distances':[],
+            plotting_dict[pair_region_id] = {'distances': [],
                                              'timing': [],
                                              'strength': [],
                                              'type': {'excitatory': 0, 'inhibitory': 0},
@@ -699,12 +705,13 @@ class FunctionalConnectivity:
                         else:
                             plotting_dict[pair_region_id]['type']['inhibitory'] += 1
                             plotting_dict[pair_region_id][rat_id][animal_session]['type'].append('inhibitory')
-                        plotting_dict[pair_region_id]['distances'].append(np.abs(np.linalg.norm(np.array(spc.iloc[spc[(spc['cluster_id'] == pair_id.split('-')[0]) & (spc['session_id'] == animal_session)].index, -3:]).ravel()
-                                                                                                - np.array(spc.iloc[spc[(spc['cluster_id'] == pair_id.split('-')[1]) & (spc['session_id'] == animal_session)].index, -3:]).ravel())))
+                        plotting_dict[pair_region_id]['distances'].append(
+                            np.abs(np.linalg.norm(np.array(spc.iloc[spc[(spc['cluster_id'] == pair_id.split('-')[0]) & (spc['session_id'] == animal_session)].index, -3:]).ravel()
+                                                  - np.array(spc.iloc[spc[(spc['cluster_id'] == pair_id.split('-')[1]) & (spc['session_id'] == animal_session)].index, -3:]).ravel())))
                         plotting_dict[pair_region_id]['timing'].append(np.abs(data[animal_session][pair_id]['peak_time']))
                         idx_of_interest = np.where(cch_total_range == data[animal_session][pair_id]['peak_time'])[0][0]
                         cross_corr_data = np.array(data[animal_session][pair_id]['data'])
-                        strength = np.abs((cross_corr_data[idx_of_interest, 0] - cross_corr_data[idx_of_interest, 1])/np.min([cross_corr_data[0, 3], cross_corr_data[0, 4]]))
+                        strength = np.abs((cross_corr_data[idx_of_interest, 0] - cross_corr_data[idx_of_interest, 1]) / np.min([cross_corr_data[0, 3], cross_corr_data[0, 4]]))
                         plotting_dict[pair_region_id]['strength'].append(strength)
                         plotting_dict[pair_region_id][rat_id][animal_session]['strength'].append(strength)
                         for cl_idx, cl in enumerate(pair_id.split('-')):
@@ -755,3 +762,320 @@ class FunctionalConnectivity:
         with io.open(f'{self.save_dir}{os.sep}cch_summary_synaptic.json', 'w', encoding='utf-8') as to_save_file:
             to_save_file.write(json.dumps(plotting_dict, ensure_ascii=False, indent=4))
 
+    def shuffling_connections(self, **kwargs):
+        """
+        Description
+        ----------
+        This method checks whether the CCH results were obtained by chance.
+        ----------
+
+        Parameters
+        ----------
+        **kwargs (dictionary)
+        areas_lst (list)
+            Brain areas of interest; defaults to ['AA'].
+        animal_dates (dict)
+            Dictionary containing dates when animals were recorded: defaults to {'kavokra': '190620', 'frank': '010620', 'johnjohn': '210520'}.
+        n_shuff (int)
+            Number of shuffle to perform; defaults to 1000.
+        mi (dict)
+            Modulation index of choice: defaults to {'AA': 'SMI', 'VV': 'LMI', 'SS': 'LMI', 'MM': 'LMI'}.
+        ----------
+
+        Returns
+        ----------
+        cch_summary (.json file)
+            A file with the CCH summary results.
+        ----------
+        """
+
+        areas_lst = kwargs['areas_lst'] if 'areas_lst' in kwargs.keys() and type(kwargs['areas_lst']) == list else ['AA']
+        animal_dates = kwargs['animal_dates'] if 'animal_dates' in kwargs.keys() and type(kwargs['animal_dates']) == dict \
+            else {'kavorka': {'distal': '190620', 'intermediate': '190620'}, 'frank': {'distal': '010620', 'intermediate': '010620'},
+                  'johnjohn': {'distal': '210520', 'intermediate': '230520'}, 'roy': {'distal': '270520', 'intermediate': '270520'},
+                  'jacopo': {'distal': '150620', 'intermediate': '150620'}, 'crazyjoe': {'distal': '170620', 'intermediate': '170620'}}
+        n_shuff = kwargs['n_shuff'] if 'n_shuff' in kwargs.keys() and type(kwargs['n_shuff']) == int else 1000
+        mi = kwargs['mi'] if 'mi' in kwargs.keys() and type(kwargs['mi']) == dict else {'AA': 'SMI', 'VV': 'LMI', 'SS': 'LMI', 'MM': 'LMI'}
+
+        with open(f'{self.cch_data_dir}{os.sep}cch_summary_synaptic.json', 'r') as summary_file:
+            synaptic_data = json.load(summary_file)
+
+        spc = pd.read_csv(self.sp_profiles_csv)
+
+        data_dict = {area: {'data': {}, 'shuffled': {}} for area in areas_lst}
+        for area in areas_lst:
+
+            largest_connection_distance = 0
+            smallest_connection_distance = 3.84
+
+            area_dict = {connection_type: {'po_po': 0, 'po_mo': 0, 'mo_mo': 0,
+                                           'mo_po': 0, f'mo_{mi[area]}': 0, f'po_{mi[area]}': 0,
+                                           'unclass': 0, f'unclass_{mi[area]}': 0} for connection_type in ['exc', 'inh']}
+
+            # data
+            for key in synaptic_data[area].keys():
+                if key in self.animal_ids.keys():
+                    for session in synaptic_data[area][key]:
+                        for idx, pair in enumerate(synaptic_data[area][key][session]['pairs']):
+                            direction = synaptic_data[area][key][session]['directionality'][idx]
+                            connection_type = synaptic_data[area][key][session]['type'][idx]
+                            cl1, cl2 = pair.split('-')
+                            if direction < 0:
+                                presynaptic_cell = cl1
+                                postsynaptic_cell = cl2
+                            else:
+                                presynaptic_cell = cl2
+                                postsynaptic_cell = cl1
+                            presynaptic_beh = synaptic_data[area][key][session]['clusters'][presynaptic_cell]['behavior']
+                            postsynaptic_beh = synaptic_data[area][key][session]['clusters'][postsynaptic_cell]['behavior']
+                            postsynaptic_mi = synaptic_data[area][key][session]['clusters'][postsynaptic_cell][mi[area]]
+
+                            presynaptic_idx = spc[(spc['cluster_id'] == presynaptic_cell) & (spc['session_id'] == session)].index.tolist()[0]
+                            postsynaptic_idx = spc[(spc['cluster_id'] == postsynaptic_cell) & (spc['session_id'] == session)].index.tolist()[0]
+                            pair_euclidean_distance = np.abs(np.linalg.norm(np.array(spc.iloc[presynaptic_idx, -3:]) - np.array(spc.iloc[postsynaptic_idx, -3:])))
+                            largest_connection_distance = max(largest_connection_distance, pair_euclidean_distance)
+                            smallest_connection_distance = min(smallest_connection_distance, pair_euclidean_distance)
+
+                            # classify by tuning of behavioral modulation
+                            if ('der' in presynaptic_beh or 'Speeds' in presynaptic_beh or 'Self_motion' in presynaptic_beh) and \
+                                    ('der' in postsynaptic_beh or 'Speeds' in postsynaptic_beh or 'Self_motion' in postsynaptic_beh) and \
+                                    (presynaptic_beh != 'Unclassified' and presynaptic_beh != 'null') and \
+                                    (postsynaptic_beh != 'Unclassified' and postsynaptic_beh != 'null'):
+                                if connection_type == 'excitatory':
+                                    area_dict['exc']['mo_mo'] += 1
+                                    if postsynaptic_mi != 'ns':
+                                        area_dict['exc'][f'mo_{mi[area]}'] += 1
+                                else:
+                                    area_dict['inh']['mo_mo'] += 1
+                                    if postsynaptic_mi != 'ns':
+                                        area_dict['inh'][f'mo_{mi[area]}'] += 1
+                            elif not ('der' in presynaptic_beh or 'Speeds' in presynaptic_beh or 'Self_motion' in presynaptic_beh) and \
+                                    not ('der' in postsynaptic_beh or 'Speeds' in postsynaptic_beh or 'Self_motion' in postsynaptic_beh) and \
+                                    (presynaptic_beh != 'Unclassified' and presynaptic_beh != 'null') and \
+                                    (postsynaptic_beh != 'Unclassified' and postsynaptic_beh != 'null'):
+                                if connection_type == 'excitatory':
+                                    area_dict['exc']['po_po'] += 1
+                                    if postsynaptic_mi != 'ns':
+                                        area_dict['exc'][f'po_{mi[area]}'] += 1
+                                else:
+                                    area_dict['inh']['po_po'] += 1
+                                    if postsynaptic_mi != 'ns':
+                                        area_dict['inh'][f'po_{mi[area]}'] += 1
+                            elif ('der' in presynaptic_beh or 'Speeds' in presynaptic_beh or 'Self_motion' in presynaptic_beh) and \
+                                    not ('der' in postsynaptic_beh or 'Speeds' in postsynaptic_beh or 'Self_motion' in postsynaptic_beh) and \
+                                    (presynaptic_beh != 'Unclassified' and presynaptic_beh != 'null') and \
+                                    (postsynaptic_beh != 'Unclassified' and postsynaptic_beh != 'null'):
+                                if connection_type == 'excitatory':
+                                    area_dict['exc']['mo_po'] += 1
+                                    if postsynaptic_mi != 'ns':
+                                        area_dict['exc'][f'mo_{mi[area]}'] += 1
+                                else:
+                                    area_dict['inh']['mo_po'] += 1
+                                    if postsynaptic_mi != 'ns':
+                                        area_dict['inh'][f'mo_{mi[area]}'] += 1
+                            elif not ('der' in presynaptic_beh or 'Speeds' in presynaptic_beh or 'Self_motion' in presynaptic_beh) and \
+                                    ('der' in postsynaptic_beh or 'Speeds' in postsynaptic_beh or 'Self_motion' in postsynaptic_beh) and \
+                                    (presynaptic_beh != 'Unclassified' and presynaptic_beh != 'null') and \
+                                    (postsynaptic_beh != 'Unclassified' and postsynaptic_beh != 'null'):
+                                if connection_type == 'excitatory':
+                                    area_dict['exc']['po_mo'] += 1
+                                    if postsynaptic_mi != 'ns':
+                                        area_dict['exc'][f'po_{mi[area]}'] += 1
+                                else:
+                                    area_dict['inh']['po_mo'] += 1
+                                    if postsynaptic_mi != 'ns':
+                                        area_dict['inh'][f'po_{mi[area]}'] += 1
+                            elif (presynaptic_beh != 'Unclassified' and presynaptic_beh != 'null') or \
+                                    (postsynaptic_beh != 'Unclassified' and postsynaptic_beh != 'null'):
+                                if connection_type == 'excitatory':
+                                    area_dict['exc']['unclass'] += 1
+                                    if postsynaptic_mi != 'ns':
+                                        if not ('der' in presynaptic_beh or 'Speeds' in presynaptic_beh or 'Self_motion' in presynaptic_beh) \
+                                                and presynaptic_beh != 'Unclassified' and presynaptic_beh != 'null':
+                                            area_dict['exc'][f'po_{mi[area]}'] += 1
+                                        elif 'der' in presynaptic_beh or 'Speeds' in presynaptic_beh or 'Self_motion' in presynaptic_beh \
+                                                and presynaptic_beh != 'Unclassified' and presynaptic_beh != 'null':
+                                            area_dict['exc'][f'mo_{mi[area]}'] += 1
+                                        else:
+                                            area_dict['exc'][f'unclass_{mi[area]}'] += 1
+                                else:
+                                    area_dict['inh']['unclass'] += 1
+                                    if postsynaptic_mi != 'ns':
+                                        if not ('der' in presynaptic_beh or 'Speeds' in presynaptic_beh or 'Self_motion' in presynaptic_beh) \
+                                                and presynaptic_beh != 'Unclassified' and presynaptic_beh != 'null':
+                                            area_dict['inh'][f'po_{mi[area]}'] += 1
+                                        elif 'der' in presynaptic_beh or 'Speeds' in presynaptic_beh or 'Self_motion' in presynaptic_beh \
+                                                and presynaptic_beh != 'Unclassified' and presynaptic_beh != 'null':
+                                            area_dict['inh'][f'mo_{mi[area]}'] += 1
+                                        else:
+                                            area_dict['inh'][f'unclass_{mi[area]}'] += 1
+                            else:
+                                if connection_type == 'excitatory':
+                                    area_dict['exc']['unclass'] += 1
+                                    if postsynaptic_mi != 'ns':
+                                        area_dict['exc'][f'unclass_{mi[area]}'] += 1
+                                else:
+                                    area_dict['inh']['unclass'] += 1
+                                    if postsynaptic_mi != 'ns':
+                                        area_dict['inh'][f'unclass_{mi[area]}'] += 1
+
+            data_dict[area]['data'] = area_dict
+
+            # shuffled data
+            exc_n = synaptic_data[area]['type']['excitatory']
+            inh_n = synaptic_data[area]['type']['inhibitory']
+
+            cl_dict = quantify_ratemaps.RatemapCharacteristics(ratemap_mat_dir='/home/bartulm/Insync/mimica.bartul@gmail.com/OneDrive/Work/data/posture_2020/ratemap_mats',
+                                                               pkl_sessions_dir=self.pkl_sessions_dir,
+                                                               specific_date={'bruno': ['020520', '030520'],
+                                                                              'roy': True,
+                                                                              'jacopo': True,
+                                                                              'crazyjoe': True,
+                                                                              'frank': True,
+                                                                              'johnjohn': ['210520', '230520'],
+                                                                              'kavorka': True},
+                                                               area_filter=area[0],
+                                                               session_id_filter=True,
+                                                               session_non_filter='johnjohn_210520_s2',
+                                                               session_type_filter=['dark'],
+                                                               cluster_type_filter='good',
+                                                               cluster_groups_dir=self.cluster_groups_dir,
+                                                               sp_profiles_csv=self.sp_profiles_csv).file_finder(return_clusters=True)
+
+            shuffled_dict = {connection_type: {'po_po': np.zeros(n_shuff), 'po_mo': np.zeros(n_shuff), 'mo_mo': np.zeros(n_shuff),
+                                               'mo_po': np.zeros(n_shuff), f'mo_{mi[area]}': np.zeros(n_shuff), f'po_{mi[area]}': np.zeros(n_shuff),
+                                               'unclass': np.zeros(n_shuff), f'unclass_{mi[area]}': np.zeros(n_shuff)} for connection_type in ['exc', 'inh']}
+
+            for shuffle_num in tqdm(range(n_shuff)):
+                exc_n_shuff = 0
+                inh_n_shuff = 0
+                while exc_n_shuff < exc_n or inh_n_shuff < inh_n:
+                    animals_lst = list(cl_dict.keys())
+                    shuffle(animals_lst)
+                    temp_animal = animals_lst[0]
+                    banks_lst = list(cl_dict[temp_animal].keys())
+                    shuffle(banks_lst)
+                    temp_bank = banks_lst[0]
+                    shuffle(cl_dict[temp_animal][temp_bank])
+
+                    cl1, cl2 = cl_dict[temp_animal][temp_bank][0], cl_dict[temp_animal][temp_bank][1]
+                    spc1 = spc[(spc['cluster_id'] == cl1) & (spc['session_id'] == f'{temp_animal}_{animal_dates[temp_animal][temp_bank]}_{temp_bank}')].index.tolist()[0]
+                    spc2 = spc[(spc['cluster_id'] == cl2) & (spc['session_id'] == f'{temp_animal}_{animal_dates[temp_animal][temp_bank]}_{temp_bank}')].index.tolist()[0]
+                    spc1_profile = spc.loc[spc1, 'profile']
+                    spc2_profile = spc.loc[spc2, 'profile']
+                    spc1_tuning = spc.loc[spc1, 'first_covariate']
+                    spc2_tuning = spc.loc[spc2, 'first_covariate']
+
+                    spc_pair_euclidean_distance = np.abs(np.linalg.norm(np.array(spc.iloc[spc1, -3:]) - np.array(spc.iloc[spc2, -3:])))
+
+                    exc_bool = ((spc1_profile == 'RS' and spc2_profile == 'RS') or (spc1_profile == 'RS' and spc2_profile == 'FS')) and exc_n_shuff < exc_n
+                    inh_bool = ((spc1_profile == 'FS' and spc2_profile == 'RS') or (spc1_profile == 'FS' and spc2_profile == 'FS')) and inh_n_shuff < inh_n
+                    distance_bool = smallest_connection_distance <= spc_pair_euclidean_distance <= largest_connection_distance
+
+                    if (exc_bool or inh_bool) and distance_bool and type(spc1_tuning) == str and type(spc2_tuning) == str:
+                        mi2_bool = False
+                        if mi == 'SMI':
+                            if spc.loc[spc2, 'pSMI'] < .05:
+                                mi2_bool = True
+                        else:
+                            if spc.loc[spc2, 'pLMI'] < .05 and spc.loc[spc2, 'pLMIcheck'] > .05:
+                                mi2_bool = True
+
+                        # classify by behavioral tuning and sensory modulation
+                        if ('der' in spc1_tuning or 'Speeds' in spc1_tuning or 'Self_motion' in spc1_tuning) and \
+                                ('der' in spc2_tuning or 'Speeds' in spc2_tuning or 'Self_motion' in spc2_tuning) and \
+                                spc1_tuning != 'Unclassified' and spc2_tuning != 'Unclassified':
+                            if exc_bool:
+                                shuffled_dict['exc']['mo_mo'][shuffle_num] += 1
+                                exc_n_shuff += 1
+                                if mi2_bool is True:
+                                    shuffled_dict['exc'][f'mo_{mi[area]}'][shuffle_num] += 1
+                            else:
+                                shuffled_dict['inh']['mo_mo'][shuffle_num] += 1
+                                inh_n_shuff += 1
+                                if mi2_bool is True:
+                                    shuffled_dict['inh'][f'mo_{mi[area]}'][shuffle_num] += 1
+                        elif not ('der' in spc1_tuning or 'Speeds' in spc1_tuning or 'Self_motion' in spc1_tuning) and \
+                                not ('der' in spc2_tuning or 'Speeds' in spc2_tuning or 'Self_motion' in spc2_tuning) and \
+                                spc1_tuning != 'Unclassified' and spc2_tuning != 'Unclassified':
+                            if exc_bool:
+                                shuffled_dict['exc']['po_po'][shuffle_num] += 1
+                                exc_n_shuff += 1
+                                if mi2_bool is True:
+                                    shuffled_dict['exc'][f'po_{mi[area]}'][shuffle_num] += 1
+                            else:
+                                shuffled_dict['inh']['po_po'][shuffle_num] += 1
+                                inh_n_shuff += 1
+                                if mi2_bool is True:
+                                    shuffled_dict['inh'][f'po_{mi[area]}'][shuffle_num] += 1
+                        elif ('der' in spc1_tuning or 'Speeds' in spc1_tuning or 'Self_motion' in spc1_tuning) and \
+                                not ('der' in spc2_tuning or 'Speeds' in spc2_tuning or 'Self_motion' in spc2_tuning) and \
+                                spc1_tuning != 'Unclassified' and spc2_tuning != 'Unclassified':
+                            if exc_bool:
+                                shuffled_dict['exc']['mo_po'][shuffle_num] += 1
+                                exc_n_shuff += 1
+                                if mi2_bool is True:
+                                    shuffled_dict['exc'][f'mo_{mi[area]}'][shuffle_num] += 1
+                            else:
+                                shuffled_dict['inh']['mo_po'][shuffle_num] += 1
+                                inh_n_shuff += 1
+                                if mi2_bool is True:
+                                    shuffled_dict['inh'][f'mo_{mi[area]}'][shuffle_num] += 1
+                        elif not ('der' in spc1_tuning or 'Speeds' in spc1_tuning or 'Self_motion' in spc1_tuning) and \
+                                ('der' in spc2_tuning or 'Speeds' in spc2_tuning or 'Self_motion' in spc2_tuning) and \
+                                spc1_tuning != 'Unclassified' and spc2_tuning != 'Unclassified':
+                            if exc_bool:
+                                shuffled_dict['exc']['po_mo'][shuffle_num] += 1
+                                exc_n_shuff += 1
+                                if mi2_bool is True:
+                                    shuffled_dict['exc'][f'po_{mi[area]}'][shuffle_num] += 1
+                            else:
+                                shuffled_dict['inh']['po_mo'][shuffle_num] += 1
+                                inh_n_shuff += 1
+                                if mi2_bool is True:
+                                    shuffled_dict['inh'][f'po_{mi[area]}'][shuffle_num] += 1
+                        elif spc1_tuning != 'Unclassified' or spc2_tuning != 'Unclassified':
+                            if exc_bool:
+                                shuffled_dict['exc']['unclass'][shuffle_num] += 1
+                                exc_n_shuff += 1
+                                if mi2_bool is True:
+                                    if not ('der' in spc1_tuning or 'Speeds' in spc1_tuning or 'Self_motion' in spc1_tuning) \
+                                            and spc1_tuning != 'Unclassified':
+                                        shuffled_dict['exc'][f'po_{mi[area]}'][shuffle_num] += 1
+                                    elif 'der' in spc1_tuning or 'Speeds' in spc1_tuning or 'Self_motion' in spc1_tuning \
+                                            and spc1_tuning != 'Unclassified':
+                                        shuffled_dict['exc'][f'mo_{mi[area]}'][shuffle_num] += 1
+                                    else:
+                                        shuffled_dict['exc'][f'unclass_{mi[area]}'][shuffle_num] += 1
+                            else:
+                                shuffled_dict['inh']['unclass'][shuffle_num] += 1
+                                inh_n_shuff += 1
+                                if mi2_bool is True:
+                                    if not ('der' in spc1_tuning or 'Speeds' in spc1_tuning or 'Self_motion' in spc1_tuning) \
+                                            and spc1_tuning != 'Unclassified':
+                                        shuffled_dict['inh'][f'po_{mi[area]}'][shuffle_num] += 1
+                                    elif 'der' in spc1_tuning or 'Speeds' in spc1_tuning or 'Self_motion' in spc1_tuning \
+                                            and spc1_tuning != 'Unclassified':
+                                        shuffled_dict['inh'][f'mo_{mi[area]}'][shuffle_num] += 1
+                                    else:
+                                        shuffled_dict['inh'][f'unclass_{mi[area]}'][shuffle_num] += 1
+                        else:
+                            if exc_bool:
+                                shuffled_dict['exc']['unclass'][shuffle_num] += 1
+                                exc_n_shuff += 1
+                                if mi2_bool is True:
+                                    shuffled_dict['exc'][f'unclass_{mi[area]}'][shuffle_num] += 1
+                            else:
+                                shuffled_dict['inh']['unclass'][shuffle_num] += 1
+                                inh_n_shuff += 1
+                                if mi2_bool is True:
+                                    shuffled_dict['inh'][f'unclass_{mi[area]}'][shuffle_num] += 1
+
+                    else:
+                        continue
+
+            data_dict[area]['shuffled'] = shuffled_dict
+
+        # save as .pkl file
+        with open(f'{self.save_dir}{os.sep}data_and_random_connections', 'wb') as save_dict:
+            pickle.dump(data_dict, save_dict)
