@@ -126,6 +126,7 @@ class Ratemap:
                 if all(fe_filter in file_name for fe_filter in [self.feature_filter['cell_id'],
                                                                 self.feature_filter['animal_id'],
                                                                 self.feature_filter['bank']]):
+                    print(file_name)
                     if self.feature_filter['sessions'] is True or any(se_filter in file_name for se_filter in self.feature_filter['sessions']):
                         file_names.append(file_name)
         else:

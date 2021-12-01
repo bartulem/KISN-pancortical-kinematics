@@ -19,6 +19,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from mpl_toolkits.mplot3d.axes3d import Axes3D
 from matplotlib.patches import FancyArrowPatch
+from matplotlib import markers
 from mpl_toolkits.mplot3d.proj3d import proj_transform
 import pandas as pd
 from tqdm import tqdm
@@ -36,7 +37,6 @@ import select_clusters
 import define_spiking_profile
 
 plt.rcParams['font.sans-serif'] = ['Helvetica']
-
 
 def fit_function(x, A, beta, B, mu, sigma):
     return A * np.exp(-x / beta) + B * np.exp(-1.0 * (x - mu) ** 2 / (2 * sigma ** 2))
@@ -1312,6 +1312,8 @@ class PlotGroupResults:
             Plots raw UMAP results with nothing else; defaults to False.
         plot_connected_cl (bool)
             Plots connected cluster pairs in all areas; defaults to False.
+        plot_special (bool)
+            Plots special plots for every area; defaults to False.
         filter_unclassified (bool)
             Remove GLM 'unclassified' clusters from the plot; defaults to False.
         plot_sm (bool)
@@ -1340,6 +1342,7 @@ class PlotGroupResults:
         umap_embedding_file = kwargs['umap_embedding_file'] if 'umap_embedding_file' in kwargs.keys() and type(kwargs['umap_embedding_file']) == str else ''
         plot_raw_umap = kwargs['plot_raw_umap'] if 'plot_raw_umap' in kwargs.keys() and type(kwargs['plot_raw_umap']) == bool else False
         plot_connected_cl = kwargs['plot_connected_cl'] if 'plot_connected_cl' in kwargs.keys() and type(kwargs['plot_connected_cl']) == bool else False
+        plot_special = kwargs['plot_special'] if 'plot_special' in kwargs.keys() and type(kwargs['plot_special']) == bool else False
         filter_unclassified = kwargs['filter_unclassified'] if 'filter_unclassified' in kwargs.keys() and type(kwargs['filter_unclassified']) == bool else False
         plot_sm = kwargs['plot_sm'] if 'plot_sm' in kwargs.keys() and type(kwargs['plot_sm']) == bool else False
         sm = kwargs['sm'] if 'sm' in kwargs.keys() and kwargs['sm'] in ['sound', 'luminance'] else 'sound'
@@ -1412,8 +1415,12 @@ class PlotGroupResults:
         pl_dict = {'VV': {'points': [], 'pairs': [], 'strength': [], 'type': []}, 'AA': {'points': [], 'pairs': [], 'strength': [], 'type': []},
                    'MM': {'points': [], 'pairs': [], 'strength': [], 'type': []}, 'SS': {'points': [], 'pairs': [], 'strength': [], 'type': []}}
 
-        pl_dict_AA_special = {'movement-SMI': {'points': [], 'pairs': [], 'strength': [], 'type': []},
-                              'movement-posture': {'points': [], 'pairs': [], 'strength': [], 'type': []}}
+        pl_dict_special = {'AA': {'movement-SMI': {'points': [], 'pairs': [], 'strength': [], 'type': []},
+                                  'movement-posture': {'points': [], 'pairs': [], 'strength': [], 'type': []},
+                                  'other': {'points': [], 'pairs': [], 'strength': [], 'type': []}},
+                           'VV': {'movement-posture': {'points': [], 'pairs': [], 'strength': [], 'type': []},
+                                  'posture-movement': {'points': [], 'pairs': [], 'strength': [], 'type': []},
+                                  'other': {'points': [], 'pairs': [], 'strength': [], 'type': []}}}
 
         for area in synaptic_data.keys():
             if area in pl_dict.keys():
@@ -1441,29 +1448,139 @@ class PlotGroupResults:
                             if spc_pos1 in non_nan_idx_list and spc_pos2 in non_nan_idx_list:
                                 pos1 = non_nan_idx_list.index(spc_pos1)
                                 pos2 = non_nan_idx_list.index(spc_pos2)
-                                if area == 'AA' and ('der' in presynaptic_beh or 'Speeds' in presynaptic_beh or 'Self_motion' in presynaptic_beh) and \
-                                        not ('der' in postsynaptic_beh or 'Speeds' in postsynaptic_beh or 'Self_motion' in postsynaptic_beh) and \
-                                        presynaptic_beh != 'Unclassified' and postsynaptic_beh != 'Unclassified':
-                                    movement_posture_bool = True
-                                if area == 'AA' and ('der' in presynaptic_beh or 'Speeds' in presynaptic_beh or 'Self_motion' in presynaptic_beh) and \
-                                        postsynaptic_smi != 'ns' and \
-                                        presynaptic_beh != 'Unclassified' and postsynaptic_beh != 'Unclassified':
-                                    print(animal_session, presynaptic_beh, presynaptic_smi, postsynaptic_beh, postsynaptic_smi)
-                                    movement_smi_bool = True
-                                if pos1 not in pl_dict[area]['points']:
-                                    pl_dict[area]['points'].append(pos1)
-                                if pos2 not in pl_dict[area]['points']:
-                                    pl_dict[area]['points'].append(pos2)
-                                pl_dict[area]['pairs'].append((pos2, pos1))
-                                pl_dict[area]['strength'].append(synaptic_data[area][animal][animal_session]['strength'][pair_idx])
-                                if synaptic_data[area][animal][animal_session]['type'][pair_idx] == 'excitatory':
-                                    pl_dict[area]['type'].append('-')
-                                elif synaptic_data[area][animal][animal_session]['type'][pair_idx] == 'inhibitory':
-                                    pl_dict[area]['type'].append('-.')
+                                if plot_special:
+                                    if area == 'AA':
+                                        movement_posture_bool = False
+                                        movement_smi_bool = False
+                                        if ('der' in presynaptic_beh or 'Speeds' in presynaptic_beh or 'Self_motion' in presynaptic_beh) and \
+                                                not ('der' in postsynaptic_beh or 'Speeds' in postsynaptic_beh or 'Self_motion' in postsynaptic_beh) and \
+                                                (presynaptic_beh != 'Unclassified' and presynaptic_beh != 'null') and (postsynaptic_beh != 'Unclassified' and postsynaptic_beh != 'null') and \
+                                                synaptic_data[area][animal][animal_session]['type'][pair_idx] == 'inhibitory':
+                                            movement_posture_bool = True
+                                            if pos1 not in pl_dict_special[area]['movement-posture']['points']:
+                                                pl_dict_special[area]['movement-posture']['points'].append(pos1)
+                                            if pos2 not in pl_dict_special[area]['movement-posture']['points']:
+                                                pl_dict_special[area]['movement-posture']['points'].append(pos2)
+                                            pl_dict_special[area]['movement-posture']['pairs'].append((pos2, pos1))
+                                            pl_dict_special[area]['movement-posture']['strength'].append(synaptic_data[area][animal][animal_session]['strength'][pair_idx])
+                                            if synaptic_data[area][animal][animal_session]['type'][pair_idx] == 'excitatory':
+                                                pl_dict_special[area]['movement-posture']['type'].append('-')
+                                            elif synaptic_data[area][animal][animal_session]['type'][pair_idx] == 'inhibitory':
+                                                pl_dict_special[area]['movement-posture']['type'].append('-.')
+                                        if ('der' in presynaptic_beh or 'Speeds' in presynaptic_beh or 'Self_motion' in presynaptic_beh) and \
+                                                postsynaptic_smi != 'ns' and synaptic_data[area][animal][animal_session]['type'][pair_idx] == 'inhibitory' and \
+                                                (presynaptic_beh != 'Unclassified' and presynaptic_beh != 'null'):
+                                            movement_smi_bool = True
+                                            if pos1 not in pl_dict_special[area]['movement-SMI']['points']:
+                                                pl_dict_special[area]['movement-SMI']['points'].append(pos1)
+                                            if pos2 not in pl_dict_special[area]['movement-SMI']['points']:
+                                                pl_dict_special[area]['movement-SMI']['points'].append(pos2)
+                                            pl_dict_special[area]['movement-SMI']['pairs'].append((pos2, pos1))
+                                            pl_dict_special[area]['movement-SMI']['strength'].append(synaptic_data[area][animal][animal_session]['strength'][pair_idx])
+                                            if synaptic_data[area][animal][animal_session]['type'][pair_idx] == 'excitatory':
+                                                pl_dict_special[area]['movement-SMI']['type'].append('-')
+                                            elif synaptic_data[area][animal][animal_session]['type'][pair_idx] == 'inhibitory':
+                                                pl_dict_special[area]['movement-SMI']['type'].append('-.')
+                                        if not movement_posture_bool and not movement_smi_bool:
+                                            if pos1 not in pl_dict_special[area]['other']['points']:
+                                                pl_dict_special[area]['other']['points'].append(pos1)
+                                            if pos2 not in pl_dict_special[area]['other']['points']:
+                                                pl_dict_special[area]['other']['points'].append(pos2)
+                                            pl_dict_special[area]['other']['pairs'].append((pos2, pos1))
+                                            pl_dict_special[area]['other']['strength'].append(synaptic_data[area][animal][animal_session]['strength'][pair_idx])
+                                            if synaptic_data[area][animal][animal_session]['type'][pair_idx] == 'excitatory':
+                                                pl_dict_special[area]['other']['type'].append('-')
+                                            elif synaptic_data[area][animal][animal_session]['type'][pair_idx] == 'inhibitory':
+                                                pl_dict_special[area]['other']['type'].append('-.')
+                                    elif area == 'VV':
+                                        movement_posture_bool = False
+                                        posture_movement_bool = False
+                                        if ('der' in presynaptic_beh or 'Speeds' in presynaptic_beh or 'Self_motion' in presynaptic_beh) and \
+                                                not ('der' in postsynaptic_beh or 'Speeds' in postsynaptic_beh or 'Self_motion' in postsynaptic_beh) and \
+                                                (presynaptic_beh != 'Unclassified' and presynaptic_beh != 'null') and (postsynaptic_beh != 'Unclassified' and postsynaptic_beh != 'null') and \
+                                                synaptic_data[area][animal][animal_session]['type'][pair_idx] == 'inhibitory':
+                                            movement_posture_bool = True
+                                            if pos1 not in pl_dict_special[area]['movement-posture']['points']:
+                                                pl_dict_special[area]['movement-posture']['points'].append(pos1)
+                                            if pos2 not in pl_dict_special[area]['movement-posture']['points']:
+                                                pl_dict_special[area]['movement-posture']['points'].append(pos2)
+                                            pl_dict_special[area]['movement-posture']['pairs'].append((pos2, pos1))
+                                            pl_dict_special[area]['movement-posture']['strength'].append(synaptic_data[area][animal][animal_session]['strength'][pair_idx])
+                                            if synaptic_data[area][animal][animal_session]['type'][pair_idx] == 'excitatory':
+                                                pl_dict_special[area]['movement-posture']['type'].append('-')
+                                            elif synaptic_data[area][animal][animal_session]['type'][pair_idx] == 'inhibitory':
+                                                pl_dict_special[area]['movement-posture']['type'].append('-.')
+                                        if not ('der' in presynaptic_beh or 'Speeds' in presynaptic_beh or 'Self_motion' in presynaptic_beh) and \
+                                                ('der' in postsynaptic_beh or 'Speeds' in postsynaptic_beh or 'Self_motion' in postsynaptic_beh) and \
+                                                synaptic_data[area][animal][animal_session]['type'][pair_idx] == 'excitatory' and \
+                                                (presynaptic_beh != 'Unclassified' and presynaptic_beh != 'null') and (postsynaptic_beh != 'Unclassified' and postsynaptic_beh != 'null'):
+                                            posture_movement_bool = True
+                                            if pos1 not in pl_dict_special[area]['posture-movement']['points']:
+                                                pl_dict_special[area]['posture-movement']['points'].append(pos1)
+                                            if pos2 not in pl_dict_special[area]['posture-movement']['points']:
+                                                pl_dict_special[area]['posture-movement']['points'].append(pos2)
+                                            pl_dict_special[area]['posture-movement']['pairs'].append((pos2, pos1))
+                                            pl_dict_special[area]['posture-movement']['strength'].append(synaptic_data[area][animal][animal_session]['strength'][pair_idx])
+                                            if synaptic_data[area][animal][animal_session]['type'][pair_idx] == 'excitatory':
+                                                pl_dict_special[area]['posture-movement']['type'].append('-')
+                                            elif synaptic_data[area][animal][animal_session]['type'][pair_idx] == 'inhibitory':
+                                                pl_dict_special[area]['posture-movement']['type'].append('-.')
+                                        if not movement_posture_bool and not posture_movement_bool:
+                                            if pos1 not in pl_dict_special[area]['other']['points']:
+                                                pl_dict_special[area]['other']['points'].append(pos1)
+                                            if pos2 not in pl_dict_special[area]['other']['points']:
+                                                pl_dict_special[area]['other']['points'].append(pos2)
+                                            pl_dict_special[area]['other']['pairs'].append((pos2, pos1))
+                                            pl_dict_special[area]['other']['strength'].append(synaptic_data[area][animal][animal_session]['strength'][pair_idx])
+                                            if synaptic_data[area][animal][animal_session]['type'][pair_idx] == 'excitatory':
+                                                pl_dict_special[area]['other']['type'].append('-')
+                                            elif synaptic_data[area][animal][animal_session]['type'][pair_idx] == 'inhibitory':
+                                                pl_dict_special[area]['other']['type'].append('-.')
+                                else:
+                                    if pos1 not in pl_dict[area]['points']:
+                                        pl_dict[area]['points'].append(pos1)
+                                    if pos2 not in pl_dict[area]['points']:
+                                        pl_dict[area]['points'].append(pos2)
+                                    pl_dict[area]['pairs'].append((pos2, pos1))
+                                    pl_dict[area]['strength'].append(synaptic_data[area][animal][animal_session]['strength'][pair_idx])
+                                    if synaptic_data[area][animal][animal_session]['type'][pair_idx] == 'excitatory':
+                                        pl_dict[area]['type'].append('-')
+                                    elif synaptic_data[area][animal][animal_session]['type'][pair_idx] == 'inhibitory':
+                                        pl_dict[area]['type'].append('-.')
 
         # plot
+        print(len(pl_dict_special['AA']['movement-SMI']['pairs']), len(pl_dict_special['AA']['movement-posture']['pairs']),
+              len(pl_dict_special['VV']['movement-posture']['pairs']), len(pl_dict_special['VV']['posture-movement']['pairs']))
+        area_colors = {'VV': '#E79791', 'AA': '#5F847F', 'MM': '#EEB849', 'SS': '#7396C0'}
+        # if plot_special:
+        #     relevant_synapses = {'AA': ['movement-SMI', 'movement-posture'], 'VV': ['posture-movement', 'movement-posture']}
+        #     fig, ax = plt.subplots(2, 1, dpi=500, figsize=(5, 10))
+        #     for sub_idx, subplot in enumerate(['AA', 'VV']):
+        #         ax = plt.subplot(2, 1, sub_idx + 1)
+        #         for syn, syn_alpha in zip(relevant_synapses[subplot], [1, .5]):
+        #             ax.scatter(umap_data[pl_dict_special[subplot][f'{syn}']['points'], 0],
+        #                        umap_data[pl_dict_special[subplot][f'{syn}']['points'], 1], s=50, c=area_colors[subplot], alpha=syn_alpha)
+        #             for con_idx, connection in enumerate(pl_dict_special[subplot][f'{syn}']['pairs']):
+        #                 ax.plot([umap_data[connection[0], 0], umap_data[connection[1], 0]], [umap_data[connection[0], 1], umap_data[connection[1], 1]],
+        #                         lw=pl_dict_special[subplot][f'{syn}']['strength'][con_idx] * 50,
+        #                         ls=pl_dict_special[subplot][f'{syn}']['type'][con_idx], c=area_colors[subplot])
+        #         ax.scatter(umap_data[pl_dict_special[subplot]['other']['points'], 0],
+        #                    umap_data[pl_dict_special[subplot]['other']['points'], 1], s=30, c=area_colors[subplot], alpha=.1)
+        #         ax.set_title(f'{subplot} connections')
+        #         ax.set_xlabel('UMAP 1', fontsize=10)
+        #         ax.set_ylabel('UMAP 2', fontsize=10)
+        #         ax.set_xlim(-.5, 10.5)
+        #         ax.set_ylim(-2.5, 9.5)
+        #         ax.set_xticks([0, 2, 4, 6, 8, 10])
+        #         ax.set_yticks([-2, 0, 2, 4, 6, 8])
+        #     if self.save_fig:
+        #         if os.path.exists(self.save_dir):
+        #             fig.savefig(f'{self.save_dir}{os.sep}selected_connection_pairs.{self.fig_format}', dpi=500)
+        #         else:
+        #             print("Specified save directory doesn't exist. Try again.")
+        #             sys.exit()
+        #     plt.show()
         if plot_connected_cl:
-            area_colors = {'VV': '#E79791', 'AA': '#5F847F', 'MM': '#EEB849', 'SS': '#7396C0'}
             variables_dict = {'eu_distances': {'VV': [], 'AA': [], 'MM': [], 'SS': []}, 'synapse_strength': {'VV': [], 'AA': [], 'MM': [], 'SS': []}}
             fig, ax = plt.subplots(2, 2, dpi=500)
             for sub_idx, subplot in enumerate(['VV', 'AA', 'MM', 'SS']):
@@ -1585,29 +1702,50 @@ class PlotGroupResults:
         with open(self.cch_connection_file, 'rb') as data_file:
             data_dict = pickle.load(data_file)
 
-        fig, ax = plt.subplots(nrows=1, ncols=2, figsize=(6, 10), dpi=500)
-        for ei_idx, ei_connection in enumerate(['exc', 'inh']):
-            ax = plt.subplot(1, 2, ei_idx+1)
-            counter = 0
-            for area in areas_lst:
+        fig, ax = plt.subplots(nrows=2, ncols=2, figsize=(4, 4), dpi=500)
+        plt.subplots_adjust(wspace=.05, hspace=.15)
+        counter = 0
+        for area in areas_lst:
+            for ei_idx, ei_connection in enumerate(['exc', 'inh']):
+                ax = plt.subplot(2, 2, counter+1)
+                y_axis_counter = 0
                 for connection_type in connection_type_dict[area]:
                     low = np.percentile(a=data_dict[area]['shuffled'][ei_connection][connection_type], q=.5)
                     high = np.percentile(a=data_dict[area]['shuffled'][ei_connection][connection_type], q=99.5)
-                    ax.hlines(y=counter+1, xmin=low, xmax=high, linewidth=2, color='#636363')
-                    ax.plot(low, counter+1, marker='>', markerfacecolor='#636363', markeredgecolor='#636363', markersize=10)
-                    ax.plot(high, counter+1, marker='<', markerfacecolor='#636363', markeredgecolor='#636363', markersize=10)
-                    ax.plot(data_dict[area]['data'][ei_connection][connection_type], counter+1,
-                            marker='o', markerfacecolor=self.area_colors[area[0]], markeredgecolor=self.area_colors[area[0]], markersize=5)
-                    counter += 1
-            if ei_idx == 0:
-                ax.set_yticks(range(1, 13))
-                ax.set_yticklabels(connection_type_dict[areas_lst[0]]+connection_type_dict[areas_lst[1]])
-                ax.set_xlim(-4, 46)
-                ax.set_xticks(range(0, 46, 5))
+                    ax.hlines(y=y_axis_counter+1, xmin=low, xmax=high, linewidth=2, color='#636363')
+                    ax.hlines(y=y_axis_counter + 1, xmin=low, xmax=high, linewidth=2, color='#636363')
+                    ax.plot(low, y_axis_counter+1, marker=markers.CARETRIGHTBASE, markerfacecolor='#636363', markeredgecolor='#636363', markersize=10, alpha=1)
+                    ax.plot(high, y_axis_counter+1, marker=markers.CARETLEFTBASE, markerfacecolor='#636363', markeredgecolor='#636363', markersize=10, alpha=1)
+                    ax.plot(data_dict[area]['data'][ei_connection][connection_type], y_axis_counter+1,
+                            marker='o', markerfacecolor=self.area_colors[area[0]], markeredgecolor=self.area_colors[area[0]], markersize=6)
+                    y_axis_counter += 1
+                ax.set_ylim(0, 7)
+                if counter == 0 or counter == 2:
+                    ax.set_yticks(range(1, 7))
+                    ax.set_yticklabels(connection_type_dict[area])
+                else:
+                    ax.set_yticks([])
+                if counter == 0:
+                    ax.set_xlim(-2, 22)
+                    ax.set_xticks(range(0, 21, 5))
+                    ax.title.set_text(ei_connection)
+                elif counter == 1:
+                    ax.set_xlim(-2, 17)
+                    ax.set_xticks(range(0, 16, 5))
+                    ax.title.set_text(ei_connection)
+                elif counter == 2:
+                    ax.set_xlim(-2, 47)
+                    ax.set_xticks(range(0, 46, 5))
+                    ax.set_xlabel('Number of synapses')
+                else:
+                    ax.set_xlim(-2, 37)
+                    ax.set_xticks(range(0, 36, 5))
+                    ax.set_xlabel('Number of synapses')
+                counter += 1
+        if self.save_fig:
+            if os.path.exists(self.save_dir):
+                fig.savefig(f'{self.save_dir}{os.sep}cch_connection_types_summary.{self.fig_format}', dpi=500)
             else:
-                ax.set_yticks([])
-                ax.set_xlim(-4, 36)
-                ax.set_xticks(range(0, 36, 5))
-            ax.set_xlabel('Number of synapses')
-            ax.title.set_text(ei_connection)
+                print("Specified save directory doesn't exist. Try again.")
+                sys.exit()
         plt.show()

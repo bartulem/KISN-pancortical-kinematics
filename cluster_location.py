@@ -11,7 +11,6 @@ Locate single-units in 3D anatomical space (relative to bregma coordinates).
 import os
 import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
 
 class ClusterLocator:
 

@@ -27,7 +27,7 @@ class PlotExamples:
                   'roy': '26472', 'bruno': '26148', 'jacopo': '26504', 'crazyjoe': '26507'}
 
     elev_azimuth_3d = {'frank': (40, 60), 'johnjohn': (40, 120), 'kavorka': (10, 120),
-                       'roy': (10, 120), 'jacopo': (10, 120), 'crazyjoe': (40, 0)}
+                       'roy': (10, 120), 'jacopo': (10, 120), 'crazyjoe': (0, 20)}
 
     area_rats = {'VV': ['kavorka', 'johnjohn', 'frank'],
                  'AA': ['kavorka', 'johnjohn', 'frank'],
@@ -575,7 +575,11 @@ class PlotExamples:
                            color=self.area_colors[area], ec='#000000', alpha=1, s=40)
         ax.view_init(elev=self.elev_azimuth_3d[chosen_rat][0], azim=self.elev_azimuth_3d[chosen_rat][1])
         ax.set_title(f'#{self.animal_ids[chosen_rat]}', pad=0)
-        ax.invert_xaxis()
+        if chosen_rat in ['kavorka', 'johnjohn', 'frank']:
+            ax.invert_xaxis()
+        if chosen_rat == 'crazyjoe':
+            ax.set_ylim(-2.79, -3.01)
+            ax.set_yticks([-2.8, -2.85, -2.9, -2.95, -3])
         ax.xaxis.set_pane_color((1.0, 1.0, 1.0, 1.0))
         ax.yaxis.set_pane_color((1.0, 1.0, 1.0, 1.0))
         ax.zaxis.set_pane_color((1.0, 1.0, 1.0, 1.0))

@@ -784,8 +784,8 @@ class FunctionalConnectivity:
 
         Returns
         ----------
-        cch_summary (.json file)
-            A file with the CCH summary results.
+        data_and_random_connections (.pkl file)
+            A file with the CCH data and random connections.
         ----------
         """
 
