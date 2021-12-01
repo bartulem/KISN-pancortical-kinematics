@@ -29,6 +29,7 @@ from scipy.stats import wilcoxon
 from scipy.stats import sem
 from scipy.stats import pearsonr
 from scipy.stats import mannwhitneyu
+from scipy.stats import levene
 import decode_events
 import sessions2load
 import make_ratemaps
@@ -1198,6 +1199,10 @@ class PlotGroupResults:
         with open(self.cch_summary_file, 'r') as summary_file:
             plotting_dict = json.load(summary_file)
 
+        for idx, item in enumerate(plotting_dict[pair_area]['distances']):
+            if item <= 0:
+                plotting_dict[pair_area]['distances'][idx] = .00001
+
         print(pearsonr(np.log10(plotting_dict[pair_area]['distances']), np.log10(plotting_dict[pair_area]['strength'])))
         print(pearsonr(plotting_dict[pair_area]['distances'], plotting_dict[pair_area]['strength']))
 
@@ -1205,15 +1210,15 @@ class PlotGroupResults:
         fig, f_ax = plt.subplots(1, 1, figsize=(7, 6), dpi=400)
         sns.regplot(np.log10(plotting_dict[pair_area]['distances']), np.log10(plotting_dict[pair_area]['strength']), color=self.area_colors[pair_area[0]], scatter_kws={'alpha': .8})
         f_ax.set_xlabel('log$_{10}$pair distance (mm)')
-        f_ax.set_xlim(-2.75, .15)
-        f_ax.set_xticks([-2.5, -2, -1.5, -1, -.5, 0])
+        # f_ax.set_xlim(-3.05, 0.1)
+        # f_ax.set_xticks([-2.5, -2, -1.5, -1, -.5, 0])
         f_ax.set_ylabel('log$_{10}$synapse strength (A.U.)')
-        f_ax.set_ylim(-2.75, -.25)
+        # f_ax.set_ylim(-2.55, -.75)
         h_bins = [1.4, 1.8, 2.2, 2.6, 3, 3.4, 3.8, 4.2]
         inset_axes = fig.add_axes(rect=[.65, .65, .22, .20])
         n, bins, patches = inset_axes.hist(plotting_dict[pair_area]['timing'], bins=h_bins, color=self.area_colors[pair_area[0]], alpha=.8)
 
-        p_opt, _ = curve_fit(fit_function, xdata=cc_bins, ydata=n, p0=[1315, .555, -2.6, 3.2, 0.1])
+        p_opt, _ = curve_fit(fit_function, xdata=cc_bins, ydata=n, p0=[1315, .555, -1.8, 3.2, 0.1])
         x_interval_for_fit = np.linspace(cc_bins[0], cc_bins[-1], len(plotting_dict[pair_area]['timing']))
         y_values = fit_function(x_interval_for_fit, *p_opt)
         inset_axes.plot(x_interval_for_fit, y_values, color='#000000')
@@ -1408,8 +1413,17 @@ class PlotGroupResults:
             ax = fig.add_subplot()
             ax.scatter(umap_data[:, 0], umap_data[:, 1], s=10, c=color_list, alpha=.5)
             # ax.set_title('Sound modulation')
+            ax.set_xlim(-.2, 10.2)
+            ax.set_ylim(-2.2, 9.2)
             ax.set_xlabel('UMAP 1')
             ax.set_ylabel('UMAP 2')
+            if self.save_fig:
+                if os.path.exists(self.save_dir):
+                    fig.savefig(f'{self.save_dir}{os.sep}UMAP_all_cells.{self.fig_format}', dpi=500)
+                else:
+                    print("Specified save directory doesn't exist. Try again.")
+                    sys.exit()
+            plt.show()
             plt.show()
 
         pl_dict = {'VV': {'points': [], 'pairs': [], 'strength': [], 'type': []}, 'AA': {'points': [], 'pairs': [], 'strength': [], 'type': []},
@@ -1549,69 +1563,70 @@ class PlotGroupResults:
                                         pl_dict[area]['type'].append('-.')
 
         # plot
-        print(len(pl_dict_special['AA']['movement-SMI']['pairs']), len(pl_dict_special['AA']['movement-posture']['pairs']),
-              len(pl_dict_special['VV']['movement-posture']['pairs']), len(pl_dict_special['VV']['posture-movement']['pairs']))
         area_colors = {'VV': '#E79791', 'AA': '#5F847F', 'MM': '#EEB849', 'SS': '#7396C0'}
-        # if plot_special:
-        #     relevant_synapses = {'AA': ['movement-SMI', 'movement-posture'], 'VV': ['posture-movement', 'movement-posture']}
-        #     fig, ax = plt.subplots(2, 1, dpi=500, figsize=(5, 10))
-        #     for sub_idx, subplot in enumerate(['AA', 'VV']):
-        #         ax = plt.subplot(2, 1, sub_idx + 1)
-        #         for syn, syn_alpha in zip(relevant_synapses[subplot], [1, .5]):
-        #             ax.scatter(umap_data[pl_dict_special[subplot][f'{syn}']['points'], 0],
-        #                        umap_data[pl_dict_special[subplot][f'{syn}']['points'], 1], s=50, c=area_colors[subplot], alpha=syn_alpha)
-        #             for con_idx, connection in enumerate(pl_dict_special[subplot][f'{syn}']['pairs']):
-        #                 ax.plot([umap_data[connection[0], 0], umap_data[connection[1], 0]], [umap_data[connection[0], 1], umap_data[connection[1], 1]],
-        #                         lw=pl_dict_special[subplot][f'{syn}']['strength'][con_idx] * 50,
-        #                         ls=pl_dict_special[subplot][f'{syn}']['type'][con_idx], c=area_colors[subplot])
-        #         ax.scatter(umap_data[pl_dict_special[subplot]['other']['points'], 0],
-        #                    umap_data[pl_dict_special[subplot]['other']['points'], 1], s=30, c=area_colors[subplot], alpha=.1)
-        #         ax.set_title(f'{subplot} connections')
-        #         ax.set_xlabel('UMAP 1', fontsize=10)
-        #         ax.set_ylabel('UMAP 2', fontsize=10)
-        #         ax.set_xlim(-.5, 10.5)
-        #         ax.set_ylim(-2.5, 9.5)
-        #         ax.set_xticks([0, 2, 4, 6, 8, 10])
-        #         ax.set_yticks([-2, 0, 2, 4, 6, 8])
-        #     if self.save_fig:
-        #         if os.path.exists(self.save_dir):
-        #             fig.savefig(f'{self.save_dir}{os.sep}selected_connection_pairs.{self.fig_format}', dpi=500)
-        #         else:
-        #             print("Specified save directory doesn't exist. Try again.")
-        #             sys.exit()
-        #     plt.show()
+        if plot_special:
+            relevant_synapses = {'AA': ['movement-SMI', 'movement-posture'], 'VV': ['posture-movement', 'movement-posture']}
+            fig, ax = plt.subplots(2, 1, dpi=500, figsize=(5, 10))
+            for sub_idx, subplot in enumerate(['AA', 'VV']):
+                ax = plt.subplot(2, 1, sub_idx + 1)
+                for syn, syn_alpha in zip(relevant_synapses[subplot], [1, .5]):
+                    ax.scatter(umap_data[pl_dict_special[subplot][f'{syn}']['points'], 0],
+                               umap_data[pl_dict_special[subplot][f'{syn}']['points'], 1], s=50, c=area_colors[subplot], alpha=syn_alpha)
+                    for con_idx, connection in enumerate(pl_dict_special[subplot][f'{syn}']['pairs']):
+                        ax.plot([umap_data[connection[0], 0], umap_data[connection[1], 0]], [umap_data[connection[0], 1], umap_data[connection[1], 1]],
+                                lw=pl_dict_special[subplot][f'{syn}']['strength'][con_idx] * 50,
+                                ls=pl_dict_special[subplot][f'{syn}']['type'][con_idx], c=area_colors[subplot])
+                ax.scatter(umap_data[pl_dict_special[subplot]['other']['points'], 0],
+                           umap_data[pl_dict_special[subplot]['other']['points'], 1], s=30, c=area_colors[subplot], alpha=.1)
+                ax.set_title(f'{subplot} connections')
+                ax.set_xlabel('UMAP 1', fontsize=10)
+                ax.set_ylabel('UMAP 2', fontsize=10)
+                ax.set_xlim(-.5, 10.5)
+                ax.set_ylim(-2.5, 9.5)
+                ax.set_xticks([0, 2, 4, 6, 8, 10])
+                ax.set_yticks([-2, 0, 2, 4, 6, 8])
+            if self.save_fig:
+                if os.path.exists(self.save_dir):
+                    fig.savefig(f'{self.save_dir}{os.sep}selected_connection_pairs.{self.fig_format}', dpi=500)
+                else:
+                    print("Specified save directory doesn't exist. Try again.")
+                    sys.exit()
+            plt.show()
         if plot_connected_cl:
             variables_dict = {'eu_distances': {'VV': [], 'AA': [], 'MM': [], 'SS': []}, 'synapse_strength': {'VV': [], 'AA': [], 'MM': [], 'SS': []}}
             fig, ax = plt.subplots(2, 2, dpi=500)
             for sub_idx, subplot in enumerate(['VV', 'AA', 'MM', 'SS']):
                 ax = plt.subplot(2, 2, sub_idx + 1)
-                ax.scatter(umap_data[pl_dict[subplot]['points'], 0], umap_data[pl_dict[subplot]['points'], 1], s=2, c=area_colors[subplot], alpha=.5)
+                ax.scatter(umap_data[pl_dict[subplot]['points'], 0], umap_data[pl_dict[subplot]['points'], 1], s=10, c=area_colors[subplot], alpha=.5)
                 ax.set_title(f'{subplot} connections')
                 ax.set_xlabel('UMAP 1', fontsize=10)
                 ax.set_ylabel('UMAP 2', fontsize=10)
                 if subplot == 'VV' or subplot == 'AA':
-                    ax.set_xlim(-1, 12)
-                    ax.set_xticks([2, 4, 6, 8, 10])
-                    ax.set_ylim(-2, 11)
-                    ax.set_yticks([0, 2, 4, 6, 8, 10])
+                    ax.set_xlim(-.2, 10.2)
+                    ax.set_xticks([0, 2, 4, 6, 8, 10])
+                    ax.set_ylim(-2.2, 10.2)
+                    ax.set_yticks([-2, 0, 2, 4, 6, 8, 10])
                 else:
-                    if subplot == 'MM':
-                        ax.set_xlim(-1, 9)
-                        ax.set_xticks([0, 2, 4, 6, 8])
-                    else:
-                        ax.set_xlim(1, 9)
-                        ax.set_xticks([2, 4, 6, 8])
-                    ax.set_ylim(-2, 9)
-                    ax.set_yticks([0, 2, 4, 6, 8])
+                    ax.set_xlim(-.2, 8.2)
+                    ax.set_xticks([0, 2, 4, 6, 8])
+                    ax.set_ylim(-2.2, 10.2)
+                    ax.set_yticks([-2, 0, 2, 4, 6, 8, 10])
                 for con_idx, connection in enumerate(pl_dict[subplot]['pairs']):
                     variables_dict['eu_distances'][subplot] = md_distances_data[subplot]['md_distance']
                     variables_dict['synapse_strength'][subplot].append(pl_dict[subplot]['strength'][con_idx])
                     ax.plot([umap_data[connection[0], 0], umap_data[connection[1], 0]], [umap_data[connection[0], 1], umap_data[connection[1], 1]],
                             lw=pl_dict[subplot]['strength'][con_idx] * 3, ls=pl_dict[subplot]['type'][con_idx], c=area_colors[subplot])
             plt.tight_layout()
+            if self.save_fig:
+                if os.path.exists(self.save_dir):
+                    fig.savefig(f'{self.save_dir}{os.sep}connection_pairs_per_area.{self.fig_format}', dpi=500)
+                else:
+                    print("Specified save directory doesn't exist. Try again.")
+                    sys.exit()
             plt.show()
 
             for variable in variables_dict.keys():
+                print(variable)
                 fig2, ax2 = plt.subplots(1, 1, dpi=500)
                 xs = [[gauss(0.25 * (ind + 1), 0.015) for x in range(len(variables_dict[variable][area]))] for ind, area in enumerate(variables_dict[variable].keys())]
                 for sub_idx, subplot in enumerate(['VV', 'AA', 'MM', 'SS']):
@@ -1631,6 +1646,12 @@ class PlotGroupResults:
                     ax2.set_ylabel('Euclidean distance in "functional space"')
                 ax2.set_yscale('log')
                 ax2.set_xticks([])
+                if self.save_fig:
+                    if os.path.exists(self.save_dir):
+                        fig2.savefig(f'{self.save_dir}{os.sep}{variable}.{self.fig_format}', dpi=500)
+                    else:
+                        print("Specified save directory doesn't exist. Try again.")
+                        sys.exit()
                 plt.show()
 
                 print('VV', 'AA', mannwhitneyu(variables_dict[variable]['VV'], variables_dict[variable]['AA']))
@@ -1665,6 +1686,12 @@ class PlotGroupResults:
                     ax3.set_ylim(-2.6, -.9)
                     ax3.set_yticks([-2.5, -2, -1.5, -1])
             plt.tight_layout()
+            if self.save_fig:
+                if os.path.exists(self.save_dir):
+                    fig3.savefig(f'{self.save_dir}{os.sep}interactions.{self.fig_format}', dpi=500)
+                else:
+                    print("Specified save directory doesn't exist. Try again.")
+                    sys.exit()
             plt.show()
 
     def plot_cch_connection_types(self, **kwargs):
