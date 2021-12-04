@@ -780,6 +780,8 @@ class FunctionalConnectivity:
             Number of shuffle to perform; defaults to 1000.
         mi (dict)
             Modulation index of choice: defaults to {'AA': 'SMI', 'VV': 'LMI', 'SS': 'LMI', 'MM': 'LMI'}.
+        input_type (str)
+            Analyze 'synaptic' data or 'common_input'; defaults to 'synaptic'.
         ----------
 
         Returns
@@ -796,8 +798,9 @@ class FunctionalConnectivity:
                   'jacopo': {'distal': '150620', 'intermediate': '150620'}, 'crazyjoe': {'distal': '170620', 'intermediate': '170620'}}
         n_shuff = kwargs['n_shuff'] if 'n_shuff' in kwargs.keys() and type(kwargs['n_shuff']) == int else 1000
         mi = kwargs['mi'] if 'mi' in kwargs.keys() and type(kwargs['mi']) == dict else {'AA': 'SMI', 'VV': 'LMI', 'SS': 'LMI', 'MM': 'LMI'}
+        input_type = kwargs['input_type'] if 'input_type' in kwargs.keys() and kwargs['input_type'] in ['synaptic', 'common_input'] else 'synaptic'
 
-        with open(f'{self.cch_data_dir}{os.sep}cch_summary_synaptic.json', 'r') as summary_file:
+        with open(f'{self.cch_data_dir}{os.sep}cch_summary_{input_type}.json', 'r') as summary_file:
             synaptic_data = json.load(summary_file)
 
         spc = pd.read_csv(self.sp_profiles_csv)
@@ -815,109 +818,110 @@ class FunctionalConnectivity:
             # data
             for key in synaptic_data[area].keys():
                 if key in self.animal_ids.keys():
-                    for session in synaptic_data[area][key]:
-                        for idx, pair in enumerate(synaptic_data[area][key][session]['pairs']):
-                            direction = synaptic_data[area][key][session]['directionality'][idx]
-                            connection_type = synaptic_data[area][key][session]['type'][idx]
-                            cl1, cl2 = pair.split('-')
-                            if direction < 0:
-                                presynaptic_cell = cl1
-                                postsynaptic_cell = cl2
-                            else:
-                                presynaptic_cell = cl2
-                                postsynaptic_cell = cl1
-                            presynaptic_beh = synaptic_data[area][key][session]['clusters'][presynaptic_cell]['behavior']
-                            postsynaptic_beh = synaptic_data[area][key][session]['clusters'][postsynaptic_cell]['behavior']
-                            postsynaptic_mi = synaptic_data[area][key][session]['clusters'][postsynaptic_cell][mi[area]]
+                    if key != 'bruno':
+                        for session in synaptic_data[area][key]:
+                            for idx, pair in enumerate(synaptic_data[area][key][session]['pairs']):
+                                direction = synaptic_data[area][key][session]['directionality'][idx]
+                                connection_type = synaptic_data[area][key][session]['type'][idx]
+                                cl1, cl2 = pair.split('-')
+                                if direction < 0:
+                                    presynaptic_cell = cl1
+                                    postsynaptic_cell = cl2
+                                else:
+                                    presynaptic_cell = cl2
+                                    postsynaptic_cell = cl1
+                                presynaptic_beh = synaptic_data[area][key][session]['clusters'][presynaptic_cell]['behavior']
+                                postsynaptic_beh = synaptic_data[area][key][session]['clusters'][postsynaptic_cell]['behavior']
+                                postsynaptic_mi = synaptic_data[area][key][session]['clusters'][postsynaptic_cell][mi[area]]
 
-                            presynaptic_idx = spc[(spc['cluster_id'] == presynaptic_cell) & (spc['session_id'] == session)].index.tolist()[0]
-                            postsynaptic_idx = spc[(spc['cluster_id'] == postsynaptic_cell) & (spc['session_id'] == session)].index.tolist()[0]
-                            pair_euclidean_distance = np.abs(np.linalg.norm(np.array(spc.iloc[presynaptic_idx, -3:]) - np.array(spc.iloc[postsynaptic_idx, -3:])))
-                            largest_connection_distance = max(largest_connection_distance, pair_euclidean_distance)
-                            smallest_connection_distance = min(smallest_connection_distance, pair_euclidean_distance)
+                                presynaptic_idx = spc[(spc['cluster_id'] == presynaptic_cell) & (spc['session_id'] == session)].index.tolist()[0]
+                                postsynaptic_idx = spc[(spc['cluster_id'] == postsynaptic_cell) & (spc['session_id'] == session)].index.tolist()[0]
+                                pair_euclidean_distance = np.abs(np.linalg.norm(np.array(spc.iloc[presynaptic_idx, -3:]) - np.array(spc.iloc[postsynaptic_idx, -3:])))
+                                largest_connection_distance = max(largest_connection_distance, pair_euclidean_distance)
+                                smallest_connection_distance = min(smallest_connection_distance, pair_euclidean_distance)
 
-                            # classify by tuning of behavioral modulation
-                            if ('der' in presynaptic_beh or 'Speeds' in presynaptic_beh or 'Self_motion' in presynaptic_beh) and \
-                                    ('der' in postsynaptic_beh or 'Speeds' in postsynaptic_beh or 'Self_motion' in postsynaptic_beh) and \
-                                    (presynaptic_beh != 'Unclassified' and presynaptic_beh != 'null') and \
-                                    (postsynaptic_beh != 'Unclassified' and postsynaptic_beh != 'null'):
-                                if connection_type == 'excitatory':
-                                    area_dict['exc']['mo_mo'] += 1
-                                    if postsynaptic_mi != 'ns':
-                                        area_dict['exc'][f'mo_{mi[area]}'] += 1
-                                else:
-                                    area_dict['inh']['mo_mo'] += 1
-                                    if postsynaptic_mi != 'ns':
-                                        area_dict['inh'][f'mo_{mi[area]}'] += 1
-                            elif not ('der' in presynaptic_beh or 'Speeds' in presynaptic_beh or 'Self_motion' in presynaptic_beh) and \
-                                    not ('der' in postsynaptic_beh or 'Speeds' in postsynaptic_beh or 'Self_motion' in postsynaptic_beh) and \
-                                    (presynaptic_beh != 'Unclassified' and presynaptic_beh != 'null') and \
-                                    (postsynaptic_beh != 'Unclassified' and postsynaptic_beh != 'null'):
-                                if connection_type == 'excitatory':
-                                    area_dict['exc']['po_po'] += 1
-                                    if postsynaptic_mi != 'ns':
-                                        area_dict['exc'][f'po_{mi[area]}'] += 1
-                                else:
-                                    area_dict['inh']['po_po'] += 1
-                                    if postsynaptic_mi != 'ns':
-                                        area_dict['inh'][f'po_{mi[area]}'] += 1
-                            elif ('der' in presynaptic_beh or 'Speeds' in presynaptic_beh or 'Self_motion' in presynaptic_beh) and \
-                                    not ('der' in postsynaptic_beh or 'Speeds' in postsynaptic_beh or 'Self_motion' in postsynaptic_beh) and \
-                                    (presynaptic_beh != 'Unclassified' and presynaptic_beh != 'null') and \
-                                    (postsynaptic_beh != 'Unclassified' and postsynaptic_beh != 'null'):
-                                if connection_type == 'excitatory':
-                                    area_dict['exc']['mo_po'] += 1
-                                    if postsynaptic_mi != 'ns':
-                                        area_dict['exc'][f'mo_{mi[area]}'] += 1
-                                else:
-                                    area_dict['inh']['mo_po'] += 1
-                                    if postsynaptic_mi != 'ns':
-                                        area_dict['inh'][f'mo_{mi[area]}'] += 1
-                            elif not ('der' in presynaptic_beh or 'Speeds' in presynaptic_beh or 'Self_motion' in presynaptic_beh) and \
-                                    ('der' in postsynaptic_beh or 'Speeds' in postsynaptic_beh or 'Self_motion' in postsynaptic_beh) and \
-                                    (presynaptic_beh != 'Unclassified' and presynaptic_beh != 'null') and \
-                                    (postsynaptic_beh != 'Unclassified' and postsynaptic_beh != 'null'):
-                                if connection_type == 'excitatory':
-                                    area_dict['exc']['po_mo'] += 1
-                                    if postsynaptic_mi != 'ns':
-                                        area_dict['exc'][f'po_{mi[area]}'] += 1
-                                else:
-                                    area_dict['inh']['po_mo'] += 1
-                                    if postsynaptic_mi != 'ns':
-                                        area_dict['inh'][f'po_{mi[area]}'] += 1
-                            elif (presynaptic_beh != 'Unclassified' and presynaptic_beh != 'null') or \
-                                    (postsynaptic_beh != 'Unclassified' and postsynaptic_beh != 'null'):
-                                if connection_type == 'excitatory':
-                                    area_dict['exc']['unclass'] += 1
-                                    if postsynaptic_mi != 'ns':
-                                        if not ('der' in presynaptic_beh or 'Speeds' in presynaptic_beh or 'Self_motion' in presynaptic_beh) \
-                                                and presynaptic_beh != 'Unclassified' and presynaptic_beh != 'null':
-                                            area_dict['exc'][f'po_{mi[area]}'] += 1
-                                        elif 'der' in presynaptic_beh or 'Speeds' in presynaptic_beh or 'Self_motion' in presynaptic_beh \
-                                                and presynaptic_beh != 'Unclassified' and presynaptic_beh != 'null':
+                                # classify by tuning of behavioral modulation
+                                if ('der' in presynaptic_beh or 'Speeds' in presynaptic_beh or 'Self_motion' in presynaptic_beh) and \
+                                        ('der' in postsynaptic_beh or 'Speeds' in postsynaptic_beh or 'Self_motion' in postsynaptic_beh) and \
+                                        (presynaptic_beh != 'Unclassified' and presynaptic_beh != 'null') and \
+                                        (postsynaptic_beh != 'Unclassified' and postsynaptic_beh != 'null'):
+                                    if connection_type == 'excitatory':
+                                        area_dict['exc']['mo_mo'] += 1
+                                        if postsynaptic_mi != 'ns':
                                             area_dict['exc'][f'mo_{mi[area]}'] += 1
-                                        else:
-                                            area_dict['exc'][f'unclass_{mi[area]}'] += 1
-                                else:
-                                    area_dict['inh']['unclass'] += 1
-                                    if postsynaptic_mi != 'ns':
-                                        if not ('der' in presynaptic_beh or 'Speeds' in presynaptic_beh or 'Self_motion' in presynaptic_beh) \
-                                                and presynaptic_beh != 'Unclassified' and presynaptic_beh != 'null':
-                                            area_dict['inh'][f'po_{mi[area]}'] += 1
-                                        elif 'der' in presynaptic_beh or 'Speeds' in presynaptic_beh or 'Self_motion' in presynaptic_beh \
-                                                and presynaptic_beh != 'Unclassified' and presynaptic_beh != 'null':
+                                    else:
+                                        area_dict['inh']['mo_mo'] += 1
+                                        if postsynaptic_mi != 'ns':
                                             area_dict['inh'][f'mo_{mi[area]}'] += 1
-                                        else:
-                                            area_dict['inh'][f'unclass_{mi[area]}'] += 1
-                            else:
-                                if connection_type == 'excitatory':
-                                    area_dict['exc']['unclass'] += 1
-                                    if postsynaptic_mi != 'ns':
-                                        area_dict['exc'][f'unclass_{mi[area]}'] += 1
+                                elif not ('der' in presynaptic_beh or 'Speeds' in presynaptic_beh or 'Self_motion' in presynaptic_beh) and \
+                                        not ('der' in postsynaptic_beh or 'Speeds' in postsynaptic_beh or 'Self_motion' in postsynaptic_beh) and \
+                                        (presynaptic_beh != 'Unclassified' and presynaptic_beh != 'null') and \
+                                        (postsynaptic_beh != 'Unclassified' and postsynaptic_beh != 'null'):
+                                    if connection_type == 'excitatory':
+                                        area_dict['exc']['po_po'] += 1
+                                        if postsynaptic_mi != 'ns':
+                                            area_dict['exc'][f'po_{mi[area]}'] += 1
+                                    else:
+                                        area_dict['inh']['po_po'] += 1
+                                        if postsynaptic_mi != 'ns':
+                                            area_dict['inh'][f'po_{mi[area]}'] += 1
+                                elif ('der' in presynaptic_beh or 'Speeds' in presynaptic_beh or 'Self_motion' in presynaptic_beh) and \
+                                        not ('der' in postsynaptic_beh or 'Speeds' in postsynaptic_beh or 'Self_motion' in postsynaptic_beh) and \
+                                        (presynaptic_beh != 'Unclassified' and presynaptic_beh != 'null') and \
+                                        (postsynaptic_beh != 'Unclassified' and postsynaptic_beh != 'null'):
+                                    if connection_type == 'excitatory':
+                                        area_dict['exc']['mo_po'] += 1
+                                        if postsynaptic_mi != 'ns':
+                                            area_dict['exc'][f'mo_{mi[area]}'] += 1
+                                    else:
+                                        area_dict['inh']['mo_po'] += 1
+                                        if postsynaptic_mi != 'ns':
+                                            area_dict['inh'][f'mo_{mi[area]}'] += 1
+                                elif not ('der' in presynaptic_beh or 'Speeds' in presynaptic_beh or 'Self_motion' in presynaptic_beh) and \
+                                        ('der' in postsynaptic_beh or 'Speeds' in postsynaptic_beh or 'Self_motion' in postsynaptic_beh) and \
+                                        (presynaptic_beh != 'Unclassified' and presynaptic_beh != 'null') and \
+                                        (postsynaptic_beh != 'Unclassified' and postsynaptic_beh != 'null'):
+                                    if connection_type == 'excitatory':
+                                        area_dict['exc']['po_mo'] += 1
+                                        if postsynaptic_mi != 'ns':
+                                            area_dict['exc'][f'po_{mi[area]}'] += 1
+                                    else:
+                                        area_dict['inh']['po_mo'] += 1
+                                        if postsynaptic_mi != 'ns':
+                                            area_dict['inh'][f'po_{mi[area]}'] += 1
+                                elif (presynaptic_beh != 'Unclassified' and presynaptic_beh != 'null') or \
+                                        (postsynaptic_beh != 'Unclassified' and postsynaptic_beh != 'null'):
+                                    if connection_type == 'excitatory':
+                                        area_dict['exc']['unclass'] += 1
+                                        if postsynaptic_mi != 'ns':
+                                            if not ('der' in presynaptic_beh or 'Speeds' in presynaptic_beh or 'Self_motion' in presynaptic_beh) \
+                                                    and presynaptic_beh != 'Unclassified' and presynaptic_beh != 'null':
+                                                area_dict['exc'][f'po_{mi[area]}'] += 1
+                                            elif 'der' in presynaptic_beh or 'Speeds' in presynaptic_beh or 'Self_motion' in presynaptic_beh \
+                                                    and presynaptic_beh != 'Unclassified' and presynaptic_beh != 'null':
+                                                area_dict['exc'][f'mo_{mi[area]}'] += 1
+                                            else:
+                                                area_dict['exc'][f'unclass_{mi[area]}'] += 1
+                                    else:
+                                        area_dict['inh']['unclass'] += 1
+                                        if postsynaptic_mi != 'ns':
+                                            if not ('der' in presynaptic_beh or 'Speeds' in presynaptic_beh or 'Self_motion' in presynaptic_beh) \
+                                                    and presynaptic_beh != 'Unclassified' and presynaptic_beh != 'null':
+                                                area_dict['inh'][f'po_{mi[area]}'] += 1
+                                            elif 'der' in presynaptic_beh or 'Speeds' in presynaptic_beh or 'Self_motion' in presynaptic_beh \
+                                                    and presynaptic_beh != 'Unclassified' and presynaptic_beh != 'null':
+                                                area_dict['inh'][f'mo_{mi[area]}'] += 1
+                                            else:
+                                                area_dict['inh'][f'unclass_{mi[area]}'] += 1
                                 else:
-                                    area_dict['inh']['unclass'] += 1
-                                    if postsynaptic_mi != 'ns':
-                                        area_dict['inh'][f'unclass_{mi[area]}'] += 1
+                                    if connection_type == 'excitatory':
+                                        area_dict['exc']['unclass'] += 1
+                                        if postsynaptic_mi != 'ns':
+                                            area_dict['exc'][f'unclass_{mi[area]}'] += 1
+                                    else:
+                                        area_dict['inh']['unclass'] += 1
+                                        if postsynaptic_mi != 'ns':
+                                            area_dict['inh'][f'unclass_{mi[area]}'] += 1
 
             data_dict[area]['data'] = area_dict
 
@@ -942,9 +946,18 @@ class FunctionalConnectivity:
                                                                cluster_groups_dir=self.cluster_groups_dir,
                                                                sp_profiles_csv=self.sp_profiles_csv).file_finder(return_clusters=True)
 
+            if 'MM' in areas_lst or 'SS' in areas_lst:
+                if 'roy' not in cl_dict.keys():
+                    cl_dict['roy'] = {}
+                cl_dict['roy']['intermediate'] = select_clusters.ClusterFinder(session=f'{self.pkl_sessions_dir}{os.sep}clean_data_roy_270520_s1_intermediate_light_reheaded_XYZeuler_notricks.pkl',
+                                                                               cluster_groups_dir=self.cluster_groups_dir,
+                                                                               sp_profiles_csv=self.sp_profiles_csv).get_desired_clusters(filter_by_area=[area[0]],
+                                                                                                                                          filter_by_cluster_type='good')
+
             shuffled_dict = {connection_type: {'po_po': np.zeros(n_shuff), 'po_mo': np.zeros(n_shuff), 'mo_mo': np.zeros(n_shuff),
                                                'mo_po': np.zeros(n_shuff), f'mo_{mi[area]}': np.zeros(n_shuff), f'po_{mi[area]}': np.zeros(n_shuff),
                                                'unclass': np.zeros(n_shuff), f'unclass_{mi[area]}': np.zeros(n_shuff)} for connection_type in ['exc', 'inh']}
+
 
             for shuffle_num in tqdm(range(n_shuff)):
                 exc_n_shuff = 0
@@ -1077,5 +1090,5 @@ class FunctionalConnectivity:
             data_dict[area]['shuffled'] = shuffled_dict
 
         # save as .pkl file
-        with open(f'{self.save_dir}{os.sep}data_and_random_connections', 'wb') as save_dict:
+        with open(f'{self.save_dir}{os.sep}{input_type}_data_and_random_connections', 'wb') as save_dict:
             pickle.dump(data_dict, save_dict)

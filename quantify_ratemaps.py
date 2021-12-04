@@ -249,7 +249,6 @@ class RatemapCharacteristics:
         cluster_dict = {}
         total_clusters = 0
         for animal in self.areas_to_animals[self.area_filter].keys():
-            cluster_dict[animal] = {}
             for bank in self.areas_to_animals[self.area_filter][animal]:
                 for pkl_file in os.listdir(self.pkl_sessions_dir):
                     if animal in pkl_file and (self.animal_filter is True or any(one_animal in pkl_file for one_animal in self.animal_filter)) \
@@ -265,8 +264,11 @@ class RatemapCharacteristics:
                                                                                                                                 filter_by_smi=self.smi_filter,
                                                                                                                                 filter_by_lmi=self.lmi_filter,
                                                                                                                                 sort_ch_num=sort_ch_num)
-                        cluster_dict[animal][bank] = cluster_list
-                        total_clusters += len(cluster_list)
+                        if len(cluster_list) > 0:
+                            if animal not in cluster_dict.keys():
+                                cluster_dict[animal] = {}
+                            cluster_dict[animal][bank] = cluster_list
+                            total_clusters += len(cluster_list)
                         break
 
         print(f"Cluster search complete. Found {total_clusters} valid cluster(s) in area {self.area_filter}.")

@@ -17,7 +17,6 @@ import pickle
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
-from mpl_toolkits.mplot3d.axes3d import Axes3D
 from matplotlib.patches import FancyArrowPatch
 from matplotlib import markers
 from mpl_toolkits.mplot3d.proj3d import proj_transform
@@ -29,7 +28,6 @@ from scipy.stats import wilcoxon
 from scipy.stats import sem
 from scipy.stats import pearsonr
 from scipy.stats import mannwhitneyu
-from scipy.stats import levene
 import decode_events
 import sessions2load
 import make_ratemaps
@@ -38,6 +36,7 @@ import select_clusters
 import define_spiking_profile
 
 plt.rcParams['font.sans-serif'] = ['Helvetica']
+
 
 def fit_function(x, A, beta, B, mu, sigma):
     return A * np.exp(-x / beta) + B * np.exp(-1.0 * (x - mu) ** 2 / (2 * sigma ** 2))
@@ -1753,20 +1752,36 @@ class PlotGroupResults:
                 else:
                     ax.set_yticks([])
                 if counter == 0:
-                    ax.set_xlim(-2, 22)
-                    ax.set_xticks(range(0, 21, 5))
+                    if 'AA' in areas_lst or 'VV' in areas_lst:
+                        ax.set_xlim(-2, 22)
+                        ax.set_xticks(range(0, 21, 5))
+                    else:
+                        ax.set_xlim(-2, 82)
+                        ax.set_xticks(range(0, 81, 20))
                     ax.title.set_text(ei_connection)
                 elif counter == 1:
-                    ax.set_xlim(-2, 17)
-                    ax.set_xticks(range(0, 16, 5))
+                    if 'AA' in areas_lst or 'VV' in areas_lst:
+                        ax.set_xlim(-2, 17)
+                        ax.set_xticks(range(0, 16, 5))
+                    else:
+                        ax.set_xlim(-2, 12)
+                        ax.set_xticks(range(0, 11, 5))
                     ax.title.set_text(ei_connection)
                 elif counter == 2:
-                    ax.set_xlim(-2, 47)
-                    ax.set_xticks(range(0, 46, 5))
+                    if 'AA' in areas_lst or 'VV' in areas_lst:
+                        ax.set_xlim(-2, 47)
+                        ax.set_xticks(range(0, 46, 5))
+                    else:
+                        ax.set_xlim(-2, 32)
+                        ax.set_xticks(range(0, 31, 5))
                     ax.set_xlabel('Number of synapses')
                 else:
-                    ax.set_xlim(-2, 37)
-                    ax.set_xticks(range(0, 36, 5))
+                    if 'AA' in areas_lst or 'VV' in areas_lst:
+                        ax.set_xlim(-2, 37)
+                        ax.set_xticks(range(0, 36, 5))
+                    else:
+                        ax.set_xlim(-2, 12)
+                        ax.set_xticks(range(0, 11, 5))
                     ax.set_xlabel('Number of synapses')
                 counter += 1
         if self.save_fig:
