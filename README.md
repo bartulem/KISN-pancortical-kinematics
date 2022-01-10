@@ -1,4 +1,4 @@
-# pancortical-kinematic-analyses
+# KISN-pancortical-kinematic
 ### Data analyses for e-phys and 3D tracking experiments
 ---------------------------------------------------------------------------------
 Code used to analyze data published in "LINK TO PROJECT"
