@@ -1,6 +1,6 @@
 """
 Performs model selection.
-@author: SolVind
+@author: JingyiGF
 """
 
 from .family import *

@@ -1,6 +1,6 @@
 """
 Computes GLM metrics.
-@author: SolVind
+@author: JingyiGF
 """
 
 from .family import *

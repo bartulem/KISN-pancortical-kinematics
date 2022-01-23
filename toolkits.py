@@ -1,6 +1,6 @@
 """
 Performs various operations.
-@author: SolVind
+@author: JingyiGF
 """
 
 import scipy

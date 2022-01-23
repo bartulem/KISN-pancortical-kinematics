@@ -1,6 +1,6 @@
 """
 Performs cross-validation.
-@author: SolVind
+@author: JingyiGF
 """
 
 from .toolkits import *

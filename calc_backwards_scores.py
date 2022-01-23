@@ -1,6 +1,6 @@
 """
 Computes backward model scores.
-@author: SolVind
+@author: JingyiGF
 """
 
 from .toolkits import *

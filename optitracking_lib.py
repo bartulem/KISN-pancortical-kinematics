@@ -1,6 +1,6 @@
 """
 Performs rotations on tracking data.
-@author: SolVind
+@author: JingyiGF
 """
 
 # import library

@@ -1,6 +1,6 @@
 """
 Performs various GLM-related computations.
-@author: SolVind
+@author: JingyiGF
 """
 
 from .toolkits import *
@@ -82,7 +82,7 @@ def loglik(family, y, eta, mu, theta=1.0):
     return log_lik
 
 
-def gradhess_negloglik_1d(family:str, link, y, xk, eta, kappa, theta, fit_intercept=True):
+def gradhess_negloglik_1d(family, link, y, xk, eta, kappa, theta, fit_intercept=True):
     """
     Compute gradient (1st derivative) and Hessian (2nd derivative)
     of negative log-likelihood for a single coordinate.

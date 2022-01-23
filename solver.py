@@ -1,6 +1,6 @@
 """
 Performs GLM solver.
-@author: SolVind
+@author: JingyiGF
 """
 
 from .toolkits import *

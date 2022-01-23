@@ -1,6 +1,6 @@
 """
 Calculates ratemaps.
-@author: SolVind
+@author: JingyiGF
 """
 
 import matplotlib

@@ -1,9 +1,13 @@
 """
-Calculates backward GLM scores.
-@author: SolVind
+Example code for processing data and performing the infrerence of GLMs.
+@author: JingyiGF
 """
 
-from paper_code import *
+from .optitracking_lib import *
+from .ratemap_lib import *
+from .model_selection import *
+from .process_data import *
+from .calc_backwards_scores import *
 
 # load the data
 
@@ -37,6 +41,7 @@ output_dict, best_model = ms.fit(data, cell_index=cell_index)
 
 f_model = {cell_name: output_dict['%s-keys' % output_dict['best-model']]}
 
+# calculate the scores for each model by deleting one feature from the final selected model
 res = calc_backwards_scores('bernoulli', data, cell_index=cell_index, final_model=f_model)
 
 

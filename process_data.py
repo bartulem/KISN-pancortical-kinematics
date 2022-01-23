@@ -1,6 +1,6 @@
 """
 Prepares data for rate-map analyses.
-@author: SolVind
+@author: JingyiGF
 """
 
 from .toolkits import *
