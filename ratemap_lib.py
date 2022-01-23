@@ -1,6 +1,7 @@
 """
 Calculates ratemaps.
-@author: JingyiGF
+@author: Benjamin Adric Dunn
+@modified: JingyiGF
 """
 
 import matplotlib
@@ -98,16 +99,7 @@ def get_cell_occ(cell_data, time_delay, frame_rate, tracking_ts, cell_start_time
 
 def get_2d_ratemap(factor1, factor2, bins1, bins2, tcount, cellocc_ind, frame_rate,
                    occupancy_thresh, smoothing_par, session_indicator=None, is_periodic=False, debug_mode=False):
-    """
-    Purpose
-    -------------
-    Get the rate map data for later use.
 
-    Inputs
-    -------------
-
-
-    """
     if isinstance(cellocc_ind, list):
         if not cellocc_ind:
             return []
@@ -198,21 +190,7 @@ def get_2d_ratemap(factor1, factor2, bins1, bins2, tcount, cellocc_ind, frame_ra
 
 
 def get_1d_binnocc(factors, bins, tcount, frame_rate, session_indicator=None, gaussian_smoothing=1, periodic=False):
-    """
-        Purpose
-        -------------
-        This binned Occ is particular for shuffling.
 
-        Inputs
-        -------------
-        factors : all the 1D factors are interested
-        bins : all the corresponding 1D bins
-
-        Outputs
-        -------------
-
-
-        """
     all_binnocc = {}
     all_smoothed_occ = {}
     all_keys = list(factors.keys())
@@ -261,20 +239,7 @@ def get_1d_binnocc(factors, bins, tcount, frame_rate, session_indicator=None, ga
 
 
 def get_1d_ratemap(factor, bins, binnocc, cellocc_ind, gaussian_smoothing=1, debug_mode=False, periodic=False):
-    """
-    Purpose
-    -------------
 
-
-    Inputs
-    -------------
-    avec :
-
-    Outputs
-    -------------
-
-
-    """
     # print 'Fraction of NaNs in the movement data = fraction of bins that are crap', sum(ixes<-1)/float(len(ixes)),
     # this makes a True / False vector of all time points inside the start/end times that we want to analyse
     if isinstance(cellocc_ind, list):
@@ -329,24 +294,7 @@ def get_1d_ratemap(factor, bins, binnocc, cellocc_ind, gaussian_smoothing=1, deb
 
 def get_selfmotion_map(ixes, jyes, tcount, cellocc_ind, frame_rate, occupancy_thresh, smoothing_par,
                        nbin_max_xval, nbin_min_yval, nbin_max_yval, session_indicator=None, debug_mode=False):
-    """
-    Purpose
-    -------------
-    make self motion maps.
 
-    Inputs
-    -------------
-    ixes :
-
-    jyes :
-
-
-
-    Outputs
-    -------------
-    rawbinnedacc :
-
-    """
     if isinstance(cellocc_ind, list):
         if not cellocc_ind:
             return []
@@ -422,20 +370,7 @@ def get_selfmotion_map(ixes, jyes, tcount, cellocc_ind, frame_rate, occupancy_th
 
 def get_spatial_tuning(spatial_values, nframes, tcount, cellocc_ind, frame_rate,
                        nbins, occupancy_thresh, smoothing_par, session_indicator=None, debug_mode=False):
-    """
-    Purpose
-    -------------
-    make velocity maps
 
-    Inputs
-    -------------
-    avec :
-
-    Outputs
-    -------------
-
-
-    """
     if isinstance(cellocc_ind, list):
         if not cellocc_ind:
             return []
@@ -527,28 +462,7 @@ def get_spatial_tuning(spatial_values, nframes, tcount, cellocc_ind, frame_rate,
 def get_velocity_tuning(move_angles, speeds, tcount, cellocc_ind, frame_rate,
                         velocity_max_speed, nbin_speed, nbin_angle,
                         occupancy_thresh, smoothing_par, session_indicator=None, debug_mode=False):
-    """
-    Purpose
-    -------------
-    This function makes velocity maps.
 
-    Inputs
-    -------------
-    move_anlges :
-
-    speeds :
-
-    time_delay :
-
-    cell_data :
-
-
-
-    Outputs
-    -------------
-
-
-    """
 
     move_angles = move_angles + math.pi
 
@@ -638,32 +552,7 @@ def get_velocity_tuning(move_angles, speeds, tcount, cellocc_ind, frame_rate,
 
 
 def plot_1d_values(xvals, yvals, y2vals, occs, means, stds, occupancy_thresh_1d, tit):
-    """
-        Purpose
-        -------------
-        Service function for ratemap_generator. Plot 1d values.
 
-        Inputs
-        -------------
-        xvals:
-
-        yvals:
-
-        y2vals:
-
-        occs:
-
-        means:
-
-        stds:
-
-        tit:
-
-        Outputs
-        -------------
-        Plots.
-
-        """
     if len(xvals) != len(yvals):
         print(('should all be same', tit, len(xvals), len(yvals), len(y2vals), len(occs), len(means), len(stds)))
     if np.sum(~np.isnan(stds)) > 0:
@@ -794,38 +683,7 @@ def prepare4ratemap(data, boundary=None, speed_type='jump',
                     use_even_odd_minutes=True, spatial_filter_diameter=None,
                     split_data_along_an_axis='', split_values=(0, 1),
                     save_data=True):
-    """
-    Purpose
-    -------------
-    generate the data for later use (upload to clusters) for making rate maps.
 
-    Inputs
-    -------------
-    data : see from data_generator() or merge_comparing_data().
-    
-    boundary : if any, see tutorial for example.
-    
-    speed_type : 'jump' (default) or 'cum'. Methods used to calculate the speed of the animal.
-    
-    derivatives_param : parameters used to calculate derivatives of factors, e.g (10,10).
-                        If given, the derivatives will be re-calculated.
-    
-    speed_filter_ind : 250 (default). The time interval (ms) we used to calculate speed in self motion.
-                       The default selfmotion parameters are (150, 250). So here we can choose 150 or 250.
-                       If the selfmotion paramters are changed, here need to change to the corresponding values.
-                       
-    speed_filter_var : (0, 40).
-
-    spatial_filter_diameter : 1 (default) cm.
-    
-    use_even_odd_minutes : True (default),  else first half / second half.
-
-
-    Outputs
-    -------------
-
-
-    """
 
     # setup constant
     occupancy_thresh = 400. / 1000. + 0.001  # Minimum bin occupancy (seconds), Parameters for self motion maps!!
@@ -1371,40 +1229,7 @@ def ratemap_generator(data, comparing=False, cell_index=(10, 11), tempoffsets=0,
                       pl_subplot=(14, 10), pl_size=(70, 70),
                       cf_subplot=(14, 10), cf_size=(70, 70),
                       save_1d_ratemaps=True):
-    """
-    Purpose
-    -------------
-    Doing shufflings and make rate maps.
 
-    Inputs
-    -------------
-    data :  data that contains all the information that needed, see data_generator() and prepare4ratemaps() for example.
-    
-    comparing : False(default), if plot 2 groups of datasets side by side to compare.
-    
-    cell_index : index of the cells included in the data. integer or integer array.
-    
-    tempoffsets : integer or np.array([ -1500, -1000, -500, -250, -150, -100, -50, -25, -16, 0, 16, 25, 50, 100, 250, 500, 1000]).
-    
-    nhuffles : 1000 (default), number of shuffles. you need enough for it to be well approximated by a Gaussian, assuming it can be.
-               Each rate map distributions for the scores are calculated using random shuffles between +/- [MIN,MAX] relative to zero.
-               Note, it is IMPORTANT that the MIN/MAX values are outside the range for the temporal offsets!!!
-    
-    shuffle_offset : Min/Max value for the shuffling range.
-    
-    include_selfmotion : True (default). Whether or not to make selfmotion maps.
-    
-    selfmotion_lims : Min/Max value for the horizontal axis (cm/s) and Min/Max value for the vertical axis (cm/s).
-    
-    selfmotion_bin_size : size of bins for selfmotion.
-
-    
-    Outputs
-    -------------
-    Auto saved rate maps.
-
-
-    """
     # check data
     matplotlib.use('Agg')
 

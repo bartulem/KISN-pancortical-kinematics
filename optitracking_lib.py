@@ -1,6 +1,7 @@
 """
 Performs rotations on tracking data.
-@author: JingyiGF
+@author: Benjamin Adric Dunn
+@modified: JingyiGF
 """
 
 # import library
