@@ -609,7 +609,7 @@ def calc_der(values, framerate, bins_1st, bins_2nd, is_angle, der_2nd, session_i
                     second_der[t] /= (2. * bins_1st / framerate[session_indicator[t]])
                 else:
                     second_der[t] /= (2. * bins_1st / framerate)
-        if (ncol_val == 1):
+        if ncol_val == 1:
             value_2nd_der = second_der + 0.
             value_1st_der = first_der + 0.
         else:

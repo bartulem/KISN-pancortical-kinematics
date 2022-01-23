@@ -63,7 +63,7 @@ def loglik(family, y, eta, mu, theta=1.0):
         eps = np.spacing(1)
         log_lik = np.sum(y * np.log(mu + eps) - mu)
     elif family == 'gaussian':
-        log_lik = -0.5 * np.sum((y - mu)**2)
+        log_lik = -0.5 * np.sum((y - mu) ** 2)
     elif family == 'bernoulli':
         if np.any(mu == 1.0):
             flow_control = True
@@ -75,10 +75,10 @@ def loglik(family, y, eta, mu, theta=1.0):
             log_lik = np.sum(y * eta - np.log(1. + np.exp(eta)))
         else:
             log_lik = np.sum(y * np.log(mu) + (1 - y) * np.log(1. - mu))
-            
+
     elif family == 'neg-binomial':
         log_lik = np.sum(loggamma(y + theta) - loggamma(theta) - loggamma(y + 1.) +
-                        theta * np.log(theta) + y * np.log(mu) - (theta + y) * np.log(mu + theta))
+                         theta * np.log(theta) + y * np.log(mu) - (theta + y) * np.log(mu + theta))
     return log_lik
 
 
@@ -104,40 +104,40 @@ def gradhess_negloglik_1d(family, link, y, xk, eta, kappa, theta, fit_intercept=
         (n_features + 1)
     """
     n_samples = xk.shape[0]
-        
+
     mu = latent_mu(family, link, eta, kappa, fit_intercept)
-    
+
     if family == 'poisson':
         s = expit(eta)
         gk = np.sum((mu[eta <= kappa] - y[eta <= kappa]) * xk[eta <= kappa]) + \
              np.exp(kappa) * np.sum((1 - y[eta > kappa] / mu[eta > kappa]) * xk[eta > kappa])
         hk = np.sum(mu[eta <= kappa] * xk[eta <= kappa] ** 2) + \
              np.exp(kappa) ** 2 * np.sum(y[eta > kappa] / (mu[eta > kappa] ** 2) * (xk[eta > kappa] ** 2))
-    
+
     elif family == 'gaussian':
         gk = np.sum((eta - y) * xk)
         hk = np.sum(xk * xk)
-    
+
     elif family == 'bernoulli':
         gk = np.sum((mu - y) * xk)
         hk = np.sum(mu * (1.0 - mu) * xk * xk)
-    
+
     elif family == 'neg-binomial':
         grad_mu = grad_latent(family, eta, kappa)
         hess_mu = np.exp(-eta) * expit(eta) ** 2
-        
+
         gradient_beta_j = -grad_mu * (y / mu - (y + theta) / (mu + theta))
         partial_beta_0_1 = hess_mu * (y / mu - (y + theta) / (mu + theta))
         partial_beta_0_2 = grad_mu ** 2 * ((y + theta) / (mu + theta) ** 2 - y / mu ** 2)
         partial_beta_0 = -(partial_beta_0_1 + partial_beta_0_2)
         gk = np.dot(gradient_beta_j.T, xk)
         hk = np.dot(partial_beta_0.T, xk ** 2)
-    
+
     standard_gk = 1. / n_samples * gk
     standard_hk = 1. / n_samples * hk
-    
+
     return standard_gk, standard_hk
-    
+
 
 # def quadratic_loglik(family, y, eta, mu0, eta0, ntrials=1, theta=1.0):
 #     """The quadratic log-likelihood."""
@@ -158,7 +158,6 @@ def gradhess_negloglik_1d(family, link, y, xk, eta, kappa, theta, fit_intercept=
 #         zi = 1
 #     qloglik = - 0.5 * np.sum(wii * (zi - eta)**2)
 #     return qloglik
-
 
 
 def l1_penalty(beta, group=None):
@@ -194,7 +193,6 @@ def grad_l1penalty(beta, group=None):
         # l1_reg += np.linalg.norm(beta[group == 0], 1)
         grad_l1 = 1
     return grad_l1
-    
 
 
 def l2_penalty(beta, tik_tau):
@@ -230,7 +228,7 @@ def scad_penalty(beta, gamma):
 def penalty(beta, style='enet', alpha=0.5, tik_tau=None, group=None):
     """The penalty."""
     penalty_options = ('enet', 'elastic-net', 'l1', 'lasso', 'l2', 'ridge', 'tikhonov', 'mnet', 'snet', 'mcp', 'scad')
-    style = string_like(style, 'style', options = penalty_options)
+    style = string_like(style, 'style', options=penalty_options)
     if style == 'enet':
         # Combine L1 and L2 penalty terms
         pen_wt_lam = 0.5 * (1 - alpha) * l2_penalty(beta, tik_tau) + alpha * l1_penalty(beta, group)
@@ -311,7 +309,7 @@ def grad_l2loss(family, link, y, x_mat, beta, lambdas, alpha=0.5, kappa=None, th
     grad_beta *= 1. / n_samples
     if fit_intercept:
         grad_beta += lambdas * (1 - alpha) * np.dot(InvCov, beta[1:])
-        g = np.zeros((n_features + 1, ))
+        g = np.zeros((n_features + 1,))
         g[0] = grad_beta0
         g[1:] = grad_beta
     else:
@@ -333,23 +331,3 @@ def quadratic_loss(family, y, x_mat, beta, style, alpha, stau, lambdas, kappa, t
         penal_t = penalty(alpha, beta, stau, group)
     loss_value = - standardized_loglik + lambdas * penal_t  # negative log-likelihood + penalty
     return loss_value
-
-
-
-
-
-
-
-
-
-
-    
-
-
-
-
-    
-    
-    
-
-
