@@ -1,11 +1,6 @@
-# -*- coding: utf-8 -*-
-
 """
-
+Plots white noise characteristics.
 @author: bartulem
-
-Plot white noise characteristics.
-
 """
 
 import os
@@ -37,7 +32,7 @@ class WhiteNoise:
         fig_format (str)
             The format of the figure; defaults to 'png'.
         save_dir (bool)
-            Directory to save the figure in; defaults to '/home/bartulm/Downloads'.
+            Directory to save the figure in; defaults to '/.../Downloads'.
         spec_cmap (str)
             Color of the PETH; defaults to 'cividis'.
         raw_data_color (str)
@@ -55,7 +50,7 @@ class WhiteNoise:
 
         save_fig = kwargs['save_fig'] if 'save_fig' in kwargs.keys() and type(kwargs['save_fig']) == bool else False
         fig_format = kwargs['fig_format'] if 'fig_format' in kwargs.keys() and type(kwargs['fig_format']) == str else 'png'
-        save_dir = kwargs['save_dir'] if 'save_dir' in kwargs.keys() and type(kwargs['save_dir']) == str else '/home/bartulm/Downloads'
+        save_dir = kwargs['save_dir'] if 'save_dir' in kwargs.keys() and type(kwargs['save_dir']) == str else '/.../Downloads'
         spec_cmap = kwargs['spec_cmap'] if 'spec_cmap' in kwargs.keys() and type(kwargs['spec_cmap']) == str else 'cividis'
         raw_data_color = kwargs['raw_data_color'] if 'raw_data_color' in kwargs.keys() and type(kwargs['raw_data_color']) == str else '#000000'
         axins_color = kwargs['axins_color'] if 'axins_color' in kwargs.keys() and type(kwargs['axins_color']) == str else '#FFFFFF'

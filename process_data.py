@@ -1,3 +1,8 @@
+"""
+Prepares data for rate-map analyses.
+@author: SolVind
+"""
+
 from .toolkits import *
 
 
@@ -42,7 +47,7 @@ def get_data(data, use_imu=False, max_num_spk=4):
                len(cell_ts) / (session_ts[1] - session_ts[0]), 'Hertz'))
         for t in cell_ts:
             indy = int(np.floor(t * framerate))  # this is the same as timebin = 1000/framerate = 8.33333333333333 ms
-            if (indy > nf - 1 or indy < 0):
+            if indy > nf - 1 or indy < 0:
                 print(('Time point %f, of cell %s, is outside of range (0, %f)' % (
                     t, cell_names[i], tracking_ts[1] - tracking_ts[0])))
                 continue
@@ -54,9 +59,9 @@ def get_data(data, use_imu=False, max_num_spk=4):
                '(estimated firing rate = %f Hertz), there are' % (np.mean(spk_mat[i, :]) * framerate),))
         for j in range(1, 50, 1):
             n = np.sum(spk_mat[i, :] == j)
-            if (n > 0):
+            if n > 0:
                 print((n, 'bins with', j, 'spikes,',))
-                if (j > 5):
+                if j > 5:
                     vv = np.argwhere(spk_mat[i, :] == j)
                     print('This happened at bin number', vv, 'which corresponds to time',
                           vv / framerate + tracking_ts[0])
@@ -69,7 +74,7 @@ def get_data(data, use_imu=False, max_num_spk=4):
 def shift_spikes_in_time(possible_covariates, spk_mat, toff):
     # nf = len(possible_covariates[list(possible_covariates.keys())[0]])
     nf = len(spk_mat[0, :])
-    if (toff < 0):
+    if toff < 0:
         ii = 0
         jj = nf + toff
         aa = abs(toff)
@@ -118,22 +123,22 @@ def get_bins_with_enough_in_each(values, minval, maxval, nbins):
 def bin_covariate_1d(values, ips, nbins, min_occupancy=100):
     minval = ips[0]
     maxval = ips[1]
-    if (ips[2]):
-        if (abs(minval) < 0.0001 and abs(maxval) < 0.0001):
+    if ips[2]:
+        if abs(minval) < 0.0001 and abs(maxval) < 0.0001:
             minval = np.nanmin(values)
             maxval = np.nanmax(values)
         for i in range(10000):
             centers, occ, chopped_up_guys = get_bins_with_enough_in_each(values, minval, maxval, nbins)
             goodtogo = True
-            if (occ[0] < min_occupancy):
+            if occ[0] < min_occupancy:
                 minval = minval + 0.05 * (centers[0] - minval)
                 goodtogo = False
-            if (occ[-1] < min_occupancy):
+            if occ[-1] < min_occupancy:
                 maxval = maxval + 0.05 * (centers[-1] - maxval)
                 goodtogo = False
-            if (goodtogo):
+            if goodtogo:
                 break
-            if (not goodtogo and i > 9999):
+            if not goodtogo and i > 9999:
                 for j in range(10):
                     raise Exception(('SHIT! Could not find good bounds for the variable!!'))
     
@@ -162,7 +167,7 @@ def bin_covariate_2d(xvals, yvals, size_axis_bins, min_occupancy=100):
         for j in np.arange(np.nanmax(jyes)):
             totpos += 1
             stuff = (ixes == i) * (jyes == j) * 1.
-            if (np.sum(stuff) > min_occupancy):
+            if np.sum(stuff) > min_occupancy:
                 outputvector.append(stuff)
     print("number of good bins is", len(outputvector), 'of a possible', totpos)
     outputvector = np.transpose(np.array(outputvector))
@@ -182,7 +187,7 @@ def preprocess_covariates(covariates, bounds, use_bins=True, nbins=15, temporal_
             print(('Key', da_key))
             values = covariates[da_key].copy()
             
-            if (da_key in bounds):
+            if da_key in bounds:
                 ips = [bounds[da_key][0], bounds[da_key][1], False, temporal_offsets]
             else:
                 ips = [0, 0, True, temporal_offsets]
@@ -220,9 +225,6 @@ def prepare_data4glms(data, use_bins=True, nbins=15, temporal_offsets=0, time_sh
 
     time_shift : integer,
         time shift in a bin.
-
-
-
     """
     settings = data['settings'].copy()
     settings['glm_use_bins'] = use_bins
@@ -255,4 +257,3 @@ def prepare_data4glms(data, use_bins=True, nbins=15, temporal_offsets=0, time_sh
         data4glms['features_mat'] = features_submat
     
     return data4glms
-

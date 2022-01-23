@@ -1,11 +1,6 @@
-# -*- coding: utf-8 -*-
-
 """
-
+Loads spike data, bins and smoothes.
 @author: bartulem
-
-Load spike data, bin and smooth.
-
 """
 
 import os
@@ -19,7 +14,6 @@ from scipy.ndimage.filters import gaussian_filter1d
 import sessions2load
 import quantify_ratemaps
 import decode_events
-
 
 warnings.simplefilter('ignore')
 
@@ -147,7 +141,6 @@ def convert_spikes_to_frame_events(purged_spike_train, frames_total, camera_fram
 def condense_frame_arrays(frame_array, camera_framerate=120.,
                           bin_size_ms=100, arr_type=True,
                           sound=True):
-
     """
     Parameters
     ----------
@@ -178,9 +171,9 @@ def condense_frame_arrays(frame_array, camera_framerate=120.,
     new_arr = np.zeros(new_shape)
 
     # fill it in
-    ls_iter = list(range(0, new_shape*step, step))
+    ls_iter = list(range(0, new_shape * step, step))
     for idx, one_bin in enumerate(ls_iter):
-        array_excerpt = frame_array[one_bin:one_bin+step]
+        array_excerpt = frame_array[one_bin:one_bin + step]
         if arr_type:
             new_arr[idx] = array_excerpt.sum()
         else:
@@ -402,7 +395,7 @@ def raster_preparation(purged_spike_train, event_start_frames,
     for event in event_start_frames:
         window_start_seconds = (event / camera_framerate) - window_size
         window_centered_spikes = purged_spike_train[(purged_spike_train >= window_start_seconds)
-                                                    & (purged_spike_train < window_start_seconds+(window_size*2))] - window_start_seconds
+                                                    & (purged_spike_train < window_start_seconds + (window_size * 2))] - window_start_seconds
         raster_list.append(window_centered_spikes[window_centered_spikes > 0])
 
     return raster_list
@@ -441,7 +434,7 @@ def discontinuous_raster_preparation(purged_spike_arr, event_start_arr, event_nu
                 purged_spike_train = purged_spike_arr[session_idx]
                 window_start_seconds = (session[event_idx] / camera_framerate_arr[session_idx])
                 window_centered_spikes = purged_spike_train[(purged_spike_train >= window_start_seconds)
-                                                            & (purged_spike_train < window_start_seconds+window_size)] - window_start_seconds + (session_idx*2)
+                                                            & (purged_spike_train < window_start_seconds + window_size)] - window_start_seconds + (session_idx * 2)
                 for spike in window_centered_spikes:
                     temp_raster_list.append(spike)
         raster_list.append(np.array(temp_raster_list))
@@ -452,7 +445,6 @@ def discontinuous_raster_preparation(purged_spike_arr, event_start_arr, event_nu
 @njit(parallel=False)
 def find_variable_sequences(variable, threshold_low=0., threshold_high=5.,
                             min_seq_duration=2, camera_framerate=120.):
-
     """
     Parameters
     ----------
@@ -476,20 +468,20 @@ def find_variable_sequences(variable, threshold_low=0., threshold_high=5.,
     """
 
     # transform sequence duration to bins
-    min_seq_duration = int(round(min_seq_duration*camera_framerate))
+    min_seq_duration = int(round(min_seq_duration * camera_framerate))
 
     indices_above_threshold = np.where((threshold_low <= variable) & (variable <= threshold_high))[0]
     seq_starts = []
     for idx, item in enumerate(indices_above_threshold):
         # both idx and item need to be below array length minus min_seq_duration
-        idx_truth = idx <= indices_above_threshold.shape[0]-min_seq_duration
-        item_truth = item <= variable.shape[0]-min_seq_duration
+        idx_truth = idx <= indices_above_threshold.shape[0] - min_seq_duration
+        item_truth = item <= variable.shape[0] - min_seq_duration
         if idx_truth and item_truth \
-                and (np.arange(item, item+min_seq_duration, 1) == indices_above_threshold[idx:idx+min_seq_duration]).all():
+                and (np.arange(item, item + min_seq_duration, 1) == indices_above_threshold[idx:idx + min_seq_duration]).all():
             if len(seq_starts) == 0:
                 seq_starts.append(item)
             else:
-                if item > seq_starts[-1]+(min_seq_duration*2):
+                if item > seq_starts[-1] + (min_seq_duration * 2):
                     seq_starts.append(item)
 
     return np.array(seq_starts).astype(np.int32)
@@ -501,9 +493,9 @@ class Spikes:
     print(f"The pseudorandom number generator was seeded at {shuffle_seed}.")
 
     def __init__(self, input_file='', purged_spikes_dictionary='', input_012=['', '', ''],
-                 cluster_groups_dir='/home/bartulm/Insync/mimica.bartul@gmail.com/OneDrive/Work/data/posture_2020/cluster_groups_info',
-                 sp_profiles_csv='/home/bartulm/Insync/mimica.bartul@gmail.com/OneDrive/Work/data/posture_2020/spiking_profiles/spiking_profiles.csv',
-                 pkl_files_dir = '/home/bartulm/Insync/mimica.bartul@gmail.com/OneDrive/Work/data/posture_2020/data_files'):
+                 cluster_groups_dir='/.../cluster_groups_info',
+                 sp_profiles_csv='/.../spiking_profiles.csv',
+                 pkl_files_dir='/.../data_files'):
         self.input_file = input_file
         self.purged_spikes_dictionary = purged_spikes_dictionary
         self.input_012 = input_012
@@ -550,7 +542,6 @@ class Spikes:
         extracted_activity = extracted_data['cluster_spikes']
 
         for cl_id, spikes in extracted_activity.items():
-
             # eliminate spikes that happen prior to and post tracking
             purged_spikes_sec = purge_spikes_beyond_tracking(spike_train=spikes, tracking_ts=track_ts)
 
@@ -711,7 +702,7 @@ class Spikes:
         smooth_sd = kwargs['smooth_sd'] if 'smooth_sd' in kwargs.keys() and type(kwargs['smooth_sd']) == int else 1
         smooth_axis = kwargs['smooth_axis'] if 'smooth_axis' in kwargs.keys() and type(kwargs['smooth_axis']) == int else 1
         raster = kwargs['raster'] if 'raster' in kwargs.keys() and type(kwargs['raster']) == bool else False
-        beh_raster = kwargs['beh_raster'] if 'beh_raster' in kwargs.keys() and ( type(kwargs['beh_raster']) == str or type(kwargs['beh_raster']) == bool) else False
+        beh_raster = kwargs['beh_raster'] if 'beh_raster' in kwargs.keys() and (type(kwargs['beh_raster']) == str or type(kwargs['beh_raster']) == bool) else False
 
         # extract relevant variables / clusters from session data
         get_variables = ['imu_sound', 'framerate']
@@ -831,8 +822,10 @@ class Spikes:
         decode_what = kwargs['decode_what'] if 'decode_what' in kwargs.keys() and type(kwargs['decode_what']) == str else 'luminance'
         cluster_areas = kwargs['cluster_areas'] if 'cluster_areas' in kwargs.keys() and type(kwargs['cluster_areas']) == list else ['A']
         cluster_type = kwargs['cluster_type'] if 'cluster_type' in kwargs.keys() and type(kwargs['cluster_type']) == str else True
-        speed_threshold_high = kwargs['speed_threshold_high'] if 'speed_threshold_high' in kwargs.keys() and (type(kwargs['speed_threshold_high']) == int or type(kwargs['speed_threshold_high']) == float) else 5.
-        speed_threshold_low = kwargs['speed_threshold_low'] if 'speed_threshold_low' in kwargs.keys() and (type(kwargs['speed_threshold_low']) == int or type(kwargs['speed_threshold_low']) == float) else 0.
+        speed_threshold_high = kwargs['speed_threshold_high'] if 'speed_threshold_high' in kwargs.keys() and (
+                    type(kwargs['speed_threshold_high']) == int or type(kwargs['speed_threshold_high']) == float) else 5.
+        speed_threshold_low = kwargs['speed_threshold_low'] if 'speed_threshold_low' in kwargs.keys() and (
+                    type(kwargs['speed_threshold_low']) == int or type(kwargs['speed_threshold_low']) == float) else 0.
         speed_min_seq_duration = kwargs['speed_min_seq_duration'] if 'speed_min_seq_duration' in kwargs.keys() \
                                                                      and (type(kwargs['speed_min_seq_duration']) == int or type(kwargs['speed_min_seq_duration']) == float) else 2.
         discontinuous_raster = kwargs['discontinuous_raster'] if 'discontinuous_raster' in kwargs.keys() and type(kwargs['discontinuous_raster']) == bool else False
@@ -927,7 +920,7 @@ class Spikes:
                 switch_points = np.arange(0, total_window, total_window // 3)
                 for epoch in range(max_event_num_all_sessions):
                     for sp_idx, sp in enumerate(switch_points):
-                        peth_array[epoch, sp:sp+(total_window // 3)] = gaussian_smoothing(array=peth_array[epoch, sp:sp+(total_window // 3)], sigma=smooth_sd, axis=0)
+                        peth_array[epoch, sp:sp + (total_window // 3)] = gaussian_smoothing(array=peth_array[epoch, sp:sp + (total_window // 3)], sigma=smooth_sd, axis=0)
 
             peth_dictionary[cluster]['discontinuous_peth'] = peth_array
 
@@ -982,15 +975,14 @@ class Spikes:
                                                                                                                                                        'session_type_filter': True,
                                                                                                                                                        'cluster_type_filter': 'good',
                                                                                                                                                        'specific_date': None},
-                                                                                                                                             'dark': {'area_filter': 'V',
-                                                                                                                                                      'animal_filter': True,
-                                                                                                                                                      'profile_filter': True,
-                                                                                                                                                      'session_id_filter': True,
-                                                                                                                                                      'session_non_filter': True,
-                                                                                                                                                      'session_type_filter': ['dark'],
-                                                                                                                                                      'cluster_type_filter': 'good',
-                                                                                                                                                      'specific_date': None}}
-
+                                                                                                                                            'dark': {'area_filter': 'V',
+                                                                                                                                                     'animal_filter': True,
+                                                                                                                                                     'profile_filter': True,
+                                                                                                                                                     'session_id_filter': True,
+                                                                                                                                                     'session_non_filter': True,
+                                                                                                                                                     'session_type_filter': ['dark'],
+                                                                                                                                                     'cluster_type_filter': 'good',
+                                                                                                                                                     'specific_date': None}}
 
         cluster_dict = {}
         for session_type in corr_input_dict.keys():
@@ -1036,27 +1028,33 @@ class Spikes:
                                 bank in pkl_file and \
                                 (corr_input_dict[session_type]['session_id_filter'] is True or corr_input_dict[session_type]['session_id_filter'] in pkl_file) and \
                                 (corr_input_dict[session_type]['session_non_filter'] is True or corr_input_dict[session_type]['session_non_filter'] not in pkl_file) and \
-                                (corr_input_dict[session_type]['session_type_filter'] is True or any(one_word in pkl_file for one_word in corr_input_dict[session_type]['session_type_filter']) in pkl_file):
+                                (corr_input_dict[session_type]['session_type_filter'] is True or any(
+                                    one_word in pkl_file for one_word in corr_input_dict[session_type]['session_type_filter']) in pkl_file):
                             for pkl_file2 in os.listdir(self.pkl_files_dir):
                                 if (specific_date[animal] is True or any(one_date in pkl_file2 for one_date in specific_date[animal])) and \
                                         animal in pkl_file2 and \
                                         bank in pkl_file2 and \
-                                        (corr_input_dict[list(cluster_dict.keys())[1]]['session_id_filter'] is True or corr_input_dict[list(cluster_dict.keys())[1]]['session_id_filter'] in pkl_file2) and \
-                                        (corr_input_dict[list(cluster_dict.keys())[1]]['session_non_filter'] is True or corr_input_dict[list(cluster_dict.keys())[1]]['session_non_filter'] not in pkl_file2) and \
-                                        (corr_input_dict[list(cluster_dict.keys())[1]]['session_type_filter'] is True or any(one_word in pkl_file2 for one_word in corr_input_dict[list(cluster_dict.keys())[1]]['session_type_filter'])):
+                                        (corr_input_dict[list(cluster_dict.keys())[1]]['session_id_filter'] is True or corr_input_dict[list(cluster_dict.keys())[1]][
+                                            'session_id_filter'] in pkl_file2) and \
+                                        (corr_input_dict[list(cluster_dict.keys())[1]]['session_non_filter'] is True or corr_input_dict[list(cluster_dict.keys())[1]][
+                                            'session_non_filter'] not in pkl_file2) and \
+                                        (corr_input_dict[list(cluster_dict.keys())[1]]['session_type_filter'] is True or any(
+                                            one_word in pkl_file2 for one_word in corr_input_dict[list(cluster_dict.keys())[1]]['session_type_filter'])):
                                     print(pkl_file, pkl_file2)
                                     file_id, \
                                     activity_dictionary, \
-                                    purged_spikes_dictionary = Spikes(input_file=f'{self.pkl_files_dir}{os.sep}{pkl_file}').convert_activity_to_frames_with_shuffles(get_clusters=acceptable_cluster_dict[session_type][animal][bank],
-                                                                                                                                                                     to_shuffle=False,
-                                                                                                                                                                     condense_arr=True,
-                                                                                                                                                                     condense_bin_ms=condense_bin_ms)
+                                    purged_spikes_dictionary = Spikes(input_file=f'{self.pkl_files_dir}{os.sep}{pkl_file}').convert_activity_to_frames_with_shuffles(
+                                        get_clusters=acceptable_cluster_dict[session_type][animal][bank],
+                                        to_shuffle=False,
+                                        condense_arr=True,
+                                        condense_bin_ms=condense_bin_ms)
                                     file_id2, \
                                     activity_dictionary2, \
-                                    purged_spikes_dictionary2 = Spikes(input_file=f'{self.pkl_files_dir}{os.sep}{pkl_file2}').convert_activity_to_frames_with_shuffles(get_clusters=acceptable_cluster_dict[session_type][animal][bank],
-                                                                                                                                                                       to_shuffle=False,
-                                                                                                                                                                       condense_arr=True,
-                                                                                                                                                                       condense_bin_ms=condense_bin_ms)
+                                    purged_spikes_dictionary2 = Spikes(input_file=f'{self.pkl_files_dir}{os.sep}{pkl_file2}').convert_activity_to_frames_with_shuffles(
+                                        get_clusters=acceptable_cluster_dict[session_type][animal][bank],
+                                        to_shuffle=False,
+                                        condense_arr=True,
+                                        condense_bin_ms=condense_bin_ms)
                                     activity_dict[animal][bank][session_type] = activity_dictionary
                                     activity_dict[animal][bank][list(cluster_dict.keys())[1]] = activity_dictionary2
                                     first_for_loop = True
@@ -1078,7 +1076,6 @@ class Spikes:
                     rearranged_activity_dict[animal][bank][session_type] = np.zeros((len(activity_dict[animal][bank][session_type].keys()), arr_len))
                     for cl_idx, cl in enumerate(activity_dict[animal][bank][session_type].keys()):
                         rearranged_activity_dict[animal][bank][session_type][cl_idx, :] = activity_dict[animal][bank][session_type][cl]['activity'].todense()
-
 
         # calculate corr/cov and plot
         for animal in rearranged_activity_dict.keys():

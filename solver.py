@@ -1,3 +1,7 @@
+"""
+Performs GLM solver.
+@author: SolVind
+"""
 
 from .toolkits import *
 from .family import *
@@ -6,11 +10,11 @@ from .metrics import *
 
 def null_solver(family, link, y, beta0, eta, kappa=2, theta=None, learning_rate=2e-1,
                 max_iter=1e5, xtol=1e-6, verbose=False):
-    if (beta0 is None):
+    if beta0 is None:
         beta0 = np.random.uniform(0, 0.5, 1)
 
     xk = np.ones(len(y))
-    if (eta is None):
+    if eta is None:
         eta = beta0 * xk
     convergence_list = []
     n_iter_ = 0
@@ -23,7 +27,7 @@ def null_solver(family, link, y, beta0, eta, kappa=2, theta=None, learning_rate=
         beta0 = beta0 - update
         eta = eta + update
 
-        if (np.mod(t, 10) == 0 and verbose):
+        if np.mod(t, 10) == 0 and verbose:
             mu = latent_mu(family, link, eta, kappa)
             log_lik = loglik(family, y, eta, mu, theta)
             print('\titer {} : loglik {}, params {}'.format(t, log_lik, beta0))

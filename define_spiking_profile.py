@@ -1,11 +1,6 @@
-# -*- coding: utf-8 -*-
-
 """
-
+Defines spiking profile: regular (RS) or fast (FS) spiking.
 @author: bartulem
-
-Define spiking profile: regular (RS) or fast (FS) spiking.
-
 """
 
 import os
@@ -159,11 +154,11 @@ class SpikingProfile:
         fig_format (str)
             The format of the figure; defaults to 'png'.
         save_fig_dir (bool)
-            Directory to save the figure in; defaults to '/home/bartulm/Downloads'.
+            Directory to save the figure in; defaults to '/.../Downloads'.
         save_df (bool)
             Save DataFrame as .csv file; defaults to False.
         save_df_dir (bool)
-            Directory to save the DataFrame in; defaults to '/home/bartulm/Downloads'.
+            Directory to save the DataFrame in; defaults to '/.../Downloads'.
         ----------
 
         Returns
@@ -179,9 +174,9 @@ class SpikingProfile:
         profile_colors = kwargs['profile_colors'] if 'profile_colors' in kwargs.keys() and type(kwargs['profile_colors']) == dict else {'RS': '#698B69', 'FS': '#9BCD9B'}
         save_fig = kwargs['save_fig'] if 'save_fig' in kwargs.keys() and type(kwargs['save_fig']) == bool else False
         fig_format = kwargs['fig_format'] if 'fig_format' in kwargs.keys() and type(kwargs['fig_format']) == str else 'png'
-        save_fig_dir = kwargs['save_fig_dir'] if 'save_fig_dir' in kwargs.keys() and type(kwargs['save_fig_dir']) == str else '/home/bartulm/Downloads'
+        save_fig_dir = kwargs['save_fig_dir'] if 'save_fig_dir' in kwargs.keys() and type(kwargs['save_fig_dir']) == str else '/.../Downloads'
         save_df = kwargs['save_df'] if 'save_df' in kwargs.keys() and type(kwargs['save_df']) == bool else False
-        save_df_dir = kwargs['save_df_dir'] if 'save_df_dir' in kwargs.keys() and type(kwargs['save_df_dir']) == str else '/home/bartulm/Downloads'
+        save_df_dir = kwargs['save_df_dir'] if 'save_df_dir' in kwargs.keys() and type(kwargs['save_df_dir']) == str else '/.../Downloads'
 
         # extract measures info dataframe
         measures_info_df = self.collect_measures_info()

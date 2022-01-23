@@ -1,11 +1,6 @@
-# -*- coding: utf-8 -*-
-
 """
-
-@author: bartulem
-
 Select appropriate clusters.
-
+@author: bartulem
 """
 
 import os

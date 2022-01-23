@@ -1,8 +1,13 @@
+"""
+Calculates backward GLM scores.
+@author: SolVind
+"""
+
 from paper_code import *
 
 # load the data
 
-a_file = open('/Users/jingyig/Work/Kavli/Data/cleaned_pickle_files/clean_data_johnjohn_210520_s5_distal_sound_reheaded_XYZeuler_notricks.pkl', "rb")
+a_file = open('/.../clean_data_johnjohn_210520_s5_distal_sound_reheaded_XYZeuler_notricks.pkl', "rb")
 data_raw = pickle.load(a_file)
 a_file.close()
 

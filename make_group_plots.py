@@ -1,11 +1,6 @@
-# -*- coding: utf-8 -*-
-
 """
-
+Makes group plots.
 @author: bartulem
-
-Make group plots.
-
 """
 
 import io

@@ -1,11 +1,6 @@
-# -*- coding: utf-8 -*-
-
 """
-
+Makes clean ratemaps for any session/combination of sessions.
 @author: bartulem
-
-Make clean ratemaps for any session/combination of sessions.
-
 """
 
 import os
@@ -60,7 +55,7 @@ class Ratemap:
     def __init__(self, ratemap_mat_dir='', animals=None,
                  session_type_labels=None,
                  session_num_labels=None,
-                 save_fig=False, fig_format='png', save_dir='/home/bartulm/Downloads', feature_filter=None):
+                 save_fig=False, fig_format='png', save_dir='/.../Downloads', feature_filter=None):
         if session_num_labels is None:
             session_num_labels = ['s1', 's2', 's3', 's4', 's5', 's6']
         if session_type_labels is None:

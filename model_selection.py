@@ -1,3 +1,8 @@
+"""
+Performs model selection.
+@author: SolVind
+"""
+
 from .family import *
 from .cross_validation import *
 
@@ -8,7 +13,7 @@ class ForwardSelection(object):
                  solver='L-BFGS', learning_rate=2e-1, max_iter=1000, xtol=1e-6,
                  significance=0.01, fit_intercept=True, score_metric='llr',
                  seed=142, verbose=False, save_file=True):
-        
+
         self.family = family
         self.alpha = alpha
         self.reg_lambda = reg_lambda
@@ -38,7 +43,7 @@ class ForwardSelection(object):
         self.verbose = verbose
         self.save_file = save_file
         self.models = models
-    
+
     def __repr__(self):
         """Description of the object."""
         reg_lambda = self.reg_lambda
@@ -51,8 +56,7 @@ class ForwardSelection(object):
         else:
             s += '\nlambda: %0.2f\n>' % reg_lambda[0]
         return s
-    
-    
+
     def fit(self, data, cell_index, models=None, avoid_feature=None, special_group=None):
         """
         Performs a forward model selection procedure for a single cell.
@@ -63,8 +67,6 @@ class ForwardSelection(object):
 
         """
         models = dict_like(models, 'model', True)
-        
-        
 
         y = data['spk_mat'][cell_index].copy()
         x_mat = data['features_mat'].copy()
@@ -73,7 +75,7 @@ class ForwardSelection(object):
         if avoid_feature is not None:
             keep_ind = [ind for ind in range(len(feature_keys)) if feature_keys[ind] not in avoid_feature]
             feature_keys = feature_keys[keep_ind]
-        
+
         output_dict = {}
         output_dict['cellnames'] = data['cell_names'][cell_index].copy()
 
@@ -83,20 +85,19 @@ class ForwardSelection(object):
                                  self.solver, self.learning_rate, self.max_iter, self.xtol,
                                  self.fit_intercept, self.seed, self.verbose)
         # cv_obj = CrossValidation()
-        
+
         if (models is None):
             save_name = 'full'
             # model = None
             good_ind = x_mat[feature_keys[0]][1]
-            for i in range(1,len(feature_keys),1):
+            for i in range(1, len(feature_keys), 1):
                 good_ind = good_ind * x_mat[feature_keys[i]][1]
             good_ind = good_ind > 0.5
             print("Good ind are", np.sum(good_ind), 'out of', len(good_ind), ', which is',
                   float(np.sum(good_ind)) / float(len(good_ind)))
 
             y_filtered = y[good_ind]
-            
-            
+
             best_model = 'null_model'
             best_model_pvalue = 0
             possible_keys = feature_keys.copy()
@@ -105,20 +106,19 @@ class ForwardSelection(object):
             best_scores_goodind = (np.zeros(10) < 1.)
             best_test_scores = np.zeros(10)
             best_score = 0.
-            
-            
+
             while best_model_pvalue < 0.01:
                 model_start_index = model_end_index + 0.
                 model, possible_keys = construct_model(possible_keys, exist_keys, special_group, model_start_index)
                 # da_model = 'm11'
                 n_models = len(model)
-                if(n_models == 0):
+                if n_models == 0:
                     print('reach all the covariates !!! ')
                     break
                 avg_score = np.zeros(n_models)
                 test_stats = np.zeros(n_models)
-                test_pvalue= np.zeros(n_models)
-                
+                test_pvalue = np.zeros(n_models)
+
                 model_ind = 0
                 mkeys = list(model.keys())
                 for da_model in mkeys:
@@ -130,7 +130,6 @@ class ForwardSelection(object):
                     x = x_mat[xkeys[0]][0]
                     for i in range(1, nx, 1):
                         x = np.concatenate((x, x_mat[xkeys[i]][0]), axis=1)
-
 
                     x_filtered = x[good_ind, :]
                     params, pred_vals, fitted, scores, scores_per_spikes, not_success = cv_obj.cv(y_filtered, x_filtered)
@@ -145,38 +144,38 @@ class ForwardSelection(object):
                     test_goind = test_scores_goodind * best_scores_goodind
 
                     # check test scores
-                    if (np.all(np.isnan(test_scores))):
+                    if np.all(np.isnan(test_scores)):
                         print('cell index: {}, model: {}, scores all nan.'.format(cell_index, da_model))
                         break
 
-                    if (np.any(np.isnan(test_scores))):
+                    if np.any(np.isnan(test_scores)):
                         print('cell index: {}, model: {}, scores all nan for fold: '
                               '{}'.format(cell_index, da_model, np.where(np.isnan(test_scores))[0]))
 
                     # do test
                     test_stats[model_ind], test_pvalue[model_ind] = \
                         wilcoxon(test_scores[test_goind], best_test_scores[test_goind], alternative='greater')
-                        
+
                     # calculate mean scores
                     avg_score[model_ind] = np.nanmean(test_scores)
-                    
+
                     # save result
                     output_dict['%s-keys' % da_model] = xkeys
                     output_dict['%s-params' % da_model] = params + 0.
                     output_dict['%s-predvals' % da_model] = pred_vals + 0.
                     output_dict['%s-scores' % da_model] = scores + 0.
                     output_dict['%s-scores_per_spikes' % da_model] = scores_per_spikes + 0.
-            
+
                     model_ind += 1
                 model_end_index += model_ind + 0.
-                
+
                 sig_bool = test_pvalue < 0.01
                 if np.any(sig_bool):
                     sig_models = np.where(sig_bool)[0]
                     best_model_score = np.nanmax(avg_score[sig_models])
-                    if(best_model_score > best_score):
+                    if best_model_score > best_score:
                         best_model_index_temp = np.where(avg_score[sig_models] == best_model_score)[0]
-                        if (len(best_model_index_temp) > 1.):
+                        if len(best_model_index_temp) > 1.:
                             warnings.warn("At least 2 models have the same score.")
                         best_model_index = sig_models[best_model_index_temp[0]]
                         best_model = mkeys[best_model_index]
@@ -190,7 +189,6 @@ class ForwardSelection(object):
                         break
                 else:
                     break
-                    
 
             output_dict['best-model'] = best_model
 
@@ -209,7 +207,6 @@ class ForwardSelection(object):
             best_test_scores = np.zeros(10)
             # best_test_success = np.zeros(self.nfold) < 1.
 
-
             good_ind = x_mat[feature_keys[0]][1]
             for i in range(1, len(feature_keys), 1):
                 good_ind = good_ind * x_mat[feature_keys[i]][1]
@@ -218,8 +215,7 @@ class ForwardSelection(object):
                   float(np.sum(good_ind)) / float(len(good_ind)))
 
             y_filtered = y[good_ind]
-                
-            
+
             model_ind = 0
             for da_model in model_keys:
                 xkeys = models[da_model]
@@ -245,13 +241,12 @@ class ForwardSelection(object):
                                                                                         np.where(not_success)[0]))
                     break
 
-
                 test_scores = scores_per_spikes[:, 1] + 0.
                 test_scores_goodind = (scores_per_spikes[:, 0] != 0)
                 test_scores_success = ~np.isnan(test_scores)
                 test_goind = test_scores_goodind * test_scores_success
 
-                if (np.all(np.isnan(test_scores))):
+                if np.all(np.isnan(test_scores)):
                     test_stats[model_ind] = np.nan
                     test_pvalue[model_ind] = np.nan
                     avg_score[model_ind] = np.nan
@@ -266,7 +261,7 @@ class ForwardSelection(object):
                     break
 
                 avg_score[model_ind] = np.nanmean(test_scores)
-                
+
                 output_dict['%s-keys' % da_model] = xkeys
                 output_dict['%s-params' % da_model] = params + 0.
                 output_dict['%s-predvals' % da_model] = pred_vals + 0.
@@ -277,18 +272,16 @@ class ForwardSelection(object):
                 if np.any(test_pvalue < self.significance):
                     best_model_score = np.nanmax(avg_score)
                     best_model_index = np.where(avg_score == best_model_score)[0]
-                    if (len(best_model_index) > 1.):
+                    if len(best_model_index) > 1.:
                         warnings.warn("At least 2 models have the same score.")
                     best_model = list(models.keys())[best_model_index[0]]
-                
-            
 
             output_dict['best-model'] = best_model
-            
+
         if self.save_file:
             file_name = data['file_name']
             cell_name = data['cell_names'][cell_index]
-            scipy.io.savemat('glmres_%s_%04d_%s_%s.mat' %(file_name, cell_index, cell_name, save_name), output_dict)
+            scipy.io.savemat('glmres_%s_%04d_%s_%s.mat' % (file_name, cell_index, cell_name, save_name), output_dict)
             print("\n")
             print("         \\|||||/        ")
             print("         ( O O )         ")
@@ -302,11 +295,3 @@ class ForwardSelection(object):
             print("         ooO  Ooo        ")
         else:
             return output_dict, best_model
-        
-        
-        
-
-
-
-
-

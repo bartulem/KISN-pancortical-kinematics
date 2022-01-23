@@ -1,11 +1,6 @@
-# -*- coding: utf-8 -*-
-
 """
-
+Compares tuning-curve rate differences in weight/no-weight sessions.
 @author: bartulem
-
-Compare tuning-curve rate differences in weight/no-weight sessions.
-
 """
 
 import os
@@ -24,6 +19,7 @@ from mpl_toolkits.axes_grid1.inset_locator import inset_axes
 import sessions2load
 import make_ratemaps
 import neural_activity
+
 
 def extract_json_data(json_file='', features=None,
                       peak_min=True, der='1st', rate_stability_bound=True,
@@ -71,7 +67,6 @@ def extract_json_data(json_file='', features=None,
     with open(json_file) as j_file:
         json_data = json.load(j_file)
 
-
     weight_dict = {}
     for feature in features:
         for feature_type in [feature, f'{feature}_{der}_der']:
@@ -99,7 +94,6 @@ def extract_json_data(json_file='', features=None,
                             and rate_stability_bound is True or abs(json_data[cl_num]['baseline_firing_rates'][ref_dict['ref_session']]
                                                                     - json_data[cl_num]['baseline_firing_rates'][test_session]) \
                             < (json_data[cl_num]['baseline_firing_rates'][ref_dict['ref_session']] * (rate_stability_bound / 100)):
-
                         weight_dict[key]['auc'][ref_dict['ref_session']].append(np.sum(ref_session_data))
                         weight_dict[key]['auc'][test_session].append(np.sum(test_session_data))
                         weight_dict[key]['auc'][ref_dict['other_session']].append(np.sum(other_session_data))
@@ -108,7 +102,6 @@ def extract_json_data(json_file='', features=None,
                         weight_dict[key]['peaks'][test_session].append(json_data[cl_num]['features'][key][test_session]['x'][np.argmax(test_session_data)])
                         weight_dict[key]['peaks'][ref_dict['other_session']].append(json_data[cl_num]['features'][key][ref_dict['other_session']]['x'][np.argmax(other_session_data)])
 
-
                         weight_dict[key]['information_rates'][ref_dict['ref_session']].append(json_data[cl_num]['features'][key]['ICr-{}'.format(ref_dict['ref_session'])])
                         weight_dict[key]['information_rates'][test_session].append(json_data[cl_num]['features'][key]['ICr-{}'.format(test_session)])
                         weight_dict[key]['information_rates'][ref_dict['other_session']].append(json_data[cl_num]['features'][key]['ICr-{}'.format(ref_dict['other_session'])])
@@ -116,7 +109,6 @@ def extract_json_data(json_file='', features=None,
                         weight_dict[key]['stability']['{}-{}'.format(ref_dict['ref_session'], test_session)].append(scipy.stats.spearmanr(ref_session_data, test_session_data)[0])
                         weight_dict[key]['stability']['{}-{}'.format(ref_dict['other_session'], test_session)].append(scipy.stats.spearmanr(other_session_data, test_session_data)[0])
                         weight_dict[key]['stability']['{}-{}'.format(ref_dict['ref_session'], ref_dict['other_session'])].append(scipy.stats.spearmanr(ref_session_data, other_session_data)[0])
-
 
     return weight_dict
 
@@ -154,19 +146,19 @@ def make_shuffled_distributions(weight_dict, ref_dict, test_session, n_shuffles=
                 shuffled_dict[feature]['stability']['null_differences'][sh] = np.mean(np.diff(joint_arr_corr, axis=0))
         for attribute in ['auc', 'peaks', 'information_rates']:
             shuffled_dict[feature][attribute]['z-value'] = (shuffled_dict[feature][attribute]['true_difference'] - shuffled_dict[feature][attribute]['null_differences'].mean()) \
-                                                         / shuffled_dict[feature][attribute]['null_differences'].std()
+                                                           / shuffled_dict[feature][attribute]['null_differences'].std()
             p_val_attribute = 1 - scipy.stats.norm.cdf(shuffled_dict[feature][attribute]['z-value'])
             if p_val_attribute < .5:
                 shuffled_dict[feature][attribute]['p-value'] = p_val_attribute
             else:
-                shuffled_dict[feature][attribute]['p-value'] = 1-p_val_attribute
+                shuffled_dict[feature][attribute]['p-value'] = 1 - p_val_attribute
         shuffled_dict[feature]['stability']['z-value'] = (true_difference_corr - shuffled_dict[feature]['stability']['null_differences'].mean()) \
-                                                            / shuffled_dict[feature]['stability']['null_differences'].std()
+                                                         / shuffled_dict[feature]['stability']['null_differences'].std()
         p_val_correlations = 1 - scipy.stats.norm.cdf(shuffled_dict[feature]['stability']['z-value'])
         if p_val_correlations < .5:
             shuffled_dict[feature]['stability']['p-value'] = p_val_correlations
         else:
-            shuffled_dict[feature]['stability']['p-value'] = 1-p_val_correlations
+            shuffled_dict[feature]['stability']['p-value'] = 1 - p_val_correlations
         shuffled_dict[feature]['stability']['true_difference'] = np.tanh(true_difference_corr)
         shuffled_dict[feature]['stability']['null_differences'] = np.tanh(shuffled_dict[feature]['stability']['null_differences'])
     return shuffled_dict
@@ -188,15 +180,14 @@ class WeightComparer:
         self.chosen_features = chosen_features
         self.peak_min = peak_min
         self.rate_stability_bound = rate_stability_bound
-        self.save_dir=save_dir
-        self.save_fig=save_fig
-        self.fig_format=fig_format
+        self.save_dir = save_dir
+        self.save_fig = save_fig
+        self.fig_format = fig_format
         self.der = der
         self.baseline_dict = baseline_dict
         self.ref_dict = ref_dict
         self.test_session_type = test_session_type
-        self.beh_plot_sessions=beh_plot_sessions
-
+        self.beh_plot_sessions = beh_plot_sessions
 
     def baseline_rate_change_over_time(self, **kwargs):
         """
@@ -243,9 +234,9 @@ class WeightComparer:
         #             file_id, \
         #             activity_dictionary, \
         #             purged_spikes_dictionary = neural_activity.Spikes(input_file=self.baseline_dict[animal]['files'][idx]).convert_activity_to_frames_with_shuffles(get_clusters=cl_id,
-                        #                                                                                                                                             to_shuffle=False,
-                        #                                                                                                                                             condense_arr=True,
-                        #                                                                                                                                             condense_bin_ms=int(1000*condensing_bin))
+        #                                                                                                                                             to_shuffle=False,
+        #                                                                                                                                             condense_arr=True,
+        #                                                                                                                                             condense_bin_ms=int(1000*condensing_bin))
         #             activity_dict[animal][cl_id][session_name] = gaussian_filter1d(input=activity_dictionary[cl_id]['activity'].todense(), sigma=smooth_sd) / condensing_bin
         #
         # plot_dict = {}
@@ -370,7 +361,7 @@ class WeightComparer:
                     np.random.shuffle(joint_arr[:, col])
                     shuffled[idx, sh] = np.mean(np.diff(joint_arr, axis=0))
 
-        fig3, ax3 = plt.subplots(nrows=1, ncols=3, figsize=(6.4*3, 4.8))
+        fig3, ax3 = plt.subplots(nrows=1, ncols=3, figsize=(6.4 * 3, 4.8))
         ax31 = plt.subplot(1, 3, 1)
         hist_n, hist_bins, hist_patches = ax31.hist(diff_light1_weight, bins=np.linspace(-7.5, 7.5, 50), histtype='stepfilled', color='#FFFFFF', edgecolor='#000000')
         ax31.axvline(x=0, ls='-.', color='#000000', alpha=.25)
@@ -626,7 +617,7 @@ class WeightComparer:
                     ax.axvline(x=np.nanpercentile(shuffled_dict[specific_feature][gs]['null_differences'], 0.5), color='#000000', ls='-.', lw=.5)
                     ax.axvline(x=np.nanpercentile(shuffled_dict[specific_feature][gs]['null_differences'], 99.5), color='#000000', ls='-.', lw=.5)
                     ax.set_ylim(ymax=hist_max)
-                    ax.plot(shuffled_dict[specific_feature][gs]['true_difference'], 0+.05*hist_max, marker='o', color=feature_colors[color_idx], markersize=5)
+                    ax.plot(shuffled_dict[specific_feature][gs]['true_difference'], 0 + .05 * hist_max, marker='o', color=feature_colors[color_idx], markersize=5)
                     if col < 1:
                         ax.set_ylabel('Shuffled count', labelpad=.1, fontsize=6)
                         ax.set_yticks(np.arange(0, hist_max, hist_step))
@@ -690,12 +681,12 @@ class WeightComparer:
         shuffled_dict = make_shuffled_distributions(weight_dict=weight_dict, ref_dict=self.ref_dict,
                                                     test_session=self.test_session_type)
 
-        weight_stats_dict={'features': {'auc': [], 'information_rates': [], 'stability': [],
-                                        'z_auc': [], 'z_information_rates': [], 'z_stability': [],
-                                        'cl_n': [], 'names': [], 'feature_colors': []},
-                           'features_der': {'auc': [], 'information_rates': [], 'stability': [],
-                                            'z_auc': [], 'z_information_rates': [], 'z_stability': [],
-                                            'cl_n': [], 'names': [], 'feature_colors': []}}
+        weight_stats_dict = {'features': {'auc': [], 'information_rates': [], 'stability': [],
+                                          'z_auc': [], 'z_information_rates': [], 'z_stability': [],
+                                          'cl_n': [], 'names': [], 'feature_colors': []},
+                             'features_der': {'auc': [], 'information_rates': [], 'stability': [],
+                                              'z_auc': [], 'z_information_rates': [], 'z_stability': [],
+                                              'cl_n': [], 'names': [], 'feature_colors': []}}
 
         for feature in weight_dict.keys():
             if 'der' not in feature:
@@ -724,39 +715,39 @@ class WeightComparer:
         fig, ax = plt.subplots(nrows=1, ncols=1, figsize=(30, 5))
         ax1 = plt.subplot(111)
         left_point, middle_point, right_point = 2, 3, 4
-        cmap=plt.cm.seismic_r
+        cmap = plt.cm.seismic_r
         normal_range = plt.Normalize(vmin=-4, vmax=0)
         for idx, feature in enumerate(weight_stats_dict['features']['names']):
-            probabilities=np.log10([weight_stats_dict['features']['stability'][idx],
-                                    weight_stats_dict['features']['auc'][idx],
-                                    weight_stats_dict['features']['information_rates'][idx],
-                                    weight_stats_dict['features_der']['stability'][idx],
-                                    weight_stats_dict['features_der']['auc'][idx],
-                                    weight_stats_dict['features_der']['information_rates'][idx]])
+            probabilities = np.log10([weight_stats_dict['features']['stability'][idx],
+                                      weight_stats_dict['features']['auc'][idx],
+                                      weight_stats_dict['features']['information_rates'][idx],
+                                      weight_stats_dict['features_der']['stability'][idx],
+                                      weight_stats_dict['features_der']['auc'][idx],
+                                      weight_stats_dict['features_der']['information_rates'][idx]])
             colors = plt.cm.seismic_r(normal_range(probabilities))
             for y_idx, y_point in enumerate([1, 3]):
                 if y_idx == 0:
                     co = colors[3:]
                 else:
                     co = colors[:3]
-                p = patches.Polygon(xy=np.array([[left_point, y_point], [right_point, y_point], [middle_point, (2*np.sqrt(3)/6)+y_point]]),
+                p = patches.Polygon(xy=np.array([[left_point, y_point], [right_point, y_point], [middle_point, (2 * np.sqrt(3) / 6) + y_point]]),
                                     closed=True,
                                     ec='#000000',
                                     fc=co[0])
-                p2 = patches.Polygon(xy=np.array([[left_point, y_point], [middle_point, (2*np.sqrt(3)/2)+y_point], [middle_point, (2*np.sqrt(3)/6)+y_point]]),
+                p2 = patches.Polygon(xy=np.array([[left_point, y_point], [middle_point, (2 * np.sqrt(3) / 2) + y_point], [middle_point, (2 * np.sqrt(3) / 6) + y_point]]),
                                      closed=True,
                                      ec='#000000',
                                      fc=co[1])
-                p3 = patches.Polygon(xy=np.array([[right_point, y_point], [middle_point, (2*np.sqrt(3)/2)+y_point], [middle_point, (2*np.sqrt(3)/6)+y_point]]),
+                p3 = patches.Polygon(xy=np.array([[right_point, y_point], [middle_point, (2 * np.sqrt(3) / 2) + y_point], [middle_point, (2 * np.sqrt(3) / 6) + y_point]]),
                                      closed=True,
                                      ec='#000000',
                                      fc=co[2])
                 ax1.add_patch(p)
                 ax1.add_patch(p2)
                 ax1.add_patch(p3)
-                ax1.text(x=left_point+.3, y=5.5, s=feature.replace('_', ' '), fontsize=8)
-                ax1.text(x=left_point+.5, y=5, s='n_clusters={}'.format(weight_stats_dict['features']['cl_n'][idx]), fontsize=8)
-                ax1.text(x=left_point+.5, y=.5, s='n_clusters={}'.format(weight_stats_dict['features_der']['cl_n'][idx]), fontsize=8)
+                ax1.text(x=left_point + .3, y=5.5, s=feature.replace('_', ' '), fontsize=8)
+                ax1.text(x=left_point + .5, y=5, s='n_clusters={}'.format(weight_stats_dict['features']['cl_n'][idx]), fontsize=8)
+                ax1.text(x=left_point + .5, y=.5, s='n_clusters={}'.format(weight_stats_dict['features_der']['cl_n'][idx]), fontsize=8)
             left_point += 3
             middle_point += 3
             right_point += 3
@@ -820,11 +811,11 @@ class WeightComparer:
         fig.subplots_adjust(right=.8, wspace=.5)
         normal_range = plt.Normalize(vmin=z_axis_bounds[0], vmax=z_axis_bounds[1])
         for idx, session_type in enumerate(three_d_occ.keys()):
-            ax = fig.add_subplot(1, 2, idx+1, projection='3d')
+            ax = fig.add_subplot(1, 2, idx + 1, projection='3d')
             for session_data in three_d_occ[session_type].keys():
                 color_array = three_d_occ[session_type][session_data][:, 2].copy()
                 neck_point = three_d_occ[session_type][session_data].reshape(-1, 1, 3)
-                segments = np.concatenate([neck_point[:-1],neck_point[1:]], axis=1)
+                segments = np.concatenate([neck_point[:-1], neck_point[1:]], axis=1)
                 lc = Line3DCollection(segments,
                                       cmap=plt.get_cmap('cividis'),
                                       norm=normal_range)
@@ -834,7 +825,7 @@ class WeightComparer:
             ax.set_xlim(0, 200)
             ax.set_ylim(0, 200)
             ax.set_zlim(z_axis_bounds[0], z_axis_bounds[1])
-            ax.set_zticks(range(z_axis_bounds[0], z_axis_bounds[1]+1, 5))
+            ax.set_zticks(range(z_axis_bounds[0], z_axis_bounds[1] + 1, 5))
             ax.set_xlabel('X (cm)')
             ax.set_ylabel('Y (cm)')
             ax.set_zlabel('Z (cm)')

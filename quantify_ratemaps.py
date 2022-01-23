@@ -1,11 +1,6 @@
-# -*- coding: utf-8 -*-
-
 """
-
-@author: bartulem
-
 Gets (1) tuning peak locations, (2) occupancies, (3) computes inter-session stability
-
+@author: bartulem
 """
 
 import io
@@ -20,6 +15,7 @@ from numba import njit
 from scipy.stats import spearmanr
 import select_clusters
 import neural_activity
+
 
 # data[0, :] = xvals (bin centers)
 # data[1, :] = raw rate map (ratemap / no smoothing)
@@ -41,7 +37,7 @@ import neural_activity
 def uncover_file_specifics(file_name):
     animal_name = [name for name in select_clusters.ClusterFinder.probe_site_areas.keys() if name in file_name][0]
     get_date_idx = [date.start() for date in re.finditer('20_s', file_name)][-1]
-    recording_date = file_name[get_date_idx-4:get_date_idx+2]
+    recording_date = file_name[get_date_idx - 4:get_date_idx + 2]
     if animal_name == 'bruno':
         recording_bank = 'distal'
     else:
@@ -88,14 +84,13 @@ def get_shuffled_stability(n_times=10, shuffled_data_1=np.zeros((36, 1000)),
     return shuffled_stability
 
 
-
 @njit(parallel=False)
 def find_valid_rm_range(rm_occ, min_acceptable_occ):
     return np.array([idx for idx, occ in enumerate(rm_occ) if occ > min_acceptable_occ])
 
 
 @njit(parallel=False)
-def check_curve_exceeds_shuffled(curve1d, shuffled_mean, shuffled_std,  min_acc_rate=True, bin_radius_to_check=1):
+def check_curve_exceeds_shuffled(curve1d, shuffled_mean, shuffled_std, min_acc_rate=True, bin_radius_to_check=1):
     """
     Parameters
     ----------
@@ -118,21 +113,23 @@ def check_curve_exceeds_shuffled(curve1d, shuffled_mean, shuffled_std,  min_acc_
     ----------
     """
     if (min_acc_rate is True or curve1d.max() > min_acc_rate) and curve1d.max() \
-            > shuffled_mean[np.argmax(curve1d)] + 3*shuffled_std[np.argmax(curve1d)]:
+            > shuffled_mean[np.argmax(curve1d)] + 3 * shuffled_std[np.argmax(curve1d)]:
         peak_position = np.argmax(curve1d)
         if peak_position == 0:
-            if (curve1d[peak_position:bin_radius_to_check*3] > shuffled_mean[peak_position:bin_radius_to_check*3] + 3*shuffled_std[peak_position:bin_radius_to_check*3]).all():
+            if (curve1d[peak_position:bin_radius_to_check * 3] > shuffled_mean[peak_position:bin_radius_to_check * 3] + 3 * shuffled_std[peak_position:bin_radius_to_check * 3]).all():
                 return True
             else:
                 return False
-        elif peak_position == curve1d.shape[0]-1:
-            if (curve1d[peak_position-(bin_radius_to_check*2):] > shuffled_mean[peak_position-(bin_radius_to_check*2):] + 3*shuffled_std[peak_position-(bin_radius_to_check*2):]).all():
+        elif peak_position == curve1d.shape[0] - 1:
+            if (curve1d[peak_position - (bin_radius_to_check * 2):] > shuffled_mean[peak_position - (bin_radius_to_check * 2):] + 3 * shuffled_std[peak_position - (bin_radius_to_check * 2):]).all():
                 return True
             else:
                 return False
         else:
-            if (curve1d[peak_position-bin_radius_to_check:peak_position] > shuffled_mean[peak_position-bin_radius_to_check:peak_position] + 3*shuffled_std[peak_position-bin_radius_to_check:peak_position]).all() \
-                    and (curve1d[peak_position:peak_position+bin_radius_to_check] > shuffled_mean[peak_position:peak_position+bin_radius_to_check] + 3*shuffled_std[peak_position:peak_position+bin_radius_to_check]).all():
+            if (curve1d[peak_position - bin_radius_to_check:peak_position] > shuffled_mean[peak_position - bin_radius_to_check:peak_position] + 3 * shuffled_std[
+                                                                                                                                                    peak_position - bin_radius_to_check:peak_position]).all() \
+                    and (curve1d[peak_position:peak_position + bin_radius_to_check] > shuffled_mean[peak_position:peak_position + bin_radius_to_check] + 3 * shuffled_std[
+                                                                                                                                                             peak_position:peak_position + bin_radius_to_check]).all():
                 return True
             else:
                 return False
@@ -141,7 +138,6 @@ def check_curve_exceeds_shuffled(curve1d, shuffled_mean, shuffled_std,  min_acc_
 
 
 class RatemapCharacteristics:
-
     areas_to_animals = {'CaPu': {'bruno': ['distal']},
                         'WhMa': {'bruno': ['distal']},
                         'S': {'bruno': ['distal'], 'roy': ['intermediate'], 'jacopo': ['intermediate'], 'crazyjoe': ['intermediate']},
@@ -390,7 +386,7 @@ class RatemapCharacteristics:
             # get animal name, bank id and date of session
             session_id = uncover_file_specifics(file)
             start_cl_idx = essential_files['chosen_session_1'][file_idx].find('imec')
-            cl_id = essential_files['chosen_session_1'][file_idx][start_cl_idx: start_cl_idx+18]
+            cl_id = essential_files['chosen_session_1'][file_idx][start_cl_idx: start_cl_idx + 18]
 
             for key in mat.keys():
                 if 'imec' in key and 'data' in key:
@@ -586,7 +582,7 @@ class RatemapCharacteristics:
             # get animal name, bank id and date of session
             session_id = uncover_file_specifics(file)
             start_cl_idx = essential_files['chosen_session_1'][file_idx].find('imec')
-            cl_id = essential_files['chosen_session_1'][file_idx][start_cl_idx: start_cl_idx+18]
+            cl_id = essential_files['chosen_session_1'][file_idx][start_cl_idx: start_cl_idx + 18]
 
             for key in mat.keys():
                 if 'imec' in key and 'data' in key:
@@ -648,13 +644,16 @@ class RatemapCharacteristics:
                             weight_comparison[cl_num]['baseline_firing_rates'] = {}
                             for pkl_file in os.listdir(self.pkl_sessions_dir):
                                 if all(one_item in pkl_file for one_item in session_id.split('_')) and 'light' in pkl_file and first_session_id in pkl_file:
-                                    file_id, baseline_activity_dictionary = neural_activity.Spikes(input_file=f'{self.pkl_sessions_dir}{os.sep}{pkl_file}').get_baseline_firing_rates(get_clusters=[cl_id])
+                                    file_id, baseline_activity_dictionary = neural_activity.Spikes(input_file=f'{self.pkl_sessions_dir}{os.sep}{pkl_file}').get_baseline_firing_rates(
+                                        get_clusters=[cl_id])
                                     weight_comparison[cl_num]['baseline_firing_rates']['light1'] = baseline_activity_dictionary[cl_id]
                                 elif all(one_item in pkl_file for one_item in session_id.split('_')) and session_2_type in pkl_file:
-                                    file_id_2, baseline_activity_dictionary_2 = neural_activity.Spikes(input_file=f'{self.pkl_sessions_dir}{os.sep}{pkl_file}').get_baseline_firing_rates(get_clusters=[cl_id])
+                                    file_id_2, baseline_activity_dictionary_2 = neural_activity.Spikes(input_file=f'{self.pkl_sessions_dir}{os.sep}{pkl_file}').get_baseline_firing_rates(
+                                        get_clusters=[cl_id])
                                     weight_comparison[cl_num]['baseline_firing_rates'][session_2_type] = baseline_activity_dictionary_2[cl_id]
                                 elif all(one_item in pkl_file for one_item in session_id.split('_')) and 'light' in pkl_file and first_session_id not in pkl_file:
-                                    file_id_3, baseline_activity_dictionary_3 = neural_activity.Spikes(input_file=f'{self.pkl_sessions_dir}{os.sep}{pkl_file}').get_baseline_firing_rates(get_clusters=[cl_id])
+                                    file_id_3, baseline_activity_dictionary_3 = neural_activity.Spikes(input_file=f'{self.pkl_sessions_dir}{os.sep}{pkl_file}').get_baseline_firing_rates(
+                                        get_clusters=[cl_id])
                                     weight_comparison[cl_num]['baseline_firing_rates']['light2'] = baseline_activity_dictionary_3[cl_id]
 
                         weight_comparison[cl_num]['features'][feature_id]['light1']['rm'] = list(valid_rm_revised)

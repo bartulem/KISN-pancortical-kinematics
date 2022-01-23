@@ -1,3 +1,8 @@
+"""
+Performs various operations.
+@author: SolVind
+"""
+
 import scipy
 import scipy.io
 import sys
@@ -10,17 +15,13 @@ import pickle
 from copy import deepcopy
 from scipy.optimize import minimize
 from scipy.stats import wilcoxon
-
 from typing import Any, Optional
 from collections.abc import Mapping
-
 import numpy as np
 import pandas as pd
 from scipy.special import log1p
 from scipy.special import expit, loggamma
 from scipy.stats import norm
-
-
 
 
 # try:
@@ -55,14 +56,13 @@ def dataframe_like(value, name, optional=False, strict=False):
     if optional and value is None:
         return None
     if not isinstance(value, dict) or (
-        strict and not (isinstance(value, pd.DataFrame))
+            strict and not (isinstance(value, pd.DataFrame))
     ):
         extra_text = "If not None, " if optional else ""
         strict_text = " or dataframe_like " if strict else ""
         msg = "{0}{1} must be a dict{2}".format(extra_text, name, strict_text)
         raise TypeError(msg)
     return pd.DataFrame(value)
-
 
 
 def bool_like(value, name, optional=False, strict=False):
@@ -106,7 +106,7 @@ def bool_like(value, name, optional=False, strict=False):
 
 
 def int_like(
-    value: Any, name: str, optional: bool = False, strict: bool = False
+        value: Any, name: str, optional: bool = False, strict: bool = False
 ) -> Optional[int]:
     """
     Convert to int or raise if not int_like
@@ -172,7 +172,6 @@ def required_int_like(value: Any, name: str, strict: bool = False) -> int:
     return _int
 
 
-
 def float_like(value, name, optional=False, strict=False):
     """
     Convert to float or raise if not float_like
@@ -202,7 +201,7 @@ def float_like(value, name, optional=False, strict=False):
         value = value.squeeze()
 
     if isinstance(value, (int, np.integer, float, np.inexact)) and not (
-        is_bool or is_complex
+            is_bool or is_complex
     ):
         return float(value)
     elif not strict and is_complex:
@@ -264,7 +263,6 @@ def string_like(value, name, optional=False, options=None, lower=True):
     return value
 
 
-
 def list_like(value, name, optional=False, options=None):
     """
     Check if object is list-like and raise if not
@@ -304,7 +302,6 @@ def list_like(value, name, optional=False, options=None):
     return value
 
 
-
 def dict_like(value, name, optional=False, strict=True):
     """
     Check if dict_like (dict, Mapping) or raise if not
@@ -326,7 +323,7 @@ def dict_like(value, name, optional=False, strict=True):
     if optional and value is None:
         return None
     if not isinstance(value, Mapping) or (
-        strict and not (isinstance(value, dict))
+            strict and not (isinstance(value, dict))
     ):
         extra_text = "If not None, " if optional else ""
         strict_text = " or dict_like (i.e., a Mapping)" if strict else ""
@@ -347,39 +344,39 @@ def softplus(z):
 
 def link_func(x, link='logit'):
     link = string_like(link, 'link', False, ('logit', 'log', 'cloglog', 'probit'))
-    if(link == 'logit'):
-        y = np.log(x) - np.log(1-x)
-    elif(link == 'log'):
+    if link == 'logit':
+        y = np.log(x) - np.log(1 - x)
+    elif link == 'log':
         y = np.log(x)
-    elif(link == 'cloglog'):
-        y = np.log(-np.log(1-x))
-    elif(link == 'probit'):
+    elif link == 'cloglog':
+        y = np.log(-np.log(1 - x))
+    elif link == 'probit':
         y = norm.ppf(x, loc=0, scale=1)
     return y
 
 
 def inv_link(x, link='logit'):
     link = string_like(link, 'link', False, ('logit', 'log', 'cloglog', 'probit'))
-    if (link == 'logit'):
+    if link == 'logit':
         y = expit(x)
-    elif (link == 'log'):
+    elif link == 'log':
         y = np.exp(x)
-    elif (link == 'cloglog'):
+    elif link == 'cloglog':
         y = 1 - np.exp(-np.exp(x))
-    elif(link == 'probit'):
+    elif link == 'probit':
         y = norm.cdf(x, loc=0, scale=1)
     return y
 
 
 def grad_invlink(x, link):
     link = string_like(link, 'link', False, ('logit', 'log', 'cloglog', 'probit'))
-    if (link == 'logit'):
+    if link == 'logit':
         y = expit(x) * (1 - expit(x))
-    elif (link == 'log'):
+    elif link == 'log':
         y = np.exp(x)
-    elif (link == 'cloglog'):
+    elif link == 'cloglog':
         y = np.exp(x - np.exp(x))
-    elif (link == 'probit'):
+    elif link == 'probit':
         y = norm.pdf(x, loc=0, scale=1)
     return y
 
@@ -397,13 +394,13 @@ def check_params(distr, max_iter, fit_intercept):
     if not isinstance(fit_intercept, bool):
         raise ValueError('fit_intercept must be bool, got %s'
                          % type(fit_intercept))
-    
-    
+
+
 def check_penalty(penalty, group_index, alpha, gamma):
     ALLOWED_PENALTIES = ['lasso', 'ridge', 'g-lasso', 'elastic-net', 'sg-lasso',
                          'scad', 'mcp', 'g-enet', 'g-scad', 'g-mcp']
 
-    if penalty not in ALLOWED_PENALTIES + ['l1','l2','group-lasso','group-enet','group-scad','group-mcp']:
+    if penalty not in ALLOWED_PENALTIES + ['l1', 'l2', 'group-lasso', 'group-enet', 'group-scad', 'group-mcp']:
         raise ValueError('penalty must be one of %s, Got '
                          '%s' % (', '.join(ALLOWED_PENALTIES), penalty))
 
@@ -411,23 +408,22 @@ def check_penalty(penalty, group_index, alpha, gamma):
         if group_index is None:
             raise ValueError('When using group penalty, group_index must be given.')
 
-    if (gamma <= 1 & penalty in ["g-mcp", "g-mcp"]):
+    if gamma <= 1 & penalty in ["g-mcp", "g-mcp"]:
         raise ValueError("gamma must be greater than 1 for the MC penalty")
-    if (gamma <= 2 and penalty == "g-scad"):
+    if gamma <= 2 and penalty == "g-scad":
         raise ValueError("gamma must be greater than 2 for the SCAD penalty")
-    if (alpha > 1 or alpha <= 0):
+    if alpha > 1 or alpha <= 0:
         raise ValueError("alpha must be in (0, 1]")
-    
-    
+
+
 def check_solver(solver):
-    ALLOWED_SOLVER = ['batch-gradient','cd-fast', 'l-bfgs', 'cd-naive', 'cd-covariance', 'cd-weighted']
+    ALLOWED_SOLVER = ['batch-gradient', 'cd-fast', 'l-bfgs', 'cd-naive', 'cd-covariance', 'cd-weighted']
 
     if solver not in ALLOWED_SOLVER + ['gradient-descent', 'gd']:
         raise ValueError('penalty must be one of %s, Got '
                          '%s' % (', '.join(ALLOWED_SOLVER), solver))
 
-    
-    
+
 # def verbose_iterable(data):
 #     """Wrap an iterable object with tqdm.
 #     If tqdm is not available or if we did not set the appropriate
@@ -447,7 +443,6 @@ def check_solver(solver):
 #     return wrapped_data
 
 
-
 def construct_model(xkeys, exist_keys=None, special_group=None, model_start_index=0):
     """
     Construct model with given information.
@@ -465,7 +460,7 @@ def construct_model(xkeys, exist_keys=None, special_group=None, model_start_inde
 
     """
     model = {}
-    if (exist_keys is None):
+    if exist_keys is None:
         xkeys_in = xkeys.copy()
         print('Layer 1 models (contain 1 covariate) are constructing.')
         for i in range(len(xkeys)):
@@ -474,18 +469,18 @@ def construct_model(xkeys, exist_keys=None, special_group=None, model_start_inde
     else:
         exist_keys = list_like(exist_keys, 'exist_keys', True)
         layer_ind = len(exist_keys)
-        print('Layer %d models are constructing.' % int(layer_ind+1))
-        if(special_group is not None):
+        print('Layer %d models are constructing.' % int(layer_ind + 1))
+        if special_group is not None:
             exist_special = False
             n_group = len(special_group)
-            if(n_group < 2.):
+            if n_group < 2.:
                 raise ValueError('special_group has length larger than 1.')
             for i in range(n_group):
                 exist_special = (len([da_key for da_key in exist_keys if special_group[i] in da_key]) > 0)
-                if(exist_special):
+                if exist_special:
                     special_key = special_group[i]
                     break
-            if(exist_special):
+            if exist_special:
                 not_special_key = [da_key for da_key in special_group if special_key not in da_key]
                 ignore_ind = []
                 for i in range(len(not_special_key)):
@@ -497,7 +492,7 @@ def construct_model(xkeys, exist_keys=None, special_group=None, model_start_inde
                 xkeys_in = xkeys.copy()
         else:
             xkeys_in = xkeys.copy()
-            
+
         delete_ind = [ind for ind in range(len(xkeys_in)) if xkeys_in[ind] in exist_keys]
         x_keys_ind = np.zeros(len(xkeys_in)) < 1.
         x_keys_ind[delete_ind] = False
@@ -506,7 +501,6 @@ def construct_model(xkeys, exist_keys=None, special_group=None, model_start_inde
             model_ind = model_start_index + i
             model['m%d' % model_ind] = exist_keys + [xkeys_in[i]]
     return model, xkeys_in
-
 
 
 def soft_thresholding_operator(z, l):
@@ -522,13 +516,12 @@ def soft_thresholding_operator(z, l):
 
     """
     if z > l:
-      val = z-l
+        val = z - l
     elif z < -l:
-      val = z+l
+        val = z + l
     else:
-      val = 0
+        val = 0
     return val
-
 
 
 def firm_func(z, l1, l2, gamma):
@@ -547,10 +540,10 @@ def firm_func(z, l1, l2, gamma):
         s = 1
     elif z < 0:
         s = -1
-    if (abs(z) <= l1):
+    if abs(z) <= l1:
         val = 0
-    elif (abs(z) <= gamma * l1 * (1 + l2)):
-        val = s * (abs(z) - l1) / (1 + l2 - 1/gamma)
+    elif abs(z) <= gamma * l1 * (1 + l2):
+        val = s * (abs(z) - l1) / (1 + l2 - 1 / gamma)
     else:
         val = z / (1 + l2)
     return val
@@ -568,27 +561,27 @@ def block_stand(x, group):
     -------
 
     """
-    
+
     n_samples, n_features = x.shape
     xx = x.copy()
     if np.any(group == 0):
         one = np.repeat(1, n_samples)
         not_penalised = np.zeros(n_features) > 1.
         not_penalised[group == 0] = True
-        scale_notpen = np.sqrt(np.sum(x[:,not_penalised]**2, 1) / n_samples)
-        xx[:,not_penalised] = x[:,not_penalised] / scale_notpen
-   
+        scale_notpen = np.sqrt(np.sum(x[:, not_penalised] ** 2, 1) / n_samples)
+        xx[:, not_penalised] = x[:, not_penalised] / scale_notpen
+
     group_ind = np.unique(group[group != 0])
     scale_pen = np.zeros(len(group_ind))
     scale_pen[:] = np.nan
     for j in range(len(group_ind)):
         ind = np.where(group == group_ind[j])[0]
-        if(np.linalg.matrix_rank(x[:, ind]) < len(ind)):
+        if np.linalg.matrix_rank(x[:, ind]) < len(ind):
             raise ValueError("Block %d has not full rank! \n" % group_ind[j])
         decomp_q, decomp_r = np.linalg.qr(x[:, ind])
         scale_pen[j] = decomp_r / np.sqrt(n_samples)
         xx[:, ind] = decomp_q * np.sqrt(n_samples)
-    
+
     return xx, scale_pen, scale_notpen
 
 
@@ -612,13 +605,13 @@ def center_scale(x_mat, standardize):
     """
     n_samples, n_features = x_mat.shape
     x = np.zeros((n_samples, n_features))
-    
+
     means = np.mean(x_mat, 0)
     for i in range(n_features):
         x[:, i] = x_mat[:, i] - means[i]
     x_transform = means
     x_out = x.copy()
-    
+
     if standardize:
         x_scale = np.std(x, 0)
         cind = np.where(x_scale > 1e-8)[0]
@@ -628,7 +621,7 @@ def center_scale(x_mat, standardize):
             x_out[:, i] = x[:, cind[i]] / x_scale[cind[i]]
     else:
         x_scale = 1
-    
+
     return x_out, x_transform, x_scale, cind
 
 
@@ -683,20 +676,20 @@ def partition_data(y, nfold=10, fold_method='sublock', nrepeat=None):
     nobs_in_fold = [nbasis + 1 if i <= leftover - 1 else nbasis for i in range(nfold)]
 
     fold_method = fold_method.lower()
-    if (fold_method == 'sublock'):
+    if fold_method == 'sublock':
         n_subfold = nfold * nfold
         nbasis_subfold = int(np.floor(left_nobs / n_subfold))
         leftover_subfold = left_nobs % n_subfold
         nobs_in_subfold = [nbasis_subfold + 1 if i <= leftover_subfold - 1 else nbasis_subfold for i in
                            range(n_subfold)]
-    
+
         fold_index_temp = []
         for i in range(nfold):
             fold_index_temp = fold_index_temp + list(
                 np.concatenate([np.repeat(j, nobs_in_subfold[j + i * nfold]) for j in range(nfold)]))
         fold_index[left_ind] = fold_index_temp
 
-    elif (fold_method == 'random'):
+    elif fold_method == 'random':
         obs_index = np.random.permutation(left_nobs)
         temp_index = list(np.concatenate([np.repeat(j, nobs_in_fold[j]) for j in range(nfold)]))
         index_order = np.argsort(obs_index)
@@ -713,7 +706,6 @@ def partition_data(y, nfold=10, fold_method='sublock', nrepeat=None):
         ', '.join(['{:}'.format(np.sum(y[fold_index == i]).astype(int)) for i in range(nfold)]))
     print(msg)
 
-
     return fold_index
 
 
@@ -721,10 +713,10 @@ def process_group_info(group_index, x_mat):
     has_unpen = False
     is_lasso = False
     n_samples, n_features = x_mat.shape
-    
+
     # group_index = np.array([0, 0, 0, 1, 1, 1, 1, 3, 2, 2, 3, 3, 3, 4, 4, 4])
     # n_features = len(group_index)
-    
+
     uni_groups = np.unique(group_index)
     sorted_uni_groups = np.sort(uni_groups)
     num_groups = len(uni_groups)
@@ -735,21 +727,21 @@ def process_group_info(group_index, x_mat):
     ix = np.ravel(ix).astype(int)
     sorted_groups = group_index[ix]
     x_mat_sorted = x_mat[:, ix].copy()
-    
+
     if np.any(group_index == 0):
         has_unpen = True
-    
+
     group_range_vec = np.zeros(num_groups + 1)
     for i in range(1, num_groups + 1):
         step_group_ind = len(np.where(sorted_groups == uni_groups[i - 1])[0])
         group_range_vec[i] = group_range_vec[i - 1] + step_group_ind
-    
+
     group_range_vec = group_range_vec.astype(int)
     group_length_vec = np.diff(group_range_vec).astype(int)
-    
+
     if np.all(group_length_vec == 1):
         is_lasso = True
-    
+
     group_info = {'has_unpen': has_unpen,
                   'sorted_groups': sorted_groups,
                   'num_groups': num_groups,
@@ -757,11 +749,8 @@ def process_group_info(group_index, x_mat):
                   'group_length_vec': group_length_vec,
                   'is_lasso': is_lasso,
                   'x_mat_sorted': x_mat_sorted}
-    
+
     return group_info
-
-
-
 
 # def keep_high_quantity_data(x_mat, level=0.9, delete_feature='Ego2_head_azimuth'):
 #     feature_keys = np.sort(list(x_mat.keys()))
@@ -810,4 +799,3 @@ def process_group_info(group_index, x_mat):
 #
 #
 #     store_res = []
-    

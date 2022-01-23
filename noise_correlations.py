@@ -1,11 +1,6 @@
-# -*- coding: utf-8 -*-
-
 """
-
-@author: bartulem
-
 Estimate synaptic connectivity through spike-spike cross-correlations.
-
+@author: bartulem
 """
 
 import io
@@ -929,7 +924,7 @@ class FunctionalConnectivity:
             exc_n = synaptic_data[area]['type']['excitatory']
             inh_n = synaptic_data[area]['type']['inhibitory']
 
-            cl_dict = quantify_ratemaps.RatemapCharacteristics(ratemap_mat_dir='/home/bartulm/Insync/mimica.bartul@gmail.com/OneDrive/Work/data/posture_2020/ratemap_mats',
+            cl_dict = quantify_ratemaps.RatemapCharacteristics(ratemap_mat_dir='/home/.../ratemap_mats',
                                                                pkl_sessions_dir=self.pkl_sessions_dir,
                                                                specific_date={'bruno': ['020520', '030520'],
                                                                               'roy': True,

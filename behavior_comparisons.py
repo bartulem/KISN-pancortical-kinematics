@@ -1,11 +1,6 @@
-# -*- coding: utf-8 -*-
-
 """
-
+Computes behavioral comparisons, e.g. between weight/no-weight.
 @author: bartulem
-
-Make comparisons of behavioral occupancies between medicated and non-medicated animals.
-
 """
 
 import os
@@ -40,7 +35,7 @@ class Behavior:
                        'opt_back_ang': np.array([[-60, -60], [60, 60]]),
                        'speeds': np.array([[0, 0, 0, 0], [120, 120, 120, 120]]),
                        'speeds_1st_der': np.array([[-150, -150, -150, -150], [150, 150, 150, 150]]),
-                       'neck_1st_der': np.array([-0.1, 0.1 ]),
+                       'neck_1st_der': np.array([-0.1, 0.1]),
                        'neck_2nd_der': np.array([-0.8, 0.8]),
                        'allo_head_1st_der': np.array([[-400, -300, -400], [400, 300, 400]]),
                        'allo_head_2nd_der': np.array([[-4000, -3000, -4000], [4000, 3000, 4000]]),
@@ -64,13 +59,17 @@ class Behavior:
                        'imu_ego2_head_1st_der': np.array([[-400, -300, -400], [400, 300, 400]]),
                        'imu_ego2_head_2nd_der': np.array([[-4000, -3000, -4000], [4000, 3000, 4000]])}
 
-    def __init__(self, variable_list=[], beh_plot_sessions={},
-                 save_dir='', save_fig=False, fig_format='png',):
+    def __init__(self, variable_list=None, beh_plot_sessions=None,
+                 save_dir='', save_fig=False, fig_format='png'):
+        if variable_list is None:
+            variable_list = []
+        if beh_plot_sessions is None:
+            beh_plot_sessions = {}
         self.variable_list = variable_list
         self.beh_plot_sessions = beh_plot_sessions
-        self.save_dir=save_dir
-        self.save_fig=save_fig
-        self.fig_format=fig_format
+        self.save_dir = save_dir
+        self.save_fig = save_fig
+        self.fig_format = fig_format
 
     def pull_occ_histograms(self, **kwargs):
         """
@@ -152,8 +151,6 @@ class Behavior:
                                                                           max_val=self.variable_bounds[variable][1],
                                                                           num_bins_1d=num_bins_1d,
                                                                           camera_framerate=data['framerate'])
-
-
         return occ_dict
 
     def plot_behavior_differences(self, **kwargs):
@@ -249,9 +246,6 @@ class Behavior:
                                    'y': [np.mean(stats_dict[variable][f_bin]) for f_bin in stats_dict[variable].keys()],
                                    'yerr': [sem(stats_dict[variable][f_bin])*2.58 for f_bin in stats_dict[variable].keys()]}
 
-        # print(plot_dict)
-
-
         fig = plt.figure(figsize=(7, 10))
         gs1 = fig.add_gridspec(nrows=5, ncols=12, left=.075,
                                right=.98, wspace=6.5, hspace=.5)
@@ -273,7 +267,7 @@ class Behavior:
             ax2.errorbar(x=plot_dict[feature]['x'],
                          y=plot_dict[feature]['y'],
                          yerr = plot_dict[feature]['yerr'],
-                         ls = 'None',
+                         ls='None',
                          color=f_color)
             ax2.scatter(x=plot_dict[feature]['x'],
                         y=plot_dict[feature]['y'],

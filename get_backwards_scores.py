@@ -1,3 +1,8 @@
+"""
+Gets scores for backward model selection.
+@author: SolVind
+"""
+
 from spikestats.toolkits import *
 from spikestats.family import *
 import spikestats.metrics as metrics
@@ -6,15 +11,18 @@ from spikestats.calc_backwards_scores import *
 import scipy.io
 import matplotlib as mpl
 import matplotlib.pyplot as plt
-
+import sys
+import os
+import pickle
+import numpy as np
 
 da_folder = 'kavorka_190620_s2_intermediate_dark2'
-file_folder = '/Volumes/whitlock/store/Jingyi/glm_res/kavorka/%s/' % da_folder
+file_folder = '/.../glm_res/kavorka/%s/' % da_folder
 
 n = 0
 final_model_res = {}
 for da_file in os.listdir(file_folder):
-    if (da_file[-4:] == '.mat'):
+    if da_file[-4:] == '.mat':
         n += 1
         print(da_file)
         mat = scipy.io.loadmat(file_folder + da_file)
@@ -29,8 +37,6 @@ for da_file in os.listdir(file_folder):
             final_model_res[cell_name] = mat['%s-keys' % mat['best-model'][0]]
 scipy.io.savemat('selected_model_%s.mat' % da_folder, final_model_res)
 
-
-
 a_file = open(sys.argv[1], "rb")
 data = pickle.load(a_file)
 a_file.close()
@@ -42,7 +48,6 @@ print('start')
 cell_index = int(sys.argv[2])
 
 final_model = scipy.io.loadmat(sys.argv[3])
-
 
 res = scipy.io.loadmat('glmres_roy_270520_s2_distal_weight_0000_imec0_cl0000_ch000_full.mat')
 res.keys()
@@ -62,7 +67,6 @@ final_model = scipy.io.loadmat('1-HPC_GLM/selected_model_roy_270520_s2_distal_we
 
 family = 'bernoulli'
 cell_index = 0
-
 
 output_dict = calc_backwards_scores('bernoulli', data, cell_index, final_model)
 
@@ -93,22 +97,10 @@ for i in range(nt):
 tpr = tp / (tp + fn)
 fpr = fp / (fp + tn)
 
-
 plt.plot(fpr, tpr)
 plt.show()
 
-
-
-
-
 metrics.auc(fpr, tpr)
-
-
-
-
-
-
-
 
 output_dict.keys()
 output_dict['full_model_keys']
@@ -127,10 +119,3 @@ output_dict['sub_model_4_scores']
 # for i in range(n_cell):
 #     print((i, data['cell_names'][i])
 #     output_dict = calc_backwards_scores('bernoulli', data, i, final_model)
-
-
-
-
-
-
-

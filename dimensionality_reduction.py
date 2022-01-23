@@ -1,11 +1,6 @@
-# -*- coding: utf-8 -*-
-
 """
-
+Performs dimensionality reduction on neural data.
 @author: bartulem
-
-Dimensionality reduction on neural data.
-
 """
 
 import io
@@ -104,7 +99,7 @@ class LatentSpace:
         Returns
         ----------
         pc_corrs (figure)
-            A figure depicting correlation of beh.features with PCs across three sessions.
+            A figure depicting correlation of behavioral features with PCs across three sessions.
         ----------
         """
 
@@ -124,7 +119,6 @@ class LatentSpace:
         session_bank = [bank for bank in ['distal', 'intermediate'] if bank in session_id][0]
         session_date = session_id[session_id.find('20') - 4:session_id.find('20') + 2]
 
-
         # choose clusters present in all sessions
         all_clusters, \
         chosen_clusters, \
@@ -141,10 +135,9 @@ class LatentSpace:
         behavioral_data = {}
         new_shapes = {}
         for session in self.input_dict.keys():
-            file_id, feature_data = sessions2load.Session(session= self.input_dict[session]).data_loader(extract_variables=feature_list)
+            file_id, feature_data = sessions2load.Session(session=self.input_dict[session]).data_loader(extract_variables=feature_list)
             behavioral_data[session] = get_condensed_features(feature_data)
             new_shapes[session] = feature_data['total_frame_num'] // int(120. * (condense_bin_ms / 1000))
-
 
         # condense neural data
         neural_data = {}
@@ -155,11 +148,11 @@ class LatentSpace:
                 which_extra = 0
             file_id, \
             activity_dictionary, \
-            purged_spikes_dictionary = neural_activity.Spikes(input_file=full_session_path).convert_activity_to_frames_with_shuffles(get_clusters=chosen_clusters+extra_chosen_clusters[which_extra],
+            purged_spikes_dictionary = neural_activity.Spikes(input_file=full_session_path).convert_activity_to_frames_with_shuffles(get_clusters=chosen_clusters + extra_chosen_clusters[which_extra],
                                                                                                                                      to_shuffle=False,
                                                                                                                                      condense_arr=True,
                                                                                                                                      condense_bin_ms=condense_bin_ms)
-            neural_data_binned =  np.zeros((len(all_clusters), new_shapes[session]))
+            neural_data_binned = np.zeros((len(all_clusters), new_shapes[session]))
             for cl_idx, cl in enumerate(all_clusters):
                 if cl in activity_dictionary.keys():
                     neural_data_binned[cl_idx, :] = activity_dictionary[cl]['activity'].todense()
@@ -206,8 +199,8 @@ class LatentSpace:
         # plot results
         fig2, ax2 = plt.subplots(1, 1)
         ax2.scatter(mapper[:shape_1, 0], mapper[:shape_1, 1], s=.01, c='#EEC900', alpha=1, label='light1')
-        ax2.scatter(mapper[shape_1:shape_1+shape_2, 0], mapper[shape_1:shape_1+shape_2, 1], s=.01, c='#00008B', alpha=1, label='dark')
-        ax2.scatter(mapper[shape_1+shape_2:, 0], mapper[shape_1+shape_2:, 1], s=.01, c='#CD950C', alpha=1, label='light2')
+        ax2.scatter(mapper[shape_1:shape_1 + shape_2, 0], mapper[shape_1:shape_1 + shape_2, 1], s=.01, c='#00008B', alpha=1, label='dark')
+        ax2.scatter(mapper[shape_1 + shape_2:, 0], mapper[shape_1 + shape_2:, 1], s=.01, c='#CD950C', alpha=1, label='light2')
         ax2.set_xlim(-5, 7.5)
         ax2.set_xlabel('UMAP1 (A.U.)')
         ax2.set_ylabel('UMAP2 (A.U.)')
@@ -269,14 +262,14 @@ class LatentSpace:
                                                                                                   'D Allo_head_direction', 'D Allo_head_direction_1st_der',
                                                                                                   'G Neck_elevation', 'G Neck_elevation_1st_der', 'K Ego3_Head_roll',
                                                                                                   'K Ego3_Head_roll_1st_der', 'L Ego3_Head_pitch', 'L Ego3_Head_pitch_1st_der',
-                                                                                                  'M Ego3_Head_azimuth',	'M Ego3_Head_azimuth_1st_der', 'N Back_pitch',
+                                                                                                  'M Ego3_Head_azimuth', 'M Ego3_Head_azimuth_1st_der', 'N Back_pitch',
                                                                                                   'N Back_pitch_1st_der', 'O Back_azimuth', 'O Back_azimuth_1st_der',
                                                                                                   'P Ego2_head_roll', 'P Ego2_head_roll_1st_der', 'Q Ego2_head_pitch',
                                                                                                   'Q Ego2_head_pitch_1st_der', 'Z Position', 'Z Self_motion']
         pc_selection = kwargs['pc_selection'] if 'pc_selection' in kwargs.keys() and kwargs['pc_selection'] in ['knee', 'all', 'proportion'] else 'knee'
         var_explained_proportion = kwargs['var_explained_proportion'] if 'var_explained_proportion' in kwargs.keys() and type(kwargs['var_explained_proportion']) == float else .9
-        umap_parameters = kwargs['umap_parameters'] if 'umap_parameters' in kwargs.keys() and type(kwargs['umap_parameters']) == dict  \
-            else {'n_components': 2, 'n_neighbors': 5, 'min_dist': .1, 'metric':'euclidean'}
+        umap_parameters = kwargs['umap_parameters'] if 'umap_parameters' in kwargs.keys() and type(kwargs['umap_parameters']) == dict \
+            else {'n_components': 2, 'n_neighbors': 5, 'min_dist': .1, 'metric': 'euclidean'}
         plot_scree = kwargs['plot_scree'] if 'plot_scree' in kwargs.keys() and type(kwargs['plot_scree']) == bool else False
         save_md = kwargs['save_md'] if 'save_md' in kwargs.keys() and type(kwargs['save_md']) == bool else False
 
@@ -324,10 +317,10 @@ class LatentSpace:
         # select the relevant PC loadings
         if pc_selection == 'all':
             pcs_to_keep = pc_embedding[:, :]
-            pc_cutoff = pc_embedding.shape[1]-1
+            pc_cutoff = pc_embedding.shape[1] - 1
         elif pc_selection == 'knee':
             kn = KneeLocator(list(range(len(pc_var_explained))), pc_var_explained, curve='convex', direction='decreasing')
-            pcs_to_keep = pc_embedding[:, :kn.knee+1]
+            pcs_to_keep = pc_embedding[:, :kn.knee + 1]
             pc_cutoff = kn.knee
         else:
             cumulative_var = 0
@@ -335,8 +328,8 @@ class LatentSpace:
             while cumulative_var < var_explained_proportion:
                 cumulative_var += pc_var_explained[var_idx]
                 var_idx += 1
-            pcs_to_keep = pc_embedding[:, :var_idx+1]
-            pc_cutoff = var_idx+1
+            pcs_to_keep = pc_embedding[:, :var_idx + 1]
+            pc_cutoff = var_idx + 1
 
         # plot the selected PCs with variance explained
         if plot_scree:

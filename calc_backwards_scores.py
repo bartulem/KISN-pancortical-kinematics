@@ -1,3 +1,8 @@
+"""
+Computes backward model scores.
+@author: SolVind
+"""
+
 from .toolkits import *
 from .family import *
 from .metrics import *
@@ -24,8 +29,6 @@ def calc_xpr(y, yhat, nt):
     fpr = fp / (fp + tn)
     
     return tpr, fpr
-    
-
 
 
 def calc_backwards_scores(family, data, cell_index, final_model):
@@ -35,7 +38,7 @@ def calc_backwards_scores(family, data, cell_index, final_model):
     x_mat = data['features_mat'].copy()
     n_samples = len(y)
     print('%s_start' % data['cell_names'][cell_index])
-    if (family == 'bernoulli'):
+    if family == 'bernoulli':
         y = (y > 0.5) * 1.  # binarize it!
     
     full_model = final_model[cell_name]
@@ -46,7 +49,7 @@ def calc_backwards_scores(family, data, cell_index, final_model):
         feature_keys.append(full_model[i].strip())
     print(feature_keys)
     
-    if (np.any(full_model == 'null')):
+    if np.any(full_model == 'null'):
         return []
     else:
         n_model = len(feature_keys)
@@ -71,7 +74,7 @@ def calc_backwards_scores(family, data, cell_index, final_model):
             x_temp = x[:, cind].copy()
             good_ind_temp = np.zeros(n_samples) < 1
             bad_ind = np.ravel([ind for ind in range(n_samples) if np.all(x_temp[ind, :] == 0)])
-            if (len(bad_ind) > 0):
+            if len(bad_ind) > 0:
                 good_ind_temp[bad_ind] = False
             good_ind = good_ind * good_ind_temp
         
@@ -81,9 +84,8 @@ def calc_backwards_scores(family, data, cell_index, final_model):
         
         groups = np.ravel(groups)
         
-        output_dict = {}
-        output_dict['cellnames'] = data['cell_names'][cell_index].copy()
-        
+        output_dict = {'cellnames': data['cell_names'][cell_index].copy()}
+
         y_in = y[good_ind]
         
         glm = Solver()
@@ -98,7 +100,7 @@ def calc_backwards_scores(family, data, cell_index, final_model):
         x_pred_temp = np.zeros(n_features)
         x_pred_temp[:] = np.nan
         for j in range(n_features):
-            if (np.std(x_temp[:, j]) > 0.):
+            if np.std(x_temp[:, j]) > 0.:
                 mean_temp = np.mean(x_temp[:, j])
                 std_temp = np.std(x_temp[:, j])
                 x_filtered[:, j] = (x_filtered[:, j] - mean_temp) / std_temp
@@ -122,7 +124,6 @@ def calc_backwards_scores(family, data, cell_index, final_model):
         Tjur = np.mean(yhat[y_in == 1]) - np.mean(yhat[y_in == 0])
         ytilde = (yhat > 0.5) * 1
         ascore = get_accuracy(y_in, ytilde)
-        
         
         # CoxSnell2 = 1 - np.power(np.exp(log_lik_full - log_lik_null), (2 / n_samples))
         CoxSnell = 1 - np.exp((-2 / n_samples) * (log_lik_full - log_lik_null))
@@ -157,7 +158,7 @@ def calc_backwards_scores(family, data, cell_index, final_model):
                 x_pred_temp = np.zeros(n_features)
                 x_pred_temp[:] = np.nan
                 for j in range(n_features):
-                    if (np.std(x_temp[:, j]) > 0.):
+                    if np.std(x_temp[:, j]) > 0.:
                         mean_temp = np.mean(x_temp[:, j])
                         std_temp = np.std(x_temp[:, j])
                         x_filtered[:, j] = (x_filtered[:, j] - mean_temp) / std_temp
@@ -171,7 +172,7 @@ def calc_backwards_scores(family, data, cell_index, final_model):
                 mu = latent_mu(family, 'logit', eta, 2, fit_intercept=True)
                 yhat = fit_res.predict(x_in)
                 log_lik = loglik(family, y_in, eta, mu, theta=1.0)
-                if (np.isnan(log_lik)):
+                if np.isnan(log_lik):
                     print('%s_problem' % data['cell_names'][cell_index])
                     raise ValueError('log_lik for group %d' % i)
                 
@@ -183,7 +184,6 @@ def calc_backwards_scores(family, data, cell_index, final_model):
                 Tjur = np.mean(yhat[y_in == 1]) - np.mean(yhat[y_in == 0])
                 ytilde = (yhat > 0.5) * 1
                 ascore = get_accuracy(y_in, ytilde)
-                
                 
                 CoxSnell = 1 - np.exp((- 2 / n_samples) * (log_lik_full - log_lik_null))
                 Negelkerke = CoxSnell / (1 - np.exp((2 * n_samples) ** (-1) * log_lik_null))

@@ -1,3 +1,8 @@
+"""
+Performs model selection.
+@author: SolVind
+"""
+
 from spikestats.toolkits import *
 from spikestats.family import *
 from spikestats.cross_validation import *
@@ -8,7 +13,7 @@ import matplotlib.pyplot as plt
 
 # from spikestats.logit_1d import process_group_info
 # data_raw = np.nan
-a_file = open('/Users/jingyig/Work/Kavli/Data/data4ratemaps_v2_naned_XYZ/ok4rms_kavorka_190620_s2_intermediate_dark_reheaded_XYZeuler_notricks_1D2D_naned_evenodd_rotatedback.pkl', "rb")
+a_file = open('/.../ok4rms_kavorka_190620_s2_intermediate_dark_reheaded_XYZeuler_notricks_1D2D_naned_evenodd_rotatedback.pkl', "rb")
 data_raw = pickle.load(a_file)
 a_file.close()
 
@@ -74,8 +79,6 @@ a_file.close()
 #
 # group_dict = process_group_info(group_index, x_mat)
 #
-
-
 
 # ms = ForwardSelection()
 # ms.fit(data, cell_index=0)

@@ -1,11 +1,6 @@
-# -*- coding: utf-8 -*-
-
 """
-
+Maked example plots.
 @author: bartulem
-
-Make example plots.
-
 """
 
 import os

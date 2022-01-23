@@ -1,3 +1,8 @@
+"""
+Performs rotations on tracking data.
+@author: SolVind
+"""
+
 # import library
 import os
 from scipy import *
@@ -38,7 +43,7 @@ def eul2rot(ang_vec, order):
     # order is a integer range from 1 to 12, 1-6 are Tait–Bryan angles and 7-12 are Proper(classic) Euler angles
     # 1:x-y-z, 2:y-z-x, 3:z-x-y, 4:x-z-y, 5:z-y-x, 6:y-x-z, note that tracking system use order = 1: xyz
     # ang_vec is Euler angles, x, y, z
-    if(np.any(np.isnan(ang_vec))):
+    if np.any(np.isnan(ang_vec)):
         rv = np.zeros((3,3))
         rv[:] = np.nan
         return(rv)
@@ -78,7 +83,7 @@ def reformat_data(mat_data):
 
     """
     print('Processing re-format the original data ...... ')
-    if ('pointdatadimensions' not in mat_data.keys()):
+    if 'pointdatadimensions' not in mat_data.keys():
         raise Exception('Check the mat. It should be a file after tracking system at least.')
     
     pdd = np.ravel(np.array(mat_data['pointdatadimensions'])).astype(int)
@@ -110,7 +115,7 @@ def reformat_data(mat_data):
     for t in np.arange(nframes):
         marker_lable = point_data[:, 3, t]
         pind = np.where(marker_lable < npoints)[0]
-        if (len(pind) > 1):
+        if len(pind) > 1:
             marker_inuse = marker_lable[pind].astype(int)
             sorted_point_data[t, marker_inuse, :] = point_data[pind, :3, t]
     
@@ -131,7 +136,7 @@ def get_global_head_data(head_x, head_z):
     head_rot_mat_inv[:] = np.nan
     head_eul_ang[:] = np.nan
     for t in range(nframe):
-        if (np.isnan(head_x[t, 0])):
+        if np.isnan(head_x[t, 0]):
             continue
         hx = head_x[t] / np.linalg.norm(head_x[t])
         hz = head_z[t] / np.linalg.norm(head_z[t])
@@ -175,7 +180,7 @@ def get_body_rotations(sorted_point_data):
     timeofheadnans = []
     # DO IT ALL FOR THE NEW ROOT NODE (ASSUMING BUTT TO NECK!)
     for t in np.arange(nf):
-        if (np.isnan(sorted_point_data[t, 4, 0]) or np.isnan(sorted_point_data[t, 6, 0])):  # 4 is neck and 6 is tail
+        if np.isnan(sorted_point_data[t, 4, 0]) or np.isnan(sorted_point_data[t, 6, 0]):  # 4 is neck and 6 is tail
             continue
     
         # THIS IS A STUPID WAY OF CREATING RROOTS (ANGLE OF BODY RELATIVE TO A WALL)
@@ -183,7 +188,7 @@ def get_body_rotations(sorted_point_data):
         xdir = sorted_point_data[t, 4, :] - sorted_point_data[t, 6, :]  # from tail to neck
         xdir[2] = 0.
         ll = np.linalg.norm(xdir)
-        if (ll < 0.001):
+        if ll < 0.001:
             continue
         xdir = xdir / ll  # x direction of the animal from the top view (chosen)
         zdir = np.ravel(np.array([0, 0, 1]))
@@ -195,7 +200,7 @@ def get_body_rotations(sorted_point_data):
         # SAME AS WITHLOCKINZ = TRUE AND WITHROTATIONS = TRUE
         xdir = sorted_point_data[t, 4, :] - sorted_point_data[t, 6, :]
         ll = np.linalg.norm(xdir)
-        if (ll < 0.001):
+        if ll < 0.001:
             continue
         xdir = xdir / ll  # unit vector from tail to neck in global coordinates (not top view)
         ydir = np.zeros(3)
@@ -211,7 +216,7 @@ def get_body_rotations(sorted_point_data):
         xdir = sorted_point_data[t, 4, :] - sorted_point_data[t, 6, :]
         xdir[2] = 0  # so we just keep the planar direction from the body coordinates!!!
         ll = np.linalg.norm(xdir)
-        if (ll < 0.001):
+        if ll < 0.001:
             timeofheadnans.append(t)
             continue
         xdir = xdir / ll
@@ -239,7 +244,7 @@ def get_body_rotations(sorted_point_data):
         # zdir = zeros(3)
         # zdir[2] = 1.
         # RrootINV = ( np.array([xdir, ydir, zdir]) ) + 0.
-        if (~np.isnan(sorted_point_data[t, 6, 0])):
+        if ~np.isnan(sorted_point_data[t, 6, 0]):
             dir_to_butt = sorted_point_data[t, 4, :] - sorted_point_data[t, 5, :]
             dir_to_butt = dir_to_butt / np.linalg.norm(dir_to_butt)
             dir_to_butt = np.dot(r_root_inv[t, :, :], dir_to_butt)
@@ -278,20 +283,19 @@ def get_head_rotations(head_x, head_z, r_root_inv, r_root_inv_oriented):
     r_heads[:] = np.nan
 
     for t in np.arange(nf):
-        if((r_root_inv is not None) and (r_root_inv_oriented is not None)):
-            if (np.isnan(r_root_inv[t, 0, 0])):
+        if (r_root_inv is not None) and (r_root_inv_oriented is not None):
+            if np.isnan(r_root_inv[t, 0, 0]):
                 continue
         else:
             print('Only global head rotation matrix is generated.')
-        
-        
-        if (~np.isnan(head_x[t, 0])):
+
+        if ~np.isnan(head_x[t, 0]):
             hx = head_x[t] / np.linalg.norm(head_x[t])
             hz = head_z[t] / np.linalg.norm(head_z[t])
             hy = np.cross(hz, hx)
             global_head_rm[t, :, :] = np.array([hx, hy, hz])  # global to head
 
-            if((r_root_inv is not None) and (r_root_inv_oriented is not None)):
+            if (r_root_inv is not None) and (r_root_inv_oriented is not None):
                 rhx = np.dot(r_root_inv[t, :, :], hx)
                 rhz = np.dot(r_root_inv[t, :, :], hz)
                 rhy = np.dot(r_root_inv[t, :, :], hy)
@@ -309,18 +313,15 @@ def get_head_rotations(head_x, head_z, r_root_inv, r_root_inv_oriented):
     return global_head_rm, r_heads, body_turned_heads, head_ups
 
 
-
-
-
 def check_rot_angs(angs):
     
     for i in range(3):
-        if (angs[i] > math.pi):
+        if angs[i] > math.pi:
             angs[i] -= 2. * math.pi
-        if (angs[i] < - math.pi):
+        if angs[i] < - math.pi:
             angs[i] += 2. * math.pi
     count_big = sum(abs(angs) > math.pi / 2.)
-    return (angs, count_big)
+    return angs, count_big
 
 
 def rot2expmap(rot_mat):
@@ -351,7 +352,7 @@ def rot2expmap(rot_mat):
 def rot2euler_xzy(rot_mat):
     r11, r12, r13, r21, r22, r23, r31, r32, r33 = np.ravel(rot_mat)
     temp = math.sqrt(r22 * r22 + r32 * r32)
-    if (temp > 0.0000001):
+    if temp > 0.0000001:
         x = np.arctan2(r32, r22)
         z = np.arctan2(-r12, temp)
         y = np.arctan2(r13, r11)
@@ -392,25 +393,25 @@ def rot2euler(rot_matrix, use_solution_with_least_tilt=False):
         angs[2] = np.arctan2(r21, r22)
     angs, count = check_rot_angs(angs)
     
-    if (use_solution_with_least_tilt):
+    if use_solution_with_least_tilt:
         angs_o = np.zeros(3)
         angs_o[0] = angs[0] + math.pi
         angs_o[1] = math.pi - angs[1]
         angs_o[2] = angs[2] + math.pi
         angs_o, count_o = check_rot_angs(angs_o)
         
-        if (abs(angs_o[1]) < abs(angs[1])):
+        if abs(angs_o[1]) < abs(angs[1]):
             angs = angs_o
     
     return angs
 
 
 def rot2angles(rotmat, useexpmap, use_xzy_order, usesolutionwithleasttilt=False):
-    if (np.isnan(rotmat[0, 0])):
+    if np.isnan(rotmat[0, 0]):
         return np.nan
-    if (useexpmap):
+    if useexpmap:
         return rot2expmap(rotmat)
-    if (use_xzy_order):
+    if use_xzy_order:
         return rot2euler_xzy(rotmat)
     return rot2euler(rotmat, usesolutionwithleasttilt)
 
@@ -478,15 +479,15 @@ def get_angles(r_roots, r_heads, body_turned_heads, global_head_rot_mat, dir_bac
         #   Rz = array([[cos(z), -sin(z), 0], [sin(z), cos(z), 0], [0, 0, 1]])
         #   Ry = array([[cos(y), 0, sin(y)], [0, 1, 0], [-sin(y), 0, cos(y)]])
         #   yaxis = dot(dot(Rz, Ry), yaxis)
-    if (head_angle_thresh is not None):
+    if head_angle_thresh is not None:
         ego2_up, ego2_down, ego3_up, ego3_down = np.ravel(head_angle_thresh)
         for t in np.arange(nf):
-            if (body_turned_heads[t, 0, 2] > ego2_up or body_turned_heads[t, 0, 2] < ego2_down):
+            if body_turned_heads[t, 0, 2] > ego2_up or body_turned_heads[t, 0, 2] < ego2_down:
                 es_head_ang[t, 0] = np.nan
                 es_head_ang[t, 2] = np.nan
                 a_head_ang[t, 0] = np.nan
                 a_head_ang[t, 2] = np.nan
-            if (r_heads[t, 0, 2] > ego3_up or r_heads[t, 0, 2] < ego3_down):
+            if r_heads[t, 0, 2] > ego3_up or r_heads[t, 0, 2] < ego3_down:
                 ef_head_ang[t, 0] = np.nan
                 ef_head_ang[t, 2] = np.nan
 
@@ -518,7 +519,7 @@ def optrotate(avec):
     
     def get_rot(tryang):
         # rotations about z (azimuth) are ok but bounds on the other two to avoid flipping
-        if (abs(tryang[0]) > math.pi * 0.5 or abs(tryang[1]) > math.pi * 0.5):
+        if abs(tryang[0]) > math.pi * 0.5 or abs(tryang[1]) > math.pi * 0.5:
             return [-1], [-1]
         rmat_z = rotation_z(tryang[2])
         rmat_y = rotation_y(tryang[1])
@@ -527,17 +528,17 @@ def optrotate(avec):
         new_vec = np.zeros(np.shape(avec))
         new_vec[:] = np.nan
         for t in range(nframe):
-            if (np.isnan(avec[t, 0])):
+            if np.isnan(avec[t, 0]):
                 continue
             new_vec[t] = np.dot(rot_mat, avec[t])
         return new_vec, rot_mat
     
     def distance_to_xaxis(tryang):  # first just rotate around azimuth and tilt to center around zero
         chk, rot_mat = get_rot([0., tryang[0], tryang[1]])
-        if (len(np.ravel(chk)) < 3):
+        if len(np.ravel(chk)) < 3:
             return 1000000000000000000000000000.
         xvec = np.zeros(3)
-        if (n == 3):
+        if n == 3:
             xvec[0] = np.nanmean(chk[:, 0])
             xvec[1] = np.nanmean(chk[:, 1])
             xvec[2] = np.nanmean(chk[:, 2])
@@ -564,7 +565,7 @@ def calc_der(values, framerate, bins_1st, bins_2nd, is_angle, der_2nd, session_i
     # central difference derivative
     nframe = len(values)
     dims_val = values.shape
-    if (len(dims_val) == 1):
+    if len(dims_val) == 1:
         ncol_val = 1
     else:
         ncol_val = dims_val[1]
@@ -574,32 +575,32 @@ def calc_der(values, framerate, bins_1st, bins_2nd, is_angle, der_2nd, session_i
     for i in range(ncol_val):
         first_der = np.zeros(nframe)
         second_der = np.zeros(nframe)
-        if (ncol_val == 1):
+        if ncol_val == 1:
             val = values
         else:
             val = values[:,i]
         for t in range(nframe):
             ts = t - bins_1st
             te = t + bins_1st
-            if (ts < 0 or te > nframe - 1 or np.isnan(val[ts]) or np.isnan(val[te])):
+            if ts < 0 or te > nframe - 1 or np.isnan(val[ts]) or np.isnan(val[te]):
                 first_der[t] = np.nan
                 continue
             first_der[t] = val[te] - val[ts]
-            if (is_angle):
-                if (first_der[t] > 180):
+            if is_angle:
+                if first_der[t] > 180:
                     first_der[t] -= 360.
-                if (first_der[t] < -180):
+                if first_der[t] < -180:
                     first_der[t] += 360.
             if len(np.ravel(framerate)) > 1:
                 first_der[t] /= (2. * bins_1st / framerate[session_indicator[t]])
             else:
                 first_der[t] /= (2. * bins_1st / framerate)
         
-        if (der_2nd):
+        if der_2nd:
             for t in range(nframe):
                 ts = t - bins_2nd
                 te = t + bins_2nd
-                if (ts < 0 or te > nframe - 1 or np.isnan(first_der[ts]) or np.isnan(first_der[te])):
+                if ts < 0 or te > nframe - 1 or np.isnan(first_der[ts]) or np.isnan(first_der[te]):
                     second_der[t] = np.nan
                     continue
                 second_der[t] = first_der[te] - first_der[ts]
@@ -656,30 +657,30 @@ def get_selfmotion(xvals, yvals, body_dir, frame_rate, speed_def, movement_offse
             for i in da_index:
                 ii = i + sm
                 jj = i + em
-                if (ii < 0 or jj > len(xvals) - 1):
+                if ii < 0 or jj > len(xvals) - 1:
                     dx[i] = np.nan
                     dy[i] = np.nan
                     speeds[i] = np.nan
                     continue
-                if (np.isnan(body_dir[ii]) or np.isnan(body_dir[jj]) or np.isnan(xvals[ii]) or np.isnan(yvals[jj])):
+                if np.isnan(body_dir[ii]) or np.isnan(body_dir[jj]) or np.isnan(xvals[ii]) or np.isnan(yvals[jj]):
                     dx[i] = np.nan
                     dy[i] = np.nan
                     speeds[i] = np.nan
                     continue
                 ang_diff = body_dir[jj] - body_dir[ii]
-                if (speed_def == 'cum'):
+                if speed_def == 'cum':
                     speed = 0.
                     for xi in np.arange(ii + 1, min([jj, len(body_dir) - 1]), 1):
                         speed += 100. * np.sqrt((xvals[xi] - xvals[xi - 1]) ** 2 + (yvals[xi] - yvals[xi - 1]) ** 2) / (
                                     movement_offset / 1000.)
-                elif(speed_def == 'jump'):
+                elif speed_def == 'jump':
                     speed = 100. * np.sqrt((xvals[jj] - xvals[ii]) ** 2 + (yvals[jj] - yvals[ii]) ** 2) / (movement_offset / 1000.)
                 else:
                     raise Exception('Speed definition is not defined !!!')
                 speeds[i] = speed + 0.
                 dx[i] = speed * np.sin(ang_diff)
                 dy[i] = speed * np.cos(ang_diff)
-                if (10000 < i < 10015):
+                if 10000 < i < 10015:
                     print('Time point, %d, movement vector (%f, %f)' % (i, dx[i], dy[i]))  # , 'angle diff', ang_diff, 'speed', speed[i]
     else:
         fsmo = float(movement_offset) * frame_rate / 1000.
@@ -689,23 +690,23 @@ def get_selfmotion(xvals, yvals, body_dir, frame_rate, speed_def, movement_offse
         for i in range(len(body_dir)):
             ii = i + sm
             jj = i + em
-            if (ii < 0 or jj > len(xvals) - 1):
+            if ii < 0 or jj > len(xvals) - 1:
                 dx[i] = np.nan
                 dy[i] = np.nan
                 speeds[i] = np.nan
                 continue
-            if (np.isnan(body_dir[ii]) or np.isnan(body_dir[jj]) or np.isnan(xvals[ii]) or np.isnan(yvals[jj])):
+            if np.isnan(body_dir[ii]) or np.isnan(body_dir[jj]) or np.isnan(xvals[ii]) or np.isnan(yvals[jj]):
                 dx[i] = np.nan
                 dy[i] = np.nan
                 speeds[i] = np.nan
                 continue
             ang_diff = body_dir[jj] - body_dir[ii]
-            if (speed_def == 'cum'):
+            if speed_def == 'cum':
                 speed = 0.
                 for xi in np.arange(ii + 1, min([jj, len(body_dir) - 1]), 1):
                     speed += 100. * np.sqrt((xvals[xi] - xvals[xi - 1]) ** 2 + (yvals[xi] - yvals[xi - 1]) ** 2) / (
                             movement_offset / 1000.)
-            elif (speed_def == 'jump'):
+            elif speed_def == 'jump':
                 speed = 100. * np.sqrt((xvals[jj] - xvals[ii]) ** 2 + (yvals[jj] - yvals[ii]) ** 2) / (
                             movement_offset / 1000.)
             else:
@@ -713,7 +714,7 @@ def get_selfmotion(xvals, yvals, body_dir, frame_rate, speed_def, movement_offse
             speeds[i] = speed + 0.
             dx[i] = speed * np.sin(ang_diff)
             dy[i] = speed * np.cos(ang_diff)
-            if (10000 < i < 10015):
+            if 10000 < i < 10015:
                 print('Time point, %d, movement vector (%f, %f)' % (
                 i, dx[i], dy[i]))  # , 'angle diff', ang_diff, 'speed', speed[i]
     return dx, dy, speeds
@@ -731,27 +732,26 @@ def calc_selfmotion(data, selfmotion_param=(150, 250), calc_derivatives=False, a
         session_indicator = data['session_indicator']
     else:
         session_indicator = np.zeros(n_frame)
-    
-    
-    if (selfmotion_param is None and add_point is None):
+
+    if selfmotion_param is None and add_point is None:
         return []
     
-    if (selfmotion_param is not None):
+    if selfmotion_param is not None:
         add_point = 'neck'
         selfmotion_window_size = selfmotion_param
         print('recalculate selfmotion speeds using neck point.')
     
-    if (add_point == 'tail'):
+    if add_point == 'tail':
         self_x = sorted_point_data[:, 6, 0]
         self_y = sorted_point_data[:, 6, 1]
-    elif (add_point == 'back'):
+    elif add_point == 'back':
         self_x = sorted_point_data[:, 5, 0]
         self_y = sorted_point_data[:, 5, 1]
     else:
         self_x = sorted_point_data[:, 4, 0]
         self_y = sorted_point_data[:, 4, 1]
     
-    if (isinstance(selfmotion_window_size, int)):
+    if isinstance(selfmotion_window_size, int):
         dx_jump, dy_jump, speeds_jump = get_selfmotion(self_x, self_y, body_direction_radiance, frame_rate, 'jump',
                                                        selfmotion_window_size, session_indicator)
         dx_cums, dy_cums, speeds_cums = get_selfmotion(self_x, self_y, body_direction_radiance, frame_rate, 'cum',
@@ -774,13 +774,13 @@ def calc_selfmotion(data, selfmotion_param=(150, 250), calc_derivatives=False, a
             selfmotion_mat = np.append(selfmotion_mat, np.column_stack([dx, dy]), 1)
             
     speeds_1st_der = []
-    if (calc_derivatives):
+    if calc_derivatives:
         speeds_1st_der, speeds_2nd_der = calc_der(speeds, frame_rate, bins_der[0], bins_der[1], False, False, session_indicator)
     return speeds, selfmotion_mat, speeds_1st_der
 
 
 def make_ang_continue(angs, degrees=True):
-    if(degrees):
+    if degrees:
         svec = np.array([-180, 0, 180])
     else:
         svec = np.array([-180, 0, 180]) / 180 * math.pi
@@ -793,7 +793,7 @@ def make_ang_continue(angs, degrees=True):
     temp_ang[:] = np.nan
     temp_ang[0] = processed_ang[0]
     # diff_ang = np.diff(processed_ang)
-    for i in range(1,n_ang):
+    for i in range(1, n_ang):
         diff_ang = processed_ang[i] - processed_ang[i-1]
         d_vec = diff_ang + svec
         idx = np.argmin(abs(d_vec))
@@ -804,7 +804,7 @@ def make_ang_continue(angs, degrees=True):
 
 
 def data_loader(mat_file, imu_file=None, sync_file=None):
-    if (not os.path.exists(mat_file)):
+    if not os.path.exists(mat_file):
         raise Exception('mat file: %s does not exist !!! Please check the given path.' % mat_file)
     mat_data = scipy.io.loadmat(mat_file)
     
@@ -813,19 +813,19 @@ def data_loader(mat_file, imu_file=None, sync_file=None):
     file_name = split_vec[len(split_vec) - 1]
     mat_data['file_info'] = file_name
     
-    if (imu_file is not None):
-        if (not os.path.exists(imu_file)):
+    if imu_file is not None:
+        if not os.path.exists(imu_file):
             raise Exception('imu file: %s does not exist !!! Please check the given path.' % imu_file)
         imu_data = pd.read_pickle(imu_file)
-        if (sync_file is None):
+        if sync_file is None:
             raise Exception('when imu file is given. the sync file must be given.')
-        if (not os.path.exists(sync_file)):
+        if not os.path.exists(sync_file):
             raise Exception('sync file: %s does not exist !!! Please check the given path.' % sync_file)
         sync_info = pd.read_pickle(sync_file)
         
-        return (mat_data, imu_data, sync_info)
+        return mat_data, imu_data, sync_info
     
-    return (mat_data)
+    return mat_data
 
 
 def get_cell_data(mat_data):
@@ -852,24 +852,24 @@ def get_cell_data(mat_data):
     kk = (list(mat_data.keys()))
     count = 0
     for i in np.arange(len(list(mat_data.keys()))):
-        if ('cellname_' in (list(mat_data.keys()))[i]):
+        if 'cellname_' in (list(mat_data.keys()))[i]:
             count += 1
     
     cell_names = []
     cell_activities = []
     for i in np.arange(count):
         cn = 'cellname_%05d' % i
-        if (cn in mat_data):
+        if cn in mat_data:
             cell_names.append((mat_data[cn])[0])
         cn = 'cell_%05d' % i
-        if (cn in mat_data):  # read in spike times in time stamps
+        if cn in mat_data:  # read in spike times in time stamps
             cell_activities.append(np.ravel(np.array(mat_data[cn])) + session_ts[0])
     
     for i in np.arange(count):
         print((i, (cell_names[i], (cell_activities[i])[:10])))
     print('')
     print(count)
-    if (len(cell_names) < 1):
+    if len(cell_names) < 1:
         print('There is no cell data in here!')
         return [], []
     
@@ -908,7 +908,7 @@ def data_generator(data, head_angle_thresh=(0.9, -0.9, 0.9, -0.9), use_expmap=Fa
                 'use_solution_with_least_tilt': use_solution_with_least_tilt,
                 'selfmotion_window_size': selfmotion_window_size, 'bins_der': bins_der}
     dt_keys = (list(data.keys()))
-    if ('file_info' not in dt_keys):
+    if 'file_info' not in dt_keys:
         raise Exception('Please use the function data_loader() first.')
     
     bins_1st = bins_der[0]
@@ -925,21 +925,20 @@ def data_generator(data, head_angle_thresh=(0.9, -0.9, 0.9, -0.9), use_expmap=Fa
         frame_times = None
         full_tracking_ts = None
         
-        
     cell_count = 0
     i = 0
     include_spikes = True
     while cell_count == 0 and i < len(dt_keys):
-        if ('cellname_' in dt_keys[i]):
+        if 'cellname_' in dt_keys[i]:
             cell_count += 1
         i += 1
-    if (cell_count == 0):
+    if cell_count == 0:
         print(
             'No spikes info in the data !!! This processing will not stop, but please make sure you do not need cell data !')
         print('IF you need cell data, please press Ctrl + C to stop this processing.')
         include_spikes = not include_spikes
     
-    if (include_spikes):
+    if include_spikes:
         cell_names, cell_activities = get_cell_data(data)
     else:
         cell_names = None
@@ -971,7 +970,7 @@ def data_generator(data, head_angle_thresh=(0.9, -0.9, 0.9, -0.9), use_expmap=Fa
     self_x = sorted_point_data[:, 4, 0]  # animal_location[:,0]
     self_y = sorted_point_data[:, 4, 1]  # animal_location[:,1]
     
-    if (isinstance(selfmotion_window_size, int)):
+    if isinstance(selfmotion_window_size, int):
         dx_jump, dy_jump, speeds_jump = get_selfmotion(self_x, self_y, -root_ang[:, 2], frame_rate, 'jump',
                                                        selfmotion_window_size, session_indicator)
         dx_cums, dy_cums, speeds_cums = get_selfmotion(self_x, self_y, -root_ang[:, 2], frame_rate, 'cum',
@@ -1010,14 +1009,14 @@ def data_generator(data, head_angle_thresh=(0.9, -0.9, 0.9, -0.9), use_expmap=Fa
     opt_back_1st_der, opt_back_2nd_der = calc_der(opt_back_ang, frame_rate, bins_1st, bins_2nd, True, True, session_indicator)
     
     file_name = data['file_info']
-    if (use_expmap):
+    if use_expmap:
         output_file_name = '%s_expmap' % file_name
     else:
-        if (use_xzy_order):
+        if use_xzy_order:
             output_file_name = '%s_XZYeuler' % file_name
         else:
             output_file_name = '%s_XYZeuler' % file_name
-    if (use_solution_with_least_tilt):
+    if use_solution_with_least_tilt:
         output_file_name = '%s_leasttilt' % output_file_name
     else:
         output_file_name = '%s_notricks' % output_file_name
@@ -1076,7 +1075,7 @@ def data_generator(data, head_angle_thresh=(0.9, -0.9, 0.9, -0.9), use_expmap=Fa
 def merge_comparing_data(data1, data2, file_info=None):
     keys1 = data1.keys()
     keys2 = data2.keys()
-    if(file_info is None):
+    if file_info is None:
         finfo1 = data1['file_info']
         finfo2 = data2['file_info']
 
@@ -1094,34 +1093,33 @@ def merge_comparing_data(data1, data2, file_info=None):
     n_merged_sessions = len(np.ravel(data1['framerate']))
     if n_merged_sessions != 1:
         for i in range(n_merged_sessions):
-            if(abs(data1['framerate'][i] - data2['framerate'][i]) > 1e-6):
+            if abs(data1['framerate'][i] - data2['framerate'][i]) > 1e-6:
                 raise Exception('merging files need to have same frame rate !!!')
     else:
-        if (abs(data1['framerate'] - data2['framerate']) > 1e-6):
+        if abs(data1['framerate'] - data2['framerate']) > 1e-6:
             raise Exception('merging files need to have same frame rate !!!')
     
-    if(~np.all(data1['tracking_ts'] == data2['tracking_ts'])):
+    if ~np.all(data1['tracking_ts'] == data2['tracking_ts']):
         raise Exception('merging files need to have same tracking time stamps !!!')
 
-    if (~np.all(data1['session_ts'] == data2['session_ts'])):
+    if ~np.all(data1['session_ts'] == data2['session_ts']):
         raise Exception('merging files need to have same session time stamps !!!')
     
-    if (~np.all(data1['ratcam_ts'] == data2['ratcam_ts'])):
+    if ~np.all(data1['ratcam_ts'] == data2['ratcam_ts']):
         raise Exception('merging files need to have same ratcam time stamps !!!')
     
     settings1 = data1['settings']
     settings2 = data2['settings']
-    if(len(settings1) != len(settings2)):
+    if len(settings1) != len(settings2):
         raise Exception('merging files need to have same settings !!!')
     keys_s1 = settings1.keys()
     keys_s2 = settings2.keys()
     for dakey in keys_s1:
-        if(dakey not in keys_s2):
+        if dakey not in keys_s2:
             raise Exception('merging files need to have same settings !!!')
         else:
-            if(~np.all(settings1[dakey] == settings2[dakey])):
+            if ~np.all(settings1[dakey] == settings2[dakey]):
                 raise Exception('merging files need to have same %s settings !!!' % dakey)
-        
     
     data = data1.copy()
     data['file_info'] = file_info

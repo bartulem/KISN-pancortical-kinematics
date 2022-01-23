@@ -1,4 +1,10 @@
+"""
+Computes GLM metrics.
+@author: SolVind
+"""
+
 from .family import *
+
 
 def get_deviance(y, yhat, family, theta):
     """Deviance metrics.
@@ -78,7 +84,7 @@ def get_llr(y, yhat, ynull_, distr, theta):
     L0 = loglik(distr, y, None, ynull_, theta=theta)
     L1 = loglik(distr, y, None, yhat, theta=theta)
 
-    score = 2*(L1 - L0)
+    score = 2 * (L1 - L0)
     return score
 
 
@@ -102,7 +108,7 @@ def get_auc(x, y):
     if x.shape[0] < 2:
         raise ValueError('At least 2 points are needed to compute'
                          ' area under curve, but x.shape = %s' % x.shape)
-    
+
     direction = 1
     dx = np.diff(x)
     if np.any(dx < 0):
@@ -111,7 +117,7 @@ def get_auc(x, y):
         else:
             raise ValueError("x is neither increasing nor decreasing "
                              ": {}.".format(x))
-    
+
     area = direction * np.trapz(y, x)
     if isinstance(area, np.memmap):
         area = area.dtype.type(area)

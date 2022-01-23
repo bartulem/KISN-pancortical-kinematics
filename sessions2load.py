@@ -1,15 +1,9 @@
-# -*- coding: utf-8 -*-
-
 """
-
-@author: bartulem
-
-Load sessions with tracking data/spikes.
-
+Loads sessions with tracking data/spikes.
 The method data_loader allows one to extract any combination of cluster activity
 and variables possible; the special method __str__ returns the type and description
 of each queried variable, respectively.
-
+@author: bartulem
 """
 
 import os

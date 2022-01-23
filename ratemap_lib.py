@@ -1,3 +1,8 @@
+"""
+Calculates ratemaps.
+@author: SolVind
+"""
+
 import matplotlib
 from scipy import *
 import scipy.linalg as linalg
@@ -26,7 +31,7 @@ def get_tcount_time(tracking_times, cell_start_times, cell_end_times, debug_mode
     # tracking_times in s
     post = tracking_times
 
-    if (debug_mode):
+    if debug_mode:
         print(('Tracking start time according to neuralynx', tracking_times[0]))
         print(('First interpolated points', post[:10]))
         print(('Last interpolated points', post[-10:]))
@@ -43,14 +48,14 @@ def get_tcount_time(tracking_times, cell_start_times, cell_end_times, debug_mode
 
 def get_tcount(nframes, frame_rate, tracking_ts, cell_start_times, cell_end_times, debug_mode=False):
     post = np.arange(nframes) / float(frame_rate) + tracking_ts[0]
-    
-    if (debug_mode):
+
+    if debug_mode:
         print(('Tracking start time according to neuralynx', tracking_ts[0]))
         print(('First interpolated points', post[:10]))
         print(('Last interpolated points', post[-10:]))
         print(('Tracking end time according to neuralynx', tracking_ts[1]))
         print('Those last ones are used for going from time bins to movement bins... consider using smaller bins but then you have to interpolate or record at higher temporal resolution')
-    
+
     tcount = (post >= cell_start_times[0]) * (post <= cell_end_times[0])
     for i in np.arange(1, len(cell_start_times), 1):
         tcount += (post >= cell_start_times[i]) * (post <= cell_end_times[i])
@@ -65,7 +70,7 @@ def get_cell_occ(cell_data, time_delay, frame_rate, tracking_ts, cell_start_time
         whiches += (cell_data >= cell_start_times[i]) * (cell_data <= cell_end_times[i])
         # print(whiches)
     # whiches[whiches > 1] = 1
-    if (np.sum(whiches) < 1):
+    if np.sum(whiches) < 1:
         return []
     cell_data = cell_data[whiches]
     if len(np.ravel(frame_rate)) == 1:
@@ -106,16 +111,13 @@ def get_2d_ratemap(factor1, factor2, bins1, bins2, tcount, cellocc_ind, frame_ra
     if isinstance(cellocc_ind, list):
         if not cellocc_ind:
             return []
-    
-    if (is_periodic):
+
+    if is_periodic:
         print('SMOOTHING AROUND EDGES OF GENERIC PERIODIC 2D GUYS IS NOT YET IMPLEMENTED!!!!')
-        
-    
-        
-    
+
     cA = 0.5 * (bins1[1:] + bins1[:(-1)])
     cB = 0.5 * (bins2[1:] + bins2[:(-1)])
-    
+
     binnedAs = np.ones(len(factor1)) * -10
     binnedBs = np.ones(len(factor2)) * -10
     for i in np.arange(len(cA)):
@@ -124,7 +126,7 @@ def get_2d_ratemap(factor1, factor2, bins1, bins2, tcount, cellocc_ind, frame_ra
     for i in np.arange(len(cB)):
         whiches = (factor2 > bins2[i]) * (factor2 <= bins2[i + 1])
         binnedBs[whiches] = i
-    
+
     binnedocc = np.zeros((len(cA), len(cB)))
     for i in np.arange(len(cA)):
         icount = (binnedAs == i) * tcount
@@ -139,37 +141,36 @@ def get_2d_ratemap(factor1, factor2, bins1, bins2, tcount, cellocc_ind, frame_ra
                     total_mat.append(part_mat)
                 total_num = np.sum(total_mat)
                 binnedocc[i, j] = np.sum(total_num)
-                
-    
+
     celldata_indofoccupancy = cellocc_ind
-    
+
     binnedacc = np.zeros((len(cA), len(cB)))
     numinemptyspot = 0
     numoutsidetracking = 0
     for i in np.arange(len(celldata_indofoccupancy)):
         ii = celldata_indofoccupancy[i]
-        
-        if (ii > len(factor1) - 1 or ii < 0):
+
+        if ii > len(factor1) - 1 or ii < 0:
             numoutsidetracking += 1
             continue
-        
-        if (binnedAs[ii] < 0 or binnedAs[ii] > len(cA) - 1 or binnedBs[ii] < 0 or binnedBs[ii] > len(cB) - 1):
+
+        if binnedAs[ii] < 0 or binnedAs[ii] > len(cA) - 1 or binnedBs[ii] < 0 or binnedBs[ii] > len(cB) - 1:
             numinemptyspot += 1
             continue
-        
+
         binnedacc[int(round(binnedAs[ii])), int(round(binnedBs[ii]))] += 1
-    
+
     if debug_mode:
-        if (numinemptyspot > 0):
+        if numinemptyspot > 0:
             print(('Spikes skipped due to empty spots in tracking or outside of range', numinemptyspot))
-        if (numoutsidetracking > 0):
+        if numoutsidetracking > 0:
             print(('Spikes skipped due to occurring before or after tracking', numoutsidetracking))
-    
+
     # convert to firing rates
     binnedacc[binnedocc > 0] = binnedacc[binnedocc > 0] / binnedocc[binnedocc > 0]
     binnedacc[binnedocc < occupancy_thresh] = 0.
     rawbinnedacc = binnedacc + 0.
-    
+
     # don't forget that angles wrap around!!!
     # add some gaussian smoothing (currently the same as for self motion maps!!!
     gaussian_smoothing_width = smoothing_par[0]
@@ -179,12 +180,12 @@ def get_2d_ratemap(factor1, factor2, bins1, bins2, tcount, cellocc_ind, frame_ra
     for x in np.arange(
             len(cA)):  # note this is a very slow and inefficient way of writing this code but it doesn't really matter
         for y in np.arange(len(cB)):
-            if (binnedocc[x, y] > float(occupancy_thresh)):
+            if binnedocc[x, y] > float(occupancy_thresh):
                 denom = 0.
                 numer = 0.
                 for xx in np.arange(len(cA)):
                     for yy in np.arange(len(cB)):
-                        if (binnedocc[xx, yy] > float(occupancy_thresh)):
+                        if binnedocc[xx, yy] > float(occupancy_thresh):
                             ddyy = yy - y  # do this because it is periodic!
                             # if(abs(ddyy)>0.5*Ngeneric2Dbins):
                             # ddyy = Ngeneric2Dbins-abs(ddyy)
@@ -192,7 +193,7 @@ def get_2d_ratemap(factor1, factor2, bins1, bins2, tcount, cellocc_ind, frame_ra
                             numer += dist * rawbinnedacc[xx, yy]
                             denom += dist
                 binnedacc[x, y] = numer / denom + 0.
-    
+
     return rawbinnedacc, binnedacc, binnedocc
 
 
@@ -219,9 +220,9 @@ def get_1d_binnocc(factors, bins, tcount, frame_rate, session_indicator=None, ga
         da_key = all_keys[k]
         da_factor = factors[da_key]
         da_bin = bins[da_key]
-        
+
         number_of_bins = len(da_bin) - 1
-        
+
         index_ok = np.where(~np.isnan(da_factor))[0]
         factor_ok = da_factor[index_ok]
         tcount_ok = tcount[index_ok]
@@ -229,9 +230,9 @@ def get_1d_binnocc(factors, bins, tcount, frame_rate, session_indicator=None, ga
             session_indok = session_indicator[index_ok]
         else:
             session_indok = np.zeros(len(tcount_ok), 'i')
-        
+
         # binnocc = np.ravel([np.sum(tcount_ok * (factor_ok > da_bin[i - 1]) * (factor_ok <= da_bin[i])) for i in range(1, len(da_bin))]) / frame_rate
-        
+
         binnocc = np.zeros(number_of_bins)
         for i in range(1, len(da_bin), 1):
             if len(np.ravel(frame_rate)) == 1:
@@ -244,17 +245,16 @@ def get_1d_binnocc(factors, bins, tcount, frame_rate, session_indicator=None, ga
                     total_mat.append(part_mat)
                 total_num = np.sum(total_mat)
                 binnocc[i - 1] = np.sum(total_num)
-            
-        
+
         smoothed_occ = np.zeros(number_of_bins)
-        if (not periodic):
+        if not periodic:
             xvar = gaussian_smoothing ** 2
             for x in np.arange(number_of_bins):
                 dist = np.exp(-0.5 * (np.arange(number_of_bins) - x) ** 2 / xvar) + 0.
                 numer = np.sum(dist * binnocc)
                 denom = np.sum(dist)
                 smoothed_occ[x] = numer / denom + 0.
-        
+
         all_binnocc[da_key] = binnocc
         all_smoothed_occ[da_key] = smoothed_occ
     return all_binnocc, all_smoothed_occ
@@ -282,52 +282,49 @@ def get_1d_ratemap(factor, bins, binnocc, cellocc_ind, gaussian_smoothing=1, deb
             return []
     numberofbins = len(bins) - 1
     celldata_indofoccupancy = cellocc_ind
-    
+
     is_outside_tracking = np.logical_or(celldata_indofoccupancy > len(factor) - 1, celldata_indofoccupancy < 0)
     celldata_inside_tracking = celldata_indofoccupancy[~is_outside_tracking]
     is_nan_tracking = np.isnan(factor[celldata_inside_tracking])
     cell_ok = celldata_inside_tracking[~is_nan_tracking]
     num_cell_ok = len(cell_ok)
-    
+
     binnacc_mat = np.zeros((num_cell_ok, numberofbins))
     for i in range(num_cell_ok):
         ifac = factor[cell_ok[i]]
         binnacc_mat[i] = np.logical_and(bins[0:numberofbins] < ifac, ifac <= bins[1:len(bins)]) * 1
-        if (np.sum(binnacc_mat[i]) > 1):
+        if np.sum(binnacc_mat[i]) > 1:
             raise Exception('crap, we have an error!!!')
-    
+
     binnacc = np.sum(binnacc_mat, 0)
-    
-    if (debug_mode):
+
+    if debug_mode:
         num_outside_tracking = np.sum(is_outside_tracking)
         num_in_empty_spot = np.sum(is_nan_tracking)
         num_outside_bound = np.sum((np.sum(binnacc_mat, 1) == 0))
-        if (num_in_empty_spot > 0):
+        if num_in_empty_spot > 0:
             print(('Spikes skipped due to empty spots in tracking', num_in_empty_spot))
-        if (num_outside_tracking > 0):
+        if num_outside_tracking > 0:
             print(('Spikes skipped due to occurring before or after tracking', num_outside_tracking))
-        if (num_outside_bound > 0):
+        if num_outside_bound > 0:
             print(('Spikes skipped due to being outside bounds of ratemap', num_outside_bound))
-    
+
     # convert to firing rates
     binnacc[binnocc > 0] = binnacc[binnocc > 0] / binnocc[binnocc > 0]
     # binnedacc[binnedocc<occupancy_thresh] = 0.
     rawbinnedacc = binnacc + 0.
-    
+
     # add some gaussian smoothing
-    
-    if (not periodic):
+
+    if not periodic:
         xvar = gaussian_smoothing ** 2
         for x in np.arange(numberofbins):
             dist = np.exp(-0.5 * (np.arange(numberofbins) - x) ** 2 / xvar) + 0.
             numer = np.sum(dist * rawbinnedacc)
             denom = np.sum(dist)
             binnacc[x] = numer / denom + 0.
-    
+
     return 0.5 * (bins[1:] + bins[:(-1)]), rawbinnedacc, binnacc
-
-
-
 
 
 def get_selfmotion_map(ixes, jyes, tcount, cellocc_ind, frame_rate, occupancy_thresh, smoothing_par,
@@ -353,7 +350,7 @@ def get_selfmotion_map(ixes, jyes, tcount, cellocc_ind, frame_rate, occupancy_th
     if isinstance(cellocc_ind, list):
         if not cellocc_ind:
             return []
-    
+
     binnedocc = np.zeros((2 * nbin_max_xval, nbin_min_yval + nbin_max_yval))
     for i in np.arange(2 * nbin_max_xval):
         icount = (ixes == i) * tcount
@@ -368,40 +365,39 @@ def get_selfmotion_map(ixes, jyes, tcount, cellocc_ind, frame_rate, occupancy_th
                     total_mat.append(part_mat)
                 total_num = np.sum(total_mat)
                 binnedocc[i, j] = np.sum(total_num)
-            
-    
+
     celldata_indofoccupancy = cellocc_ind
-    
+
     binnedacc = np.zeros((2 * nbin_max_xval, nbin_min_yval + nbin_max_yval))
     numinemptyspot = 0
     numoutsidetracking = 0
     numoutsideofbounds = 0
     for i in np.arange(len(celldata_indofoccupancy)):
         ii = celldata_indofoccupancy[i]
-        if (ii > len(ixes) - 1 or ii < 0):
+        if ii > len(ixes) - 1 or ii < 0:
             numoutsidetracking += 1
             continue
-        if (ixes[ii] < 0 or jyes[ii] < 0):
+        if ixes[ii] < 0 or jyes[ii] < 0:
             numinemptyspot += 1
             continue
-        
-        if (ixes[ii] < 2 * nbin_max_xval and jyes[ii] < nbin_min_yval + nbin_max_yval):
+
+        if ixes[ii] < 2 * nbin_max_xval and jyes[ii] < nbin_min_yval + nbin_max_yval:
             binnedacc[ixes[ii], jyes[ii]] += 1
         else:
             numoutsideofbounds += 1
-    if (debug_mode):
-        if (numinemptyspot > 0):
+    if debug_mode:
+        if numinemptyspot > 0:
             print(('Spikes skipped due to empty spots in tracking', numinemptyspot))
-        if (numoutsidetracking > 0):
+        if numoutsidetracking > 0:
             print(('Spikes skipped due to occurring before or after tracking', numoutsidetracking))
-        if (numoutsideofbounds > 0):
+        if numoutsideofbounds > 0:
             print(('Spikes skipped due to being outside bounds of ratemap', numoutsideofbounds))
-    
+
     # convert to firing rates
     binnedacc[binnedocc > 0] = binnedacc[binnedocc > 0] / binnedocc[binnedocc > 0]
     binnedacc[binnedocc < occupancy_thresh] = 0.
     rawbinnedacc = binnedacc + 0.
-    
+
     # add some gaussian smoothing
     gaussian_smoothing_width = smoothing_par[0]
     gaussian_smoothing_height = smoothing_par[1]
@@ -410,17 +406,17 @@ def get_selfmotion_map(ixes, jyes, tcount, cellocc_ind, frame_rate, occupancy_th
     for y in np.arange((
             nbin_min_yval + nbin_max_yval)):  # note this is a very slow and inefficient way of writing this code but it doesn't really matter
         for x in np.arange(2 * nbin_max_xval):
-            if (binnedocc[x, y] > float(occupancy_thresh)):
+            if binnedocc[x, y] > float(occupancy_thresh):
                 denom = 0.
                 numer = 0.
                 for yy in range((nbin_min_yval + nbin_max_yval)):
                     for xx in range(2 * nbin_max_xval):
-                        if (binnedocc[xx, yy] > float(occupancy_thresh)):
+                        if binnedocc[xx, yy] > float(occupancy_thresh):
                             dist = math.exp(-0.5 * (xx - x) ** 2 / xvar - 0.5 * (yy - y) ** 2 / yvar) + 0.
                             numer += dist * rawbinnedacc[xx, yy]
                             denom += dist
                 binnedacc[x, y] = numer / denom + 0.
-    
+
     return rawbinnedacc, binnedacc, binnedocc
 
 
@@ -457,7 +453,7 @@ def get_spatial_tuning(spatial_values, nframes, tcount, cellocc_ind, frame_rate,
     for i in np.arange(nbins):
         whiches = (spatial_values[:, 1] >= i * dY + Ymin) * (spatial_values[:, 1] < (i + 1) * dY + Ymin)
         binnedYs[whiches] = i
-    
+
     binnedocc = np.zeros((nbins, nbins))
     for i in np.arange(nbins):
         icount = (binnedXs == i) * tcount
@@ -472,37 +468,36 @@ def get_spatial_tuning(spatial_values, nframes, tcount, cellocc_ind, frame_rate,
                     total_mat.append(part_mat)
                 total_num = np.sum(total_mat)
                 binnedocc[i, j] = np.sum(total_num)
-            
-    
+
     celldata_indofoccupancy = cellocc_ind
-    
+
     binnedacc = np.zeros((nbins, nbins))
     numinemptyspot = 0
     numoutsidetracking = 0
     for i in np.arange(len(celldata_indofoccupancy)):
         ii = celldata_indofoccupancy[i]
-        
-        if (ii > nframes - 1 or ii < 0):
+
+        if ii > nframes - 1 or ii < 0:
             numoutsidetracking += 1
             continue
-        
-        if (np.isnan(spatial_values[ii, 1])):
+
+        if np.isnan(spatial_values[ii, 1]):
             numinemptyspot += 1
             continue
-        
+
         binnedacc[int(round(binnedXs[ii])), int(round(binnedYs[ii]))] += 1
-    
-    if (debug_mode):
-        if (numinemptyspot > 0):
+
+    if debug_mode:
+        if numinemptyspot > 0:
             print(('Spikes skipped due to empty spots in tracking or outside of speed range', numinemptyspot))
-        if (numoutsidetracking > 0):
+        if numoutsidetracking > 0:
             print(('Spikes skipped due to occurring before or after tracking', numoutsidetracking))
-    
+
     # convert to firing rates
     binnedacc[binnedocc > 0] = binnedacc[binnedocc > 0] / binnedocc[binnedocc > 0]
     binnedacc[binnedocc < occupancy_thresh] = 0.
     rawbinnedacc = binnedacc + 0.
-    
+
     # don't forget that angles wrap around!!!
     # add some gaussian smoothing (currently the same as for self motion maps!!!
     gaussian_smoothing_width = smoothing_par[0]
@@ -512,20 +507,20 @@ def get_spatial_tuning(spatial_values, nframes, tcount, cellocc_ind, frame_rate,
     for x in np.arange(
             nbins):  # note this is a very slow and inefficient way of writing this code but it doesn't really matter
         for y in np.arange(nbins):
-            if (binnedocc[x, y] > float(occupancy_thresh)):
+            if binnedocc[x, y] > float(occupancy_thresh):
                 denom = 0.
                 numer = 0.
                 for xx in np.arange(nbins):
                     for yy in np.arange(nbins):
-                        if (binnedocc[xx, yy] > float(occupancy_thresh)):
-                            ddyy = yy - y  ## do this because it is periodic!
-                            if (abs(ddyy) > 0.5 * nbins):
+                        if binnedocc[xx, yy] > float(occupancy_thresh):
+                            ddyy = yy - y  # do this because it is periodic!
+                            if abs(ddyy) > 0.5 * nbins:
                                 ddyy = nbins - abs(ddyy)
                             dist = math.exp(-0.5 * (xx - x) ** 2 / xvar - 0.5 * ddyy ** 2 / yvar) + 0.
                             numer += dist * rawbinnedacc[xx, yy]
                             denom += dist
                 binnedacc[x, y] = numer / denom + 0.
-    
+
     return rawbinnedacc, binnedacc, binnedocc
 
 
@@ -554,24 +549,24 @@ def get_velocity_tuning(move_angles, speeds, tcount, cellocc_ind, frame_rate,
 
 
     """
-    
+
     move_angles = move_angles + math.pi
-    
-    if (np.nanmin(move_angles) < -0.0001 or np.nanmax(move_angles) > 2. * math.pi + 0.0001):
+
+    if np.nanmin(move_angles) < -0.0001 or np.nanmax(move_angles) > 2. * math.pi + 0.0001:
         raise Exception('Shit, move_angles is not between -pi and pi, what is going on?????')
-    
+
     dspeed = float(velocity_max_speed) / float(nbin_speed - 1)
     dangle = float(2. * math.pi + 0.000001) / float(nbin_angle - 1)
     binnedspeeds = np.ones(len(move_angles)).astype(int) * -10
     binnedangles = np.ones(len(move_angles)).astype(int) * -10
-    
+
     for i in np.arange(nbin_speed):
         whiches = (speeds >= i * dspeed) * (speeds < (i + 1) * dspeed)
         binnedspeeds[whiches] = i
     for i in np.arange(nbin_angle):
         whiches = (move_angles >= i * dangle) * (move_angles < (i + 1) * dangle)
         binnedangles[whiches] = i
-    
+
     binnedocc = np.zeros((nbin_speed, nbin_angle))
     for i in np.arange(nbin_speed):
         icount = (binnedspeeds == i) * tcount
@@ -586,37 +581,36 @@ def get_velocity_tuning(move_angles, speeds, tcount, cellocc_ind, frame_rate,
                     total_mat.append(part_mat)
                 total_num = np.sum(total_mat)
                 binnedocc[i, j] = np.sum(total_num)
-            
-    
+
     celldata_indofoccupancy = cellocc_ind
-    
+
     binnedacc = np.zeros((nbin_speed, nbin_angle))
     numinemptyspot = 0
     numoutsidetracking = 0
     for i in np.arange(len(celldata_indofoccupancy)):
         ii = celldata_indofoccupancy[i]
-        
-        if (ii > len(binnedangles) - 1 or ii < 0):
+
+        if ii > len(binnedangles) - 1 or ii < 0:
             numoutsidetracking += 1
             continue
-        
-        if (binnedangles[ii] < 0 or binnedspeeds[ii] < 0):
+
+        if binnedangles[ii] < 0 or binnedspeeds[ii] < 0:
             numinemptyspot += 1
             continue
-        
+
         binnedacc[binnedspeeds[ii], binnedangles[ii]] += 1
-    
+
     if (debug_mode == True):
-        if (numinemptyspot > 0):
+        if numinemptyspot > 0:
             print(('Spikes skipped due to empty spots in tracking or outside of speed range', numinemptyspot))
-        if (numoutsidetracking > 0):
+        if numoutsidetracking > 0:
             print(('Spikes skipped due to occurring before or after tracking', numoutsidetracking))
-    
+
     # convert to firing rates
     binnedacc[binnedocc > 0] = binnedacc[binnedocc > 0] / binnedocc[binnedocc > 0]
     binnedacc[binnedocc < occupancy_thresh] = 0.
     rawbinnedacc = binnedacc + 0.
-    
+
     # don't forget that angles wrap around!!!
     # add some gaussian smoothing (currently the same as for self motion maps!!!
     gaussian_smoothing_width = smoothing_par[0]
@@ -626,20 +620,20 @@ def get_velocity_tuning(move_angles, speeds, tcount, cellocc_ind, frame_rate,
     for x in np.arange(
             nbin_speed):  # note this is a very slow and inefficient way of writing this code but it doesn't really matter
         for y in np.arange(nbin_angle):
-            if (binnedocc[x, y] > float(occupancy_thresh)):
+            if binnedocc[x, y] > float(occupancy_thresh):
                 denom = 0.
                 numer = 0.
                 for xx in np.arange(nbin_speed):
                     for yy in np.arange(nbin_angle):
-                        if (binnedocc[xx, yy] > float(occupancy_thresh)):
+                        if binnedocc[xx, yy] > float(occupancy_thresh):
                             ddyy = yy - y  # do this because it is periodic!
-                            if (abs(ddyy) > 0.5 * nbin_angle):
+                            if abs(ddyy) > 0.5 * nbin_angle:
                                 ddyy = nbin_angle - abs(ddyy)
                             dist = math.exp(-0.5 * (xx - x) ** 2 / xvar - 0.5 * ddyy ** 2 / yvar) + 0.
                             numer += dist * rawbinnedacc[xx, yy]
                             denom += dist
                 binnedacc[x, y] = numer / denom + 0.
-    
+
     return rawbinnedacc, binnedacc, binnedocc
 
 
@@ -670,9 +664,9 @@ def plot_1d_values(xvals, yvals, y2vals, occs, means, stds, occupancy_thresh_1d,
         Plots.
 
         """
-    if (len(xvals) != len(yvals)):
+    if len(xvals) != len(yvals):
         print(('should all be same', tit, len(xvals), len(yvals), len(y2vals), len(occs), len(means), len(stds)))
-    if (np.sum(~np.isnan(stds)) > 0):
+    if np.sum(~np.isnan(stds)) > 0:
         xx = xvals[~np.isnan(stds)]
         yyA = means[~np.isnan(stds)] + 2. * stds[np.isnan(stds) == False]
         yyB = means[~np.isnan(stds)] - 2. * stds[np.isnan(stds) == False]
@@ -697,7 +691,7 @@ def plot_ratemaps(ratemap_data, occupancy, occupancy_thresh, title, name):
     imshowobj.set_clim(0., max(np.ravel(ratemap_data)))
     clb.draw_all()
     plt.axis('off')
-    if (len(name) > 2):
+    if len(name) > 2:
         plt.savefig('%s.png' % name)
 
 
@@ -707,12 +701,12 @@ def calculate_skinfo_rate(darm, occ):
     AveFR = 0.
     Pocc = np.zeros(len(occ))
     for occi in range(len(occ)):
-        if (np.sum(occ) > 0.000001):
+        if np.sum(occ) > 0.000001:
             Pocc[occi] = occ[occi] / np.sum(occ) + 0.
             AveFR += (Pocc[occi]) * darm[occi]
     ICr = 0
     for occi in range(len(occ)):
-        if (darm[occi] > 0.000001):
+        if darm[occi] > 0.000001:
             ICr += ((Pocc[occi] * darm[occi]) / AveFR) * math.log2(darm[occi] / AveFR)
     return ICr
 
@@ -726,39 +720,39 @@ def re_calc_der(factors, bounds, xaxis, framerate, first_derivative_bins, second
         nvals = len(vals)
         first_der = np.zeros(nvals)
         isangle = False
-        if ('direction' in tkey or 'roll' in tkey or 'pitch' in tkey or 'azimuth' in tkey):
+        if 'direction' in tkey or 'roll' in tkey or 'pitch' in tkey or 'azimuth' in tkey:
             isangle = True
-        
+
         for t in range(nvals):
             ts = t - first_derivative_bins
             te = t + first_derivative_bins
-            if (ts < 0 or te > nvals - 1 or np.isnan(vals[ts]) or np.isnan(vals[te])):
+            if ts < 0 or te > nvals - 1 or np.isnan(vals[ts]) or np.isnan(vals[te]):
                 first_der[t] = np.nan
                 continue
             first_der[t] = vals[te] - vals[ts]
-            if (isangle):
-                if (first_der[t] > 180): first_der[t] -= 360.
-                if (first_der[t] < -180): first_der[t] += 360.
+            if isangle:
+                if first_der[t] > 180: first_der[t] -= 360.
+                if first_der[t] < -180: first_der[t] += 360.
             if len(np.ravel(framerate)) == 1:
                 first_der[t] /= (2. * first_derivative_bins / framerate)
             else:
                 first_der[t] /= (2. * first_derivative_bins / framerate[session_indicator[t]])
-        
+
         factors['%s_1st_der' % tkey] = first_der + 0.
         bounds['%s_1st_der' % tkey] = [0, 0]
-        if (isangle):
+        if isangle:
             xaxis['%s_1st_der' % tkey] = 'degrees per second'
         else:
             xaxis['%s_1st_der' % tkey] = 'cm per second'
-        
-        if ('Speeds' in tkey):
+
+        if 'Speeds' in tkey:
             continue
-        
+
         second_der = np.zeros(nvals)
         for t in range(nvals):
             ts = t - second_derivative_bins
             te = t + second_derivative_bins
-            if (ts < 0 or te > nvals - 1 or np.isnan(first_der[ts]) or np.isnan(first_der[te])):
+            if ts < 0 or te > nvals - 1 or np.isnan(first_der[ts]) or np.isnan(first_der[te]):
                 second_der[t] = np.nan
                 continue
             second_der[t] = first_der[te] - first_der[ts]
@@ -768,7 +762,7 @@ def re_calc_der(factors, bounds, xaxis, framerate, first_derivative_bins, second
                 second_der[t] /= (2. * first_derivative_bins / framerate[session_indicator[t]])
         factors['%s_2nd_der' % tkey] = second_der + 0.
         bounds['%s_2nd_der' % tkey] = [0, 0]
-        if (isangle):
+        if isangle:
             xaxis['%s_2nd_der' % tkey] = 'degrees per second squared'
         else:
             xaxis['%s_2nd_der' % tkey] = 'cm per second squared'
@@ -777,13 +771,13 @@ def re_calc_der(factors, bounds, xaxis, framerate, first_derivative_bins, second
 
 def get_time_split(data, use_even_odd_minutes=True):
     session_ts = data['session_ts']
-    if (use_even_odd_minutes):
+    if use_even_odd_minutes:
         print('calculating even odd minutes ....')
         otherbins = np.arange(session_ts[0], session_ts[1] + 60., 60)
         otherbins[otherbins > session_ts[1]] = session_ts[1]
-        if (abs(otherbins[-1] - otherbins[-2]) < 1):
+        if abs(otherbins[-1] - otherbins[-2]) < 1:
             otherbins = otherbins[:(-1)]
-        if (abs(otherbins[-1] - otherbins[-2]) < 59.99999999999999999):
+        if abs(otherbins[-1] - otherbins[-2]) < 59.99999999999999999:
             print(('FYI: one of the time chunks that should be one minute long is really just',
                    abs(otherbins[-1] - otherbins[-2]), 'seconds and is currently included in the analysis'))
         startaltbins = otherbins[:(-1)]
@@ -791,7 +785,7 @@ def get_time_split(data, use_even_odd_minutes=True):
     else:
         startaltbins = np.ravel(np.array([session_ts[0], 0.5 * (session_ts[0] + session_ts[1])]))
         endaltbins = np.ravel(np.array([0.5 * (session_ts[0] + session_ts[1]), session_ts[1]]))
-    
+
     return startaltbins, endaltbins
 
 
@@ -854,14 +848,14 @@ def prepare4ratemap(data, boundary=None, speed_type='jump',
     end_split_value = split_values[1]
 
     startaltbins, endaltbins = get_time_split(data, use_even_odd_minutes)
-    
+
     # check data
     dt_keys = (list(data.keys()))
-    if ('file_info' not in dt_keys):
+    if 'file_info' not in dt_keys:
         raise Exception('file_info is not in the data !!! Please see data_generator().')
     filename = data['file_info']
     print(('File to be working', filename))
-    
+
     settings = data['settings'].copy()
     settings['speed_filter_ind'] = speed_filter_ind
     settings['speed_filter_var'] = speed_filter_var
@@ -869,7 +863,7 @@ def prepare4ratemap(data, boundary=None, speed_type='jump',
     settings['use_even_odd_minutes'] = use_even_odd_minutes
     settings['split_data_along_an_axis'] = split_data_along_an_axis
     settings['split_values'] = split_values
-    
+
     # frame rate
     captureframerate = data['framerate']
     if len(np.ravel(captureframerate)) == 1:
@@ -880,30 +874,29 @@ def prepare4ratemap(data, boundary=None, speed_type='jump',
         frame_times = data['frame_times']
     session_ts = data['session_ts']
     tracking_ts = data['tracking_ts']
-    
+
     # update settings
     include_speed_filter = False
     include_spatial_filter = False
-    if (speed_filter_var is not None):
+    if speed_filter_var is not None:
         include_speed_filter = True
         minspeedfilt = speed_filter_var[0]
         maxspeedfilt = speed_filter_var[1]
-    if (spatial_filter_diameter is not None):
+    if spatial_filter_diameter is not None:
         include_spatial_filter = True
-    
-    if (derivatives_param is not None):
+
+    if derivatives_param is not None:
         settings['bins_der'] = derivatives_param
-        
-    
+
     # construct
-    
+
     der_param = settings['bins_der']
     num_par = len(settings['selfmotion_window_size'])
-    
-    if (speed_type == 'jump'):
+
+    if speed_type == 'jump':
         sfmat_ind = np.arange(2 * num_par)
         speed_ind = np.arange(num_par)
-    elif (speed_type == 'cum'):
+    elif speed_type == 'cum':
         sfmat_ind = np.arange(2 * num_par, 4 * num_par)
         speed_ind = np.arange(num_par, 2 * num_par)
     else:
@@ -911,7 +904,7 @@ def prepare4ratemap(data, boundary=None, speed_type='jump',
 
     # check data
     comparing = False
-    if ('cf_allo_head_ang' in dt_keys):
+    if 'cf_allo_head_ang' in dt_keys:
         print('comparison data included.')
         comparing = True
 
@@ -921,7 +914,7 @@ def prepare4ratemap(data, boundary=None, speed_type='jump',
 
     sorted_point_data = data['sorted_point_data'].copy()
     animal_loc = sorted_point_data[:, 4, :]  # neck point
-    
+
     # construct processing data
     temp_data = {}
     temp_data['allo_head_rotm'] = data['global_head_rot_mat'].copy()
@@ -943,14 +936,12 @@ def prepare4ratemap(data, boundary=None, speed_type='jump',
     dxs = selfmotiion_mat[:, 0: 2 * num_par: 2]
     dys = selfmotiion_mat[:, 1: 2 * num_par: 2]
     speeds = speeds_mat
-    
-    
+
     main_key = temp_data.keys()
     n_main_key = len(main_key)
     main_key_ind = np.arange(n_main_key)
 
-
-    if (comparing):
+    if comparing:
         cf_bbscale_xy = data['bbscale_xy'].copy()
         cf_bbtrans_xy = data['bbtrans_xy'].copy()
 
@@ -982,7 +973,6 @@ def prepare4ratemap(data, boundary=None, speed_type='jump',
     cf_key_ind = np.arange(n_cf_key) + n_main_key
     cf_key = [all_key_list[ind] for ind in cf_key_ind]
 
-
     for i in range(num_par):
         print((
             'To get all the values of the movement vectors for window size %d, you would need a min/max horizontal value of %f %f and a min vertical value of %f and a max of %f' % (
@@ -990,34 +980,32 @@ def prepare4ratemap(data, boundary=None, speed_type='jump',
                 np.nanmin(dys[:, i]), np.nanmax(dys[:, i])), 'for the second'))
     # dxs, dys, speeds = get_sf_var(temp_data, speed_type)
 
-    if (isinstance(settings['selfmotion_window_size'], int)):
-        if (speed_filter_ind != settings['selfmotion_window_size']):
+    if isinstance(settings['selfmotion_window_size'], int):
+        if speed_filter_ind != settings['selfmotion_window_size']:
             print('Possible value for speed_filter_ind is', settings['selfmotion_window_size'], ', set to',
                   settings['selfmotion_window_size'], '.')
         speeds2 = speeds
-        if(comparing):
+        if comparing:
             cf_speeds2 = cf_speeds
     else:
-        if (speed_filter_ind not in settings['selfmotion_window_size']):
+        if speed_filter_ind not in settings['selfmotion_window_size']:
             print('Possible values for speed_filter_ind are', settings['selfmotion_window_size'], ', set to',
                   settings['selfmotion_window_size'][-1], '.')
             speed_filter_ind = settings['selfmotion_window_size'][-1]
         ind4speed = [ind for ind in range(len(settings['selfmotion_window_size'])) if
                      speed_filter_ind == settings['selfmotion_window_size'][ind]][0]
         speeds2 = speeds[:, ind4speed]
-        if (comparing):
+        if comparing:
             cf_speeds2 = cf_speeds[:, ind4speed]
-    
-    
-    
+
     # start spatial filtering
-    if (include_spatial_filter):
+    if include_spatial_filter:
         print('processing spatial fitering ....')
         rad_squared = (spatial_filter_diameter / 2.) ** 2
         dd = (animal_loc[:, 0] - bbtrans_xy[0]) ** 2 + (animal_loc[:, 1] - bbtrans_xy[1]) ** 2
         beyond_radius = dd > rad_squared
         numbef = np.sum(~np.isnan(animal_loc[:, 0]))
-        if (np.sum(beyond_radius) > 0):
+        if np.sum(beyond_radius) > 0:
             whiches = beyond_radius
             animal_loc[whiches] = np.nan
             dxs[whiches] = np.nan
@@ -1025,13 +1013,13 @@ def prepare4ratemap(data, boundary=None, speed_type='jump',
             speeds[whiches] = np.nan
             speeds2[whiches] = np.nan
             for da_key in main_key:
-                    temp_data[da_key][whiches] = np.nan
-                
-        if(comparing):
+                temp_data[da_key][whiches] = np.nan
+
+        if comparing:
             cf_dd = (cf_animal_loc[:, 0] - cf_bbtrans_xy[0]) ** 2 + (cf_animal_loc[:, 1] - cf_bbtrans_xy[1]) ** 2
             cf_beyond_radius = cf_dd > rad_squared
             cf_numbef = np.sum(~np.isnan(cf_animal_loc[:, 0]))
-            if (np.sum(cf_beyond_radius) > 0):
+            if np.sum(cf_beyond_radius) > 0:
                 whiches = cf_beyond_radius
                 cf_animal_loc[whiches] = np.nan
                 cf_dxs[whiches] = np.nan
@@ -1040,7 +1028,7 @@ def prepare4ratemap(data, boundary=None, speed_type='jump',
                 cf_speeds2[whiches] = np.nan
                 for da_key in cf_key:
                     temp_data[da_key][whiches] = np.nan
-        
+
         numnow = np.sum(~np.isnan(animal_loc[:, 0]))
         print(('After filtering, the remaining tracked data is (for the neck point)', numnow, 'which is',
                100. * numnow / float(len(animal_loc[:, 0])), 'percent of the total data length'))
@@ -1049,11 +1037,11 @@ def prepare4ratemap(data, boundary=None, speed_type='jump',
         print(('After filtering, the remaining tracked data is (for the neck point)', numnow, 'which is',
                100. * numnow / float(len(cf_animal_loc[:, 0])), 'percent of the total data length'))
     # start speed filtering
-    if (include_speed_filter):
+    if include_speed_filter:
         print('processing speed filter ....')
         below_thresh = speeds2 < minspeedfilt
         above_thresh = speeds2 > maxspeedfilt
-        if (np.sum(below_thresh) > 0):
+        if np.sum(below_thresh) > 0:
             whiches = below_thresh
             animal_loc[whiches] = np.nan
             dxs[whiches] = np.nan
@@ -1062,8 +1050,8 @@ def prepare4ratemap(data, boundary=None, speed_type='jump',
             speeds2[whiches] = np.nan
             for da_key in main_key:
                 temp_data[da_key][whiches] = np.nan
-        
-        if (np.sum(above_thresh) > 0):
+
+        if np.sum(above_thresh) > 0:
             whiches = above_thresh
             animal_loc[whiches] = np.nan
             dxs[whiches] = np.nan
@@ -1072,12 +1060,12 @@ def prepare4ratemap(data, boundary=None, speed_type='jump',
             speeds2[whiches] = np.nan
             for da_key in main_key:
                 temp_data[da_key][whiches] = np.nan
-                
-        if(comparing):
+
+        if comparing:
             print('processing comparing speed filter ....')
             below_thresh = cf_speeds2 < minspeedfilt
             above_thresh = cf_speeds2 > maxspeedfilt
-            if (np.sum(below_thresh) > 0):
+            if np.sum(below_thresh) > 0:
                 whiches = below_thresh
                 cf_animal_loc[whiches] = np.nan
                 cf_dxs[whiches] = np.nan
@@ -1086,8 +1074,8 @@ def prepare4ratemap(data, boundary=None, speed_type='jump',
                 cf_speeds2[whiches] = np.nan
                 for da_key in cf_key:
                     temp_data[da_key][whiches] = np.nan
-    
-            if (np.sum(above_thresh) > 0):
+
+            if np.sum(above_thresh) > 0:
                 whiches = above_thresh
                 cf_animal_loc[whiches] = np.nan
                 cf_dxs[whiches] = np.nan
@@ -1096,7 +1084,7 @@ def prepare4ratemap(data, boundary=None, speed_type='jump',
                 cf_speeds2[whiches] = np.nan
                 for da_key in cf_key:
                     temp_data[da_key][whiches] = np.nan
-    
+
     factor1d = {}
     factor1d['B Speeds'] = speeds2
     factor1d['C Body_direction'] = temp_data['body_direction']
@@ -1104,7 +1092,7 @@ def prepare4ratemap(data, boundary=None, speed_type='jump',
     # factor1d['E Allo_head_pitch'] = data['allo_head_ang'][:,1]
     # factor1d['F Allo_head_roll'] = data['allo_head_ang'][:,0]
     factor1d['G Neck_elevation'] = animal_loc[:, 2] * 100
-    
+
     factor1d['K Ego3_Head_roll'] = temp_data['ego3_head_ang'][:, 0]
     factor1d['L Ego3_Head_pitch'] = temp_data['ego3_head_ang'][:, 1]
     factor1d['M Ego3_Head_azimuth'] = temp_data['ego3_head_ang'][:, 2]
@@ -1113,43 +1101,21 @@ def prepare4ratemap(data, boundary=None, speed_type='jump',
     factor1d['P Ego2_head_roll'] = temp_data['ego2_head_ang'][:, 0]
     factor1d['Q Ego2_head_pitch'] = temp_data['ego2_head_ang'][:, 1]
     factor1d['R Ego2_head_azimuth'] = temp_data['ego2_head_ang'][:, 2]
-    
+
     # all the bounds
-    bounds1d = {}  # zeros mean optimize it for me!! So it is min, max, periodic (True or False)
-    bounds1d['B Speeds'] = [0, 0, False]
-    bounds1d['C Body_direction'] = [-180, 180, True]
-    bounds1d['D Allo_head_direction'] = [-180, 180, True]
-    
-    bounds1d['G Neck_elevation'] = [0, 0, True]
-    
-    bounds1d['K Ego3_Head_roll'] = [-180, 180, True]
-    bounds1d['L Ego3_Head_pitch'] = [-180, 180, True]
-    bounds1d['M Ego3_Head_azimuth'] = [-180, 180, True]
-    bounds1d['N Back_pitch'] = [-60, 60, True]
-    bounds1d['O Back_azimuth'] = [-60, 60, True]
-    bounds1d['P Ego2_head_roll'] = [-180, 180, True]
-    bounds1d['Q Ego2_head_pitch'] = [-180, 180, True]
-    bounds1d['R Ego2_head_azimuth'] = [-180, 180, True]
-    
-    xaxis1d = {}
-    xaxis1d['B Speeds'] = 'cm per second'
-    xaxis1d['C Body_direction'] = 'angles'
-    xaxis1d['D Allo_head_direction'] = 'angles'
+    bounds1d = {'B Speeds': [0, 0, False], 'C Body_direction': [-180, 180, True], 'D Allo_head_direction': [-180, 180, True], 'G Neck_elevation': [0, 0, True], 'K Ego3_Head_roll': [-180, 180, True],
+                'L Ego3_Head_pitch': [-180, 180, True], 'M Ego3_Head_azimuth': [-180, 180, True], 'N Back_pitch': [-60, 60, True], 'O Back_azimuth': [-60, 60, True],
+                'P Ego2_head_roll': [-180, 180, True], 'Q Ego2_head_pitch': [-180, 180, True],
+                'R Ego2_head_azimuth': [-180, 180, True]}  # zeros mean optimize it for me!! So it is min, max, periodic (True or False)
+
+    xaxis1d = {'B Speeds': 'cm per second', 'C Body_direction': 'angles', 'D Allo_head_direction': 'angles', 'G Neck_elevation': 'cm', 'K Ego3_Head_roll': 'ccw --- angles --- cw',
+               'L Ego3_Head_pitch': 'down --- angles --- up', 'M Ego3_Head_azimuth': 'left --- angles --- right', 'N Back_pitch': 'down --- angles --- up',
+               'O Back_azimuth': 'left --- angles --- right', 'P Ego2_head_roll': 'ccw --- angles --- cw', 'Q Ego2_head_pitch': 'down --- angles --- up',
+               'R Ego2_head_azimuth': 'left --- angles --- right'}
     # xaxis1d['E Allo_head_pitch'] = 'angles'
     # xaxis1d['F Allo_head_roll'] = 'ccw --- angles --- cw'
-    xaxis1d['G Neck_elevation'] = 'cm'
-    
-    xaxis1d['K Ego3_Head_roll'] = 'ccw --- angles --- cw'
-    xaxis1d['L Ego3_Head_pitch'] = 'down --- angles --- up'
-    xaxis1d['M Ego3_Head_azimuth'] = 'left --- angles --- right'
-    xaxis1d['N Back_pitch'] = 'down --- angles --- up'
-    xaxis1d['O Back_azimuth'] = 'left --- angles --- right'
-    xaxis1d['P Ego2_head_roll'] = 'ccw --- angles --- cw'
-    xaxis1d['Q Ego2_head_pitch'] = 'down --- angles --- up'
-    xaxis1d['R Ego2_head_azimuth'] = 'left --- angles --- right'
-    
-    
-    if (comparing):
+
+    if comparing:
         factor1d_cf = factor1d.copy()
         factor1d_cf['B Speeds'] = cf_speeds2
         factor1d_cf['C Body_direction'] = temp_data['cf_body_direction']
@@ -1163,67 +1129,67 @@ def prepare4ratemap(data, boundary=None, speed_type='jump',
         factor1d_cf['P Ego2_head_roll'] = temp_data['cf_ego2_head_ang'][:, 0]
         factor1d_cf['Q Ego2_head_pitch'] = temp_data['cf_ego2_head_ang'][:, 1]
         factor1d_cf['R Ego2_head_azimuth'] = temp_data['cf_ego2_head_ang'][:, 2]
-        
+
         bounds1d_cf = bounds1d.copy()
         xaxis1d_cf = xaxis1d.copy()
 
     print('calculating derivatives ...')
     factor1d, bounds1d, xaxis1d = re_calc_der(factor1d, bounds1d, xaxis1d, captureframerate, der_param[0], der_param[1], session_indicator)
-    
-    if (comparing):
+
+    if comparing:
         print('calculating derivatives for comparing data ...')
         factor1d_cf, bounds1d_cf, xaxis1d_cf = re_calc_der(factor1d_cf, bounds1d_cf, xaxis1d_cf,
                                                            captureframerate, der_param[0], der_param[1], session_indicator)
-    
-    if (boundary is not None):
+
+    if boundary is not None:
         mkeys = boundary.keys()
         bkeys = bounds1d.keys()
         for dm_key in mkeys:
             if (dm_key in bkeys):
                 bounds1d[dm_key] = boundary[dm_key]
-        
-        if(comparing):
+
+        if comparing:
             bkeys = bounds1d_cf.keys()
             for dm_key in mkeys:
                 if (dm_key in bkeys):
                     bounds1d_cf[dm_key] = boundary[dm_key]
-    
+
     # start split axis
-    if (len(split_data_along_an_axis) > 1):
+    if len(split_data_along_an_axis) > 1:
         print('processing split ...')
-        
+
         def greaterthanignorenan(x, value):
             notnans = ~np.isnan(x)
             whiches = np.zeros(len(x), dtype=bool)
             whiches[notnans] = x[notnans] > value
             return whiches
-        
+
         def lessthanignorenan(x, value):
             notnans = ~np.isnan(x)
             whiches = np.zeros(len(x), dtype=bool)
             whiches[notnans] = x[notnans] < value
             return whiches
-        
+
         split_val = factor1d[split_data_along_an_axis]
         gt = greaterthanignorenan(split_val, end_split_value)
         lt = lessthanignorenan(split_val, start_split_value)
         whiches = (gt + lt) > 0.5
         print('Num combined is', np.sum((split_val < start_split_value) + (split_val > end_split_value)))
         print('Num to remove then is', np.sum(whiches), 'since the total is', len(whiches))
-        if (np.sum(whiches) > 0):
+        if np.sum(whiches) > 0:
             all_keys = list(factor1d.keys())
             for da_key in all_keys:
                 vals = factor1d[da_key]
                 sh = np.shape(vals)
                 print(da_key, sh, len(sh), 'CHECK THIS YOU IDIOT!!!')
-                if (len(sh) == 1):
+                if len(sh) == 1:
                     vals[whiches] = np.nan
-                if (len(sh) == 2):
+                if len(sh) == 2:
                     vals[whiches, :] = np.nan
-                if (len(sh) == 3):
+                if len(sh) == 3:
                     vals[whiches, :, :] = np.nan
                 factor1d[da_key] = vals
-        
+
         animal_loc[whiches] = np.nan
         dxs[whiches] = np.nan
         dys[whiches] = np.nan
@@ -1237,17 +1203,17 @@ def prepare4ratemap(data, boundary=None, speed_type='jump',
         whiches = (gt + lt) > 0.5
         print('Num combined is', np.sum((split_val < start_split_value) + (split_val > end_split_value)))
         print('Num to remove then is', np.sum(whiches), 'since the total is', len(whiches))
-        if (np.sum(whiches) > 0):
+        if np.sum(whiches) > 0:
             all_keys = list(factor1d_cf.keys())
             for da_key in all_keys:
                 vals = factor1d_cf[da_key]
                 sh = np.shape(vals)
                 print(da_key, sh, len(sh), 'CHECK THIS YOU IDIOT!!!')
-                if (len(sh) == 1):
+                if len(sh) == 1:
                     vals[whiches] = np.nan
-                if (len(sh) == 2):
+                if len(sh) == 2:
                     vals[whiches, :] = np.nan
-                if (len(sh) == 3):
+                if len(sh) == 3:
                     vals[whiches, :, :] = np.nan
                 factor1d_cf[da_key] = vals
 
@@ -1257,7 +1223,7 @@ def prepare4ratemap(data, boundary=None, speed_type='jump',
         cf_speeds[whiches] = np.nan
         for da_key in cf_key:
             temp_data[da_key][whiches] = np.nan
-    
+
     # get super bounds!!!
     def getbinswithenoughineach(values, minval, maxval, num_bins_1d, frame_rate, session_ind):
         bins = np.linspace(minval, maxval, num_bins_1d + 1)
@@ -1279,9 +1245,9 @@ def prepare4ratemap(data, boundary=None, speed_type='jump',
                     total_mat.append(part_mat)
                 total_num = np.sum(total_mat)
                 occupancy[i - 1] = total_num
-                
+
         return bins, occupancy
-    
+
     def get_super_bounds(factors, bounds, num_bins_1d, captureframerate, occupancy_thresh_1d, session_ind):
         all_da_bins = {}
         all_keys = list(factors.keys())
@@ -1289,82 +1255,63 @@ def prepare4ratemap(data, boundary=None, speed_type='jump',
             da_key = all_keys[i]
             values = factors[da_key]  # values
             ips = bounds[da_key]  # bound
-            
+
             minval = ips[0]  # lower limit of the bound
             maxval = ips[1]  # upper limit of the bound
-            if (abs(minval) < 0.00001 and abs(maxval) < 0.00001):
+            if abs(minval) < 0.00001 and abs(maxval) < 0.00001:
                 minval = np.nanmin(values)
                 maxval = np.nanmax(values)
                 for j in range(10000):
                     bins, occ = getbinswithenoughineach(values, minval, maxval, num_bins_1d, captureframerate, session_ind)
                     goodtogo = True
-                    if (occ[0] < occupancy_thresh_1d):
+                    if occ[0] < occupancy_thresh_1d:
                         minval = minval + 0.05 * (bins[1] - bins[0])
                         goodtogo = False
-                    if (occ[-1] < occupancy_thresh_1d):
+                    if occ[-1] < occupancy_thresh_1d:
                         maxval = maxval - 0.05 * (bins[-1] - bins[-2])
                         goodtogo = False
-                    if (goodtogo == True):
+                    if goodtogo == True:
                         break
-                    if (goodtogo == False and j > 9999):
+                    if goodtogo == False and j > 9999:
                         for k in range(10):
                             print(('SHIT! Could not find good bounds for the variable!!', da_key))
-            
+
             bins, occ = getbinswithenoughineach(values, minval, maxval, num_bins_1d, captureframerate, session_ind)
             all_da_bins[da_key] = bins + 0.
             bounds[da_key][0] = bins[0]
             bounds[da_key][1] = bins[-1]
         return all_da_bins, bounds
-    
+
     print('getting super bounds ...')
     bins1d, bounds1d = get_super_bounds(factor1d, bounds1d, num_bins_1d, captureframerate, occupancy_thresh_1d, session_indicator)
-    if (comparing):
+    if comparing:
         print('getting super bounds for comparing data ...')
         bins1d_cf, bounds1d_cf = get_super_bounds(factor1d_cf, bounds1d_cf, num_bins_1d, captureframerate, occupancy_thresh_1d, session_indicator)
-    
+
     # making output file name
     output_file_prefix = '%s_1D2D' % (filename)
-    
-    if (use_even_odd_minutes):
+
+    if use_even_odd_minutes:
         output_file_prefix = '%s_evenodd' % output_file_prefix
     else:
         output_file_prefix = '%s_firstsecondhalves' % output_file_prefix
-    if (include_speed_filter):
+    if include_speed_filter:
         output_file_prefix = '%s_speedfiltered_from_%05d_to_%05d' % (output_file_prefix, minspeedfilt, maxspeedfilt)
-    if (include_spatial_filter):
+    if include_spatial_filter:
         output_file_prefix = '%s_spatfilt' % output_file_prefix
-    if (len(split_data_along_an_axis) > 1):
+    if len(split_data_along_an_axis) > 1:
         output_file_prefix = '%s_%s_filtered_from_%09d_to_%09d' % (
             output_file_prefix, split_data_along_an_axis[2:], int(round(1000. * start_split_value)),
             int(round(1000. * end_split_value)))
-    
+
     output_file_prefix = '%s_rotatedback' % output_file_prefix
-    
-    mat_data = {}
-    mat_data['full_tracking_ts'] = None
-    mat_data['session_indicator'] = session_indicator
-    mat_data['frame_times'] = frame_times
-    mat_data['settings'] = settings
-    mat_data['framerate'] = captureframerate
-    mat_data['session_ts'] = session_ts
-    mat_data['tracking_ts'] = tracking_ts
-    mat_data['output_file_prefix'] = output_file_prefix
-    mat_data['cell_names'] = data['cell_names']
-    mat_data['cell_activities'] = data['cell_activities']
-    mat_data['startaltbins'] = startaltbins
-    mat_data['endaltbins'] = endaltbins
-    
-    mat_data['bbscale_xy'] = bbscale_xy
-    mat_data['bbtrans_xy'] = bbtrans_xy
-    mat_data['dxs'] = dxs
-    mat_data['dys'] = dys
-    mat_data['speeds'] = speeds
-    mat_data['animal_location'] = animal_loc
-    mat_data['possiblecovariates'] = factor1d
-    mat_data['possiblecovariatesnames'] = xaxis1d
-    mat_data['possiblecovariatesbounds'] = bounds1d
-    mat_data['possiblecovariatesbins'] = bins1d
-    if (comparing):
+
+    mat_data = {'full_tracking_ts': None, 'session_indicator': session_indicator, 'frame_times': frame_times, 'settings': settings, 'framerate': captureframerate, 'session_ts': session_ts,
+                'tracking_ts': tracking_ts, 'output_file_prefix': output_file_prefix, 'cell_names': data['cell_names'], 'cell_activities': data['cell_activities'], 'startaltbins': startaltbins,
+                'endaltbins': endaltbins, 'bbscale_xy': bbscale_xy, 'bbtrans_xy': bbtrans_xy, 'dxs': dxs, 'dys': dys, 'speeds': speeds, 'animal_location': animal_loc, 'possiblecovariates': factor1d,
+                'possiblecovariatesnames': xaxis1d, 'possiblecovariatesbounds': bounds1d, 'possiblecovariatesbins': bins1d}
+
+    if comparing:
         mat_data['cf_bbscale_xy'] = cf_bbscale_xy
         mat_data['cf_bbtrans_xy'] = cf_bbtrans_xy
         mat_data['cf_dxs'] = cf_dxs
@@ -1375,8 +1322,8 @@ def prepare4ratemap(data, boundary=None, speed_type='jump',
         mat_data['cf_possiblecovariatesnames'] = xaxis1d_cf
         mat_data['cf_possiblecovariatesbounds'] = bounds1d_cf
         mat_data['cf_possiblecovariatesbins'] = bins1d_cf
-    
-    if (save_data):
+
+    if save_data:
         # scipy.io.savemat('ok4rms_%s.mat' % output_file_prefix, mat_data)
         a_file = open('ok4rms_%s.pkl' % output_file_prefix, "wb")
         pickle.dump(mat_data, a_file)
@@ -1385,63 +1332,44 @@ def prepare4ratemap(data, boundary=None, speed_type='jump',
 
 
 def get_2d_tasks(include_derivatives=True, printout=False):
-    stuff2d = {}
-    stuff2d['A Ego2_H_pitch_and_Ego3_H_pitch'] = ['Q Ego2_head_pitch', 'L Ego3_Head_pitch']
-    stuff2d['B Ego2_H_roll_and_Ego3_H_roll'] = ['P Ego2_head_roll', 'K Ego3_Head_roll']
-    stuff2d['C Ego2_H_azimuth_and_Ego3_H_azimuth'] = ['R Ego2_head_azimuth', 'M Ego3_Head_azimuth']
-    
-    stuff2d['D Ego2_H_pitch_and_allo_HD'] = ['Q Ego2_head_pitch', 'D Allo_head_direction']
-    stuff2d['E Ego2_H_pitch_and_neck_elevation'] = ['Q Ego2_head_pitch', 'G Neck_elevation']
-    
-    stuff2d['E Ego2_H_pitch_and_Ego2_H_azimuth'] = ['Q Ego2_head_pitch', 'R Ego2_head_azimuth']
-    stuff2d['E Ego2_H_pitch_and_Ego2_H_roll'] = ['Q Ego2_head_pitch', 'P Ego2_head_roll']
-    stuff2d['F Ego2_H_azimuth_and_Ego2_H_roll'] = ['R Ego2_head_azimuth', 'P Ego2_head_roll']
-    
-    stuff2d['G Ego3_H_pitch_and_neck_elevation'] = ['L Ego3_Head_pitch', 'G Neck_elevation']
-    stuff2d['G Ego3_H_pitch_and_Ego3_H_roll'] = ['L Ego3_Head_pitch', 'K Ego3_Head_roll']
-    stuff2d['G Ego3_H_pitch_and_Ego3_H_azimuth'] = ['L Ego3_Head_pitch', 'M Ego3_Head_azimuth']
-    stuff2d['H Ego3_H_azimuth_and_Ego3_H_roll'] = ['M Ego3_Head_azimuth', 'K Ego3_Head_roll']
-    
-    stuff2d['J Ego3_H_roll_and_B_azimuth'] = ['K Ego3_Head_roll', 'O Back_azimuth']
-    
-    stuff2d['P Speeds_and_Ego2_H_pitch'] = ['B Speeds', 'Q Ego2_head_pitch']
-    stuff2d['Q Speeds_and_Ego3_H_pitch'] = ['B Speeds', 'L Ego3_Head_pitch']
-    stuff2d['R Speeds_and_Ego3_H_azimuth'] = ['B Speeds', 'M Ego3_Head_azimuth']
-    stuff2d['S Speeds_and_Ego3_H_roll'] = ['B Speeds', 'K Ego3_Head_roll']
-    
-    stuff2d['U B_pitch_and_B_direction'] = ['N Back_pitch', 'C Body_direction']
-    stuff2d['V B_pitch_and_Ego2_H_pitch'] = ['N Back_pitch', 'Q Ego2_head_pitch']
-    stuff2d['W B_pitch_and_Ego3_H_pitch'] = ['N Back_pitch', 'L Ego3_Head_pitch']
-    stuff2d['X B_pitch_and_Ego3_H_azimuth'] = ['N Back_pitch', 'M Ego3_Head_azimuth']
-    stuff2d['Y B_pitch_and_Ego3_H_roll'] = ['N Back_pitch', 'K Ego3_Head_roll']
-    stuff2d['Z B_pitch_and_B_azimuth'] = ['N Back_pitch', 'O Back_azimuth']
+    stuff2d = {'A Ego2_H_pitch_and_Ego3_H_pitch': ['Q Ego2_head_pitch', 'L Ego3_Head_pitch'], 'B Ego2_H_roll_and_Ego3_H_roll': ['P Ego2_head_roll', 'K Ego3_Head_roll'],
+               'C Ego2_H_azimuth_and_Ego3_H_azimuth': ['R Ego2_head_azimuth', 'M Ego3_Head_azimuth'], 'D Ego2_H_pitch_and_allo_HD': ['Q Ego2_head_pitch', 'D Allo_head_direction'],
+               'E Ego2_H_pitch_and_neck_elevation': ['Q Ego2_head_pitch', 'G Neck_elevation'], 'E Ego2_H_pitch_and_Ego2_H_azimuth': ['Q Ego2_head_pitch', 'R Ego2_head_azimuth'],
+               'E Ego2_H_pitch_and_Ego2_H_roll': ['Q Ego2_head_pitch', 'P Ego2_head_roll'], 'F Ego2_H_azimuth_and_Ego2_H_roll': ['R Ego2_head_azimuth', 'P Ego2_head_roll'],
+               'G Ego3_H_pitch_and_neck_elevation': ['L Ego3_Head_pitch', 'G Neck_elevation'], 'G Ego3_H_pitch_and_Ego3_H_roll': ['L Ego3_Head_pitch', 'K Ego3_Head_roll'],
+               'G Ego3_H_pitch_and_Ego3_H_azimuth': ['L Ego3_Head_pitch', 'M Ego3_Head_azimuth'], 'H Ego3_H_azimuth_and_Ego3_H_roll': ['M Ego3_Head_azimuth', 'K Ego3_Head_roll'],
+               'J Ego3_H_roll_and_B_azimuth': ['K Ego3_Head_roll', 'O Back_azimuth'], 'P Speeds_and_Ego2_H_pitch': ['B Speeds', 'Q Ego2_head_pitch'],
+               'Q Speeds_and_Ego3_H_pitch': ['B Speeds', 'L Ego3_Head_pitch'], 'R Speeds_and_Ego3_H_azimuth': ['B Speeds', 'M Ego3_Head_azimuth'],
+               'S Speeds_and_Ego3_H_roll': ['B Speeds', 'K Ego3_Head_roll'], 'U B_pitch_and_B_direction': ['N Back_pitch', 'C Body_direction'],
+               'V B_pitch_and_Ego2_H_pitch': ['N Back_pitch', 'Q Ego2_head_pitch'], 'W B_pitch_and_Ego3_H_pitch': ['N Back_pitch', 'L Ego3_Head_pitch'],
+               'X B_pitch_and_Ego3_H_azimuth': ['N Back_pitch', 'M Ego3_Head_azimuth'], 'Y B_pitch_and_Ego3_H_roll': ['N Back_pitch', 'K Ego3_Head_roll'],
+               'Z B_pitch_and_B_azimuth': ['N Back_pitch', 'O Back_azimuth']}
+
     # allda2Dstuff['R Allo_H_roll_and_neck_elevation'] = ['F Allo_head_roll', 'G Neck_elevation']
     # allda2Dstuff['S Allo_H_roll_and_H_roll'] = ['F Allo_head_roll', 'K Head_roll']
 
-    if(include_derivatives):
+    if include_derivatives:
         stuff2d['L Ego3_H_pitch_and_Allo_HD_1st_der'] = ['L Ego3_Head_pitch', 'D Allo_head_direction_1st_der']
         stuff2d['M Speeds_and_Allo_HD_1st_der'] = ['B Speeds', 'D Allo_head_direction_1st_der']
         stuff2d['N Speeds_and_BD_1st_der'] = ['B Speeds', 'C Body_direction_1st_der']
         stuff2d['T B_pitch_and_Allo_HD_1st_der'] = ['N Back_pitch', 'D Allo_head_direction_1st_der']
-    
-    if(printout):
+
+    if printout:
         for dakey in stuff2d.keys():
             print(dakey)
-    
+
     return stuff2d
-
-
 
 
 def ratemap_generator(data, comparing=False, cell_index=(10, 11), tempoffsets=0,
                       nshuffles=1000, shuffle_offset=(15, 60),
-                      include_selfmotion=True, selfmotion_lims=(0,40,-5,80), selfmotion_bin_size=3,
+                      include_selfmotion=True, selfmotion_lims=(0, 40, -5, 80), selfmotion_bin_size=3,
                       include_derivatives=True, include_spatial_maps=True,
                       include_generic_2d_plots=True, include_velocity_plots=False,
                       comparing_task_2d=(''), comparing_task_1d=(''),
                       compare_selfmotion=True, compare_spatial_maps=True, compare_velocity=False,
-                      pl_subplot=(14,10), pl_size=(70,70),
-                      cf_subplot=(14,10), cf_size=(70,70),
+                      pl_subplot=(14, 10), pl_size=(70, 70),
+                      cf_subplot=(14, 10), cf_size=(70, 70),
                       save_1d_ratemaps=True):
     """
     Purpose
@@ -1479,9 +1407,9 @@ def ratemap_generator(data, comparing=False, cell_index=(10, 11), tempoffsets=0,
     """
     # check data
     matplotlib.use('Agg')
-    
+
     dkeys = list(data.keys())
-    
+
     settings = data['settings']
     captureframerate = data['framerate']
     if len(np.ravel(captureframerate)) == 1:
@@ -1535,12 +1463,10 @@ def ratemap_generator(data, comparing=False, cell_index=(10, 11), tempoffsets=0,
     n_frames = len(animal_loc)
     output_file_prefix = '%s_shuffling_%05d_times' % (output_file_prefix, nshuffles)
 
-    
-    
     all_1d_keys = factor1d.keys()
     if (len(comparing_task_1d) == 0):
         comparing_task_1d = all_1d_keys
-    
+
     # setup constant
     # parameters for self motion maps !!
     # selfmotion parameters
@@ -1557,47 +1483,42 @@ def ratemap_generator(data, comparing=False, cell_index=(10, 11), tempoffsets=0,
     occupancy_thresh = 400. / 1000. + 0.001  # Minimum bin occupancy (seconds), Parameters for self motion maps!!
     smoothing_par = [1.15, 1.15]  # Width and Height of Gaussian smoothing (bins), Parameters for self motion maps!!
 
-    
-    
     # Parameters for velocity map thingies!!
     velocity_max_speed = 60
     nbin_speed = 18
     nbin_angle = 20
-    
+
     # Parameters for spatial maps!!
     nbin_spatial = 30
-    
+
     # Parameters for 1D curves
     num_bins_1d = 36
     occupancy_thresh_1d = 400. / 1000. + 0.001  # Minimum bin occupancy (seconds)
-    
 
     tempoffsets = np.ravel(tempoffsets) / 1000.
-    
+
     # read input arguments
     shuffleoffsetMIN = shuffle_offset[0]  # in seconds!!
     shuffleoffsetMAX = shuffle_offset[1]  # in seconds!!
-    
-    
-    
+
     if (include_generic_2d_plots):
         stuff2d = get_2d_tasks(include_derivatives)
         all_2d_keys = stuff2d.keys()
-        
+
         if (comparing):
-            if(len(comparing_task_2d) == 0):
+            if (len(comparing_task_2d) == 0):
                 comparing_task_2d = all_2d_keys
             stuff2d_cf = {}
             for dakey in comparing_task_2d:
                 stuff2d_cf[dakey] = stuff2d[dakey]
-            
+
     ixess = nbin_max_xval + (np.floor(dxs / sizeofbins)).astype(int)
     jyess = nbin_min_yval + (np.floor(dys / sizeofbins)).astype(int)
-    
-    if(comparing):
+
+    if (comparing):
         cf_ixess = nbin_max_xval + (np.floor(cf_dxs / sizeofbins)).astype(int)
         cf_jyess = nbin_min_yval + (np.floor(cf_dys / sizeofbins)).astype(int)
-    
+
     if frame_times is None:
         all_tcount = get_tcount(n_frames, captureframerate, tracking_ts, [session_ts[0]], [session_ts[1]])
         p1_tcount = get_tcount(n_frames, captureframerate, tracking_ts, startaltbins[1::2], endaltbins[1::2])
@@ -1606,7 +1527,7 @@ def ratemap_generator(data, comparing=False, cell_index=(10, 11), tempoffsets=0,
         all_tcount = get_tcount_time(frame_times, [session_ts[0]], [session_ts[1]])
         p1_tcount = get_tcount_time(frame_times, startaltbins[1::2], endaltbins[1::2])
         p2_tcount = get_tcount_time(frame_times, startaltbins[0::2], endaltbins[0::2])
-        
+
     all_binnocc, all_smoothed_occ = get_1d_binnocc(factor1d, bins1d, all_tcount, captureframerate, session_indicator)
     p1_binnocc, p1_smoothed_occ = get_1d_binnocc(factor1d, bins1d, p1_tcount, captureframerate, session_indicator)
     p2_binnocc, p2_smoothed_occ = get_1d_binnocc(factor1d, bins1d, p2_tcount, captureframerate, session_indicator)
@@ -1614,8 +1535,7 @@ def ratemap_generator(data, comparing=False, cell_index=(10, 11), tempoffsets=0,
         cf_all_binnocc, cf_all_smoothed_occ = get_1d_binnocc(cf_factor1d, cf_bins1d, all_tcount, captureframerate, session_indicator)
         cf_p1_binnocc, cf_p1_smoothed_occ = get_1d_binnocc(cf_factor1d, cf_bins1d, p1_tcount, captureframerate, session_indicator)
         cf_p2_binnocc, cf_p2_smoothed_occ = get_1d_binnocc(cf_factor1d, cf_bins1d, p2_tcount, captureframerate, session_indicator)
-        
-    
+
     # shuffle
     def getgetget(factor, bins, occ, cellocc_ind):
         valvalval = np.zeros(num_bins_1d)
@@ -1635,10 +1555,10 @@ def ratemap_generator(data, comparing=False, cell_index=(10, 11), tempoffsets=0,
             da_key = all_keys[j]
             shuffled_values_1d_means[da_key] = np.zeros((num_bins_1d, n_cells))
             shuffled_values_1d_stds[da_key] = np.zeros((num_bins_1d, n_cells))
-        
+
         random_numbers = np.random.rand(nshuffles, n_cells)
         toff_mat = random_numbers * (shuffleoffsetMAX - shuffleoffsetMIN) + shuffleoffsetMIN
-        
+
         for cellnum in np.arange(n_cells):
             da_cell_name = cell_names[cellnum]
             da_cell_activity = cell_activities[cellnum]
@@ -1657,7 +1577,7 @@ def ratemap_generator(data, comparing=False, cell_index=(10, 11), tempoffsets=0,
             for j in np.arange(nkeys):
                 da_key = all_keys[j]
                 for k in np.arange(num_bins_1d):
-                    if (np.sum(np.isnan(vals[j, k, :]) == False) > 0):
+                    if np.sum(np.isnan(vals[j, k, :]) == False) > 0:
                         nmmm = np.nanmean(vals[j, k, :]) + 0.
                         nsss = np.nanstd(vals[j, k, :]) + 0.
                         (shuffled_values_1d_means[da_key])[k, cellnum] = nmmm
@@ -1665,42 +1585,39 @@ def ratemap_generator(data, comparing=False, cell_index=(10, 11), tempoffsets=0,
                     else:
                         (shuffled_values_1d_means[da_key])[k, cellnum] = np.nan
                         (shuffled_values_1d_stds[da_key])[k, cellnum] = np.nan
-                
+
                 ratemaps_1d_data['%s-%s-rawacc_shuffles' % (da_cell_name, (da_key)[2:])] = rawrms[j, :, :]
                 ratemaps_1d_data['%s-%s-rawocc_shuffles' % (da_cell_name, (da_key)[2:])] = occs[j, :, :]
         return ratemaps_1d_data, shuffled_values_1d_means, shuffled_values_1d_stds
-    
+
     print('doing shuffling .....')
     # cute_seed = np.random.randint(100000)
     # np.random.seed(cute_seed)
     # np.random.seed(103)
     ratemaps_1d_data, shuffled_values_1d_means, shuffled_values_1d_stds = get_shuffled_data(factor1d, bins1d, all_binnocc)
-    if (comparing):
+    if comparing:
         print('doing shuffling for comparing .....')
         # np.random.seed(cute_seed)
         # np.random.seed(103)
         cf_ratemaps_1d_data, cf_shuffled_values_1d_means, cf_shuffled_values_1d_stds = \
             get_shuffled_data(cf_factor1d, cf_bins1d, cf_all_binnocc)
 
-    
-    
-    
     # start plot
     fig_width, fig_height = np.ravel(pl_size)
     plrows, plcols = np.ravel(pl_subplot)
-    if(comparing):
+    if comparing:
         cf_plot_row, cf_plot_column = np.ravel(cf_subplot)
         cf_fig_width, cf_fig_height = np.ravel(cf_size)
-    
+
     print(('available monkeys', np.sort(list(xaxis1d.keys()))))
     # T = len(rotatedDirBacks[:, 0])
     for cellnum in np.arange(n_cells):
         da_cell_name = cell_names[cellnum]
-        if (n_cells == 1):
+        if n_cells == 1:
             print_cell = cell_index
         else:
             print_cell = cell_index[cellnum]
-        
+
         print('plotting cell %d ...' % print_cell)
         da_cell_data = cell_activities[cellnum]
         with PdfPages('%s_%04d_%s.pdf' % (output_file_prefix, print_cell, da_cell_name)) as pdf:
@@ -1717,7 +1634,7 @@ def ratemap_generator(data, comparing=False, cell_index=(10, 11), tempoffsets=0,
                 plt.clf()
                 subplot_index = 1
                 # plot 2d rate maps
-                if (include_generic_2d_plots):
+                if include_generic_2d_plots:
                     print('plotting 2D rate maps ...')
                     keys2d = list(stuff2d.keys())
                     keys2d.sort()
@@ -1737,7 +1654,7 @@ def ratemap_generator(data, comparing=False, cell_index=(10, 11), tempoffsets=0,
                         subplot_index += 1
                         tit = '%s' % (((da_2d_key)[2:]).replace('_', ' '))
                         plot_ratemaps(rawratemap, occupancy, occupancy_thresh, tit, '')
-                        
+
                         plt.subplot(plrows, plcols, subplot_index)
                         subplot_index += 1
                         tit = '    Smoothed'
@@ -1745,15 +1662,15 @@ def ratemap_generator(data, comparing=False, cell_index=(10, 11), tempoffsets=0,
                         ICr = calculate_skinfo_rate(ratemap, occupancy)
                         tit = '%s (%f)' % (tit, ICr)
                         plot_ratemaps(ratemap, occupancy, occupancy_thresh, tit, '')
-                
+
                 # plot sel motion maps
-                if (include_selfmotion):
+                if include_selfmotion:
                     print('plotting self motion maps ...')
                     for sind in range(len(data['settings']['selfmotion_window_size'])):
-                        if(len(data['settings']['selfmotion_window_size']) == 1):
+                        if len(data['settings']['selfmotion_window_size']) == 1:
                             ixess = ixess.reshape((len(ixess), 1))
                             jyess = jyess.reshape((len(jyess), 1))
-                        f_raw_rate_map1, f_rate_map1, f_occupancy1 = get_selfmotion_map(ixess[:,sind], jyess[:,sind], all_tcount,
+                        f_raw_rate_map1, f_rate_map1, f_occupancy1 = get_selfmotion_map(ixess[:, sind], jyess[:, sind], all_tcount,
                                                                                         cellocc_ind, captureframerate,
                                                                                         occupancy_thresh, smoothing_par,
                                                                                         nbin_max_xval, nbin_min_yval,
@@ -1762,16 +1679,16 @@ def ratemap_generator(data, comparing=False, cell_index=(10, 11), tempoffsets=0,
                         subplot_index += 1
                         tit = 'Unsmoothed self motion %d' % data['settings']['selfmotion_window_size'][sind]
                         plot_ratemaps(f_raw_rate_map1, f_occupancy1, occupancy_thresh, tit, '')
-                        
+
                         plt.subplot(plrows, plcols, subplot_index)
                         subplot_index += 1
                         tit = 'Smoothed'
                         ICr = calculate_skinfo_rate(f_rate_map1, f_occupancy1)
                         tit = '%s (%f)' % (tit, ICr)
                         plot_ratemaps(f_rate_map1, f_occupancy1, occupancy_thresh, tit, '')
-                    
+
                 # plot velocity tuning
-                if (include_velocity_plots):
+                if include_velocity_plots:
                     print('plotting velocity maps ...')
                     movement_body = data['possiblecovariates']['C Body_direction'] * math.pi / 180
                     speeds2 = data['possiblecovariates']['B Speeds']
@@ -1790,7 +1707,7 @@ def ratemap_generator(data, comparing=False, cell_index=(10, 11), tempoffsets=0,
                     subplot_index += 1
                     tit = 'Velocity, unsmoothed'
                     plot_ratemaps(v_raw_rate_map2, v_occupancy2, occupancy_thresh, tit, '')
-                    
+
                     plt.subplot(plrows, plcols, subplot_index)
                     subplot_index += 1
                     tit = 'Smoothed'
@@ -1798,7 +1715,7 @@ def ratemap_generator(data, comparing=False, cell_index=(10, 11), tempoffsets=0,
                     tit = '%s (%f)' % (tit, ICr)
                     plot_ratemaps(v_rate_map2, v_occupancy2, occupancy_thresh, tit, '')
                 # plot spatial maps
-                if (include_spatial_maps):
+                if include_spatial_maps:
                     print('plotting spatial maps ...')
                     p_raw_rate_map2, p_rate_map2, p_occupancy2 = get_spatial_tuning(animal_loc, n_frames, all_tcount,
                                                                                     cellocc_ind,
@@ -1809,31 +1726,31 @@ def ratemap_generator(data, comparing=False, cell_index=(10, 11), tempoffsets=0,
                     subplot_index += 1
                     tit = 'Space, unsmoothed'
                     plot_ratemaps(p_raw_rate_map2, p_occupancy2, occupancy_thresh, tit, '')
-                    
+
                     plt.subplot(plrows, plcols, subplot_index)
                     subplot_index += 1
                     tit = 'Smoothed'
                     ICr = calculate_skinfo_rate(p_rate_map2, p_occupancy2)
                     tit = '%s (%f)' % (tit, ICr)
                     plot_ratemaps(p_rate_map2, p_occupancy2, occupancy_thresh, tit, '')
-                
+
                 # start 1d plots
                 print('plotting 1D rate maps ...')
                 keys = list(factor1d.keys())
                 keys.sort()
-                
+
                 var1st = 0.0
                 var2nd = 0.0
                 var3rd = 0.0
                 var4th = 0.0
-                
+
                 name1st = ''
                 name2nd = ''
                 name3rd = ''
                 name4th = ''
-                
+
                 max_ylim = -10
-                
+
                 onedguys = []
                 axis_list = []
                 for j in range(len(keys)):
@@ -1845,10 +1762,10 @@ def ratemap_generator(data, comparing=False, cell_index=(10, 11), tempoffsets=0,
                     occ = all_binnocc[da_key]
                     smoothed_occ = all_smoothed_occ[da_key]
                     xvals, rawrm, smrm = get_1d_ratemap(factor1d[da_key], bins1d[da_key], occ, cellocc_ind)
-                    
+
                     ICr = calculate_skinfo_rate(rawrm, occ)
-                    
-                    if (ICr > var1st):
+
+                    if ICr > var1st:
                         var4th = var3rd
                         name4th = name3rd
                         var3rd = var2nd
@@ -1857,22 +1774,22 @@ def ratemap_generator(data, comparing=False, cell_index=(10, 11), tempoffsets=0,
                         name2nd = name1st
                         var1st = ICr
                         name1st = ((da_key)[2:]).replace('_', ' ')
-                    elif (ICr > var2nd):
+                    elif ICr > var2nd:
                         var4th = var3rd
                         name4th = name3rd
                         var3rd = var2nd
                         name3rd = name2nd
                         var2nd = ICr
                         name2nd = ((da_key)[2:]).replace('_', ' ')
-                    elif (ICr > var3rd):
+                    elif ICr > var3rd:
                         var4th = var3rd
                         name4th = name3rd
                         var3rd = ICr
                         name3rd = ((da_key)[2:]).replace('_', ' ')
-                    elif (ICr > var4th):
+                    elif ICr > var4th:
                         var4th = ICr
                         name4th = ((da_key)[2:]).replace('_', ' ')
-                    
+
                     tit = ((da_key)[2:]).replace('_', ' ')
                     tit = '%s (%f)' % (tit, ICr)
                     plot_1d_values(xvals, smrm, rawrm, occ, (shuffled_values_1d_means[da_key])[:, cellnum],
@@ -1894,16 +1811,16 @@ def ratemap_generator(data, comparing=False, cell_index=(10, 11), tempoffsets=0,
                              color='red')
                     plt.plot(xvals[occ_p2 > occupancy_thresh_1d], rawrm_p2[occ_p2 > occupancy_thresh_1d], '+',
                              color='red')
-                    
-                    if (max_ylim < (axis_list[j].get_ylim())[1]):
+
+                    if max_ylim < (axis_list[j].get_ylim())[1]:
                         max_ylim = (axis_list[j].get_ylim())[1]
-                    
+
                     plt.xlabel('%s' % (xaxis1d[da_key]))
                     plt.subplot(plrows, plcols, subplot_index)
                     subplot_index += 1
                     vals = factor1d[da_key]
                     plt.hist(vals[~np.isnan(vals)], 40)
-                    
+
                     # save data
                     onethingy = np.zeros((15, len(xvals)))
                     onethingy[0, :] = xvals
@@ -1926,22 +1843,22 @@ def ratemap_generator(data, comparing=False, cell_index=(10, 11), tempoffsets=0,
                 # set ylim
                 for j in range(len(onedguys)):
                     axis_list[j].set_ylim([0, max_ylim])
-                    
+
                 good_max_ylim = max_ylim
                 # fig title
                 tit = "%s : %s : %f\nTop 1D info rates from: %s, %s, %s, %s" % (
                     output_file_prefix, cell_names[cellnum], tempoffsets[i], name1st, name2nd, name3rd, name4th)
-                
+
                 plt.tight_layout(rect=[0, 0.03, 1, 0.95])
                 plt.gcf().suptitle(tit, fontsize=40)
-                if (abs(tempoffsets[i] - 0) < 0.001):
+                if abs(tempoffsets[i] - 0) < 0.001:
                     plt.savefig('%s_%04d_%s_at_zero.png' % (output_file_prefix, print_cell, cell_names[cellnum]))
-            
+
             pdf.savefig()
             plt.close()
-        
-        if (comparing):
-            
+
+        if comparing:
+
             with PdfPages('%s_%04d_%s_comparing.pdf' % (output_file_prefix, print_cell, da_cell_name)) as pdf:
                 for i in np.arange(len(tempoffsets)):
                     cellocc_ind = get_cell_occ(da_cell_data, tempoffsets[i], captureframerate, tracking_ts,
@@ -1950,12 +1867,12 @@ def ratemap_generator(data, comparing=False, cell_index=(10, 11), tempoffsets=0,
                                                   startaltbins[1::2], endaltbins[1::2], full_tracking_ts)
                     cellocc_ind_p2 = get_cell_occ(da_cell_data, tempoffsets[i], captureframerate, tracking_ts,
                                                   startaltbins[0::2], endaltbins[0::2], full_tracking_ts)
-                    
+
                     fig = plt.figure(i + 1, figsize=(cf_fig_width, cf_fig_height))
                     plt.clf()
                     subplot_index = 1
                     # plot 2d rate maps
-                    if (include_generic_2d_plots):
+                    if include_generic_2d_plots:
                         print('plotting 2D rate maps for comparing ...')
                         cf_keys2d = list(stuff2d_cf.keys())
                         cf_keys2d.sort()
@@ -1967,16 +1884,16 @@ def ratemap_generator(data, comparing=False, cell_index=(10, 11), tempoffsets=0,
                             cf_fac2 = cf_factor1d[k2d2]
                             cf_bins1 = cf_bins1d[k2d1]
                             cf_bins2 = cf_bins1d[k2d2]
-                            
+
                             fac1 = factor1d[k2d1]
                             fac2 = factor1d[k2d2]
                             bins1 = bins1d[k2d1]
                             bins2 = bins1d[k2d2]
-                            
+
                             rawratemap, ratemap, occupancy = get_2d_ratemap(fac1, fac2, bins1, bins2, all_tcount,
                                                                             cellocc_ind,
                                                                             captureframerate, occupancy_thresh,
-                                                                            smoothing_par,session_indicator)
+                                                                            smoothing_par, session_indicator)
                             cf_rawratemap, cf_ratemap, cf_occupancy = get_2d_ratemap(cf_fac1, cf_fac2, cf_bins1, cf_bins2,
                                                                                      all_tcount, cellocc_ind, captureframerate,
                                                                                      occupancy_thresh, smoothing_par, session_indicator)
@@ -1984,7 +1901,7 @@ def ratemap_generator(data, comparing=False, cell_index=(10, 11), tempoffsets=0,
                             subplot_index += 1
                             tit = '%s' % (((dacf2dkey)[2:]).replace('_', ' '))
                             plot_ratemaps(rawratemap, occupancy, occupancy_thresh, tit, '')
-                            
+
                             plt.subplot(cf_plot_row, cf_plot_column, subplot_index)
                             subplot_index += 1
                             tit = '    Smoothed'
@@ -1992,12 +1909,12 @@ def ratemap_generator(data, comparing=False, cell_index=(10, 11), tempoffsets=0,
                             ICr = calculate_skinfo_rate(ratemap, occupancy)
                             tit = '%s (%f)' % (tit, ICr)
                             plot_ratemaps(ratemap, occupancy, occupancy_thresh, tit, '')
-                            
+
                             plt.subplot(cf_plot_row, cf_plot_column, subplot_index)
                             subplot_index += 1
                             tit = 'Cf. %s' % (((dacf2dkey)[2:]).replace('_', ' '))
                             plot_ratemaps(cf_rawratemap, cf_occupancy, occupancy_thresh, tit, '')
-                            
+
                             plt.subplot(cf_plot_row, cf_plot_column, subplot_index)
                             subplot_index += 1
                             tit = '    Smoothed'
@@ -2007,10 +1924,10 @@ def ratemap_generator(data, comparing=False, cell_index=(10, 11), tempoffsets=0,
                             plot_ratemaps(cf_ratemap, cf_occupancy, occupancy_thresh, tit, '')
 
                     # plot sel motion maps
-                    if (compare_selfmotion):
+                    if compare_selfmotion:
                         print('plotting self motion maps for comparing ...')
                         for sind in range(len(data['settings']['selfmotion_window_size'])):
-                            if (len(data['settings']['selfmotion_window_size']) == 1):
+                            if len(data['settings']['selfmotion_window_size']) == 1:
                                 ixess = ixess.reshape((len(ixess), 1))
                                 jyess = jyess.reshape((len(jyess), 1))
                                 cf_ixess = cf_ixess.reshape((len(cf_ixess), 1))
@@ -2062,7 +1979,7 @@ def ratemap_generator(data, comparing=False, cell_index=(10, 11), tempoffsets=0,
                             plot_ratemaps(f_rate_map1, f_occupancy1, occupancy_thresh, tit, '')
 
                     # plot velocity tuning
-                    if (compare_velocity):
+                    if compare_velocity:
                         print('plotting velocity maps for comparing ...')
                         movement_body = data['possiblecovariates']['C Body_direction'] * math.pi / 180
                         speeds2 = data['possiblecovariates']['B Speeds']
@@ -2117,7 +2034,7 @@ def ratemap_generator(data, comparing=False, cell_index=(10, 11), tempoffsets=0,
                         tit = '%s (%f)' % (tit, ICr)
                         plot_ratemaps(v_rate_map2, v_occupancy2, occupancy_thresh, tit, '')
                     # plot spatial maps
-                    if (compare_spatial_maps):
+                    if compare_spatial_maps:
                         print('plotting spatial maps for comparing ...')
                         p_raw_rate_map2, p_rate_map2, p_occupancy2 = get_spatial_tuning(animal_loc, n_frames,
                                                                                         all_tcount,
@@ -2162,29 +2079,29 @@ def ratemap_generator(data, comparing=False, cell_index=(10, 11), tempoffsets=0,
                     print('plotting 1D rate maps for comparing ...')
                     cf_keys = list(cf_factor1d.keys())
                     cf_keys.sort()
-                    
+
                     var1st = 0.0
                     var2nd = 0.0
                     var3rd = 0.0
                     var4th = 0.0
-                    
+
                     name1st = ''
                     name2nd = ''
                     name3rd = ''
                     name4th = ''
-                    
+
                     # max_ylim = -10
                     axis_list = []
                     count_1d = 0
                     for j in range(len(cf_keys)):
                         da_key = cf_keys[j]
-                        if (da_key not in comparing_task_1d):
+                        if da_key not in comparing_task_1d:
                             continue
                         axis_list.append(plt.subplot(cf_plot_row, cf_plot_column, subplot_index))
                         subplot_index += 1
-                        
+
                         onethingy_from_previous = ratemaps_1d_data['%s-%s-data' % (cell_names[cellnum], (da_key)[2:])]
-                        
+
                         xvals = onethingy_from_previous[0, :]
                         rawrm = onethingy_from_previous[1, :]
                         occ = onethingy_from_previous[2, :]
@@ -2195,10 +2112,10 @@ def ratemap_generator(data, comparing=False, cell_index=(10, 11), tempoffsets=0,
                         rawrm_p2 = onethingy_from_previous[11, :]
                         smrm_p2 = onethingy_from_previous[12, :]
                         occ_p2 = onethingy_from_previous[13, :]
-                        
+
                         ICr = calculate_skinfo_rate(rawrm, occ)
-                        
-                        if (ICr > var1st):
+
+                        if ICr > var1st:
                             var4th = var3rd
                             name4th = name3rd
                             var3rd = var2nd
@@ -2207,22 +2124,22 @@ def ratemap_generator(data, comparing=False, cell_index=(10, 11), tempoffsets=0,
                             name2nd = name1st
                             var1st = ICr
                             name1st = ((da_key)[2:]).replace('_', ' ')
-                        elif (ICr > var2nd):
+                        elif ICr > var2nd:
                             var4th = var3rd
                             name4th = name3rd
                             var3rd = var2nd
                             name3rd = name2nd
                             var2nd = ICr
                             name2nd = ((da_key)[2:]).replace('_', ' ')
-                        elif (ICr > var3rd):
+                        elif ICr > var3rd:
                             var4th = var3rd
                             name4th = name3rd
                             var3rd = ICr
                             name3rd = ((da_key)[2:]).replace('_', ' ')
-                        elif (ICr > var4th):
+                        elif ICr > var4th:
                             var4th = ICr
                             name4th = ((da_key)[2:]).replace('_', ' ')
-                        
+
                         tit = ((da_key)[2:]).replace('_', ' ')
                         tit = '%s (%f)' % (tit, ICr)
                         plot_1d_values(xvals, smrm, rawrm, occ, (shuffled_values_1d_means[da_key])[:, cellnum],
@@ -2235,17 +2152,17 @@ def ratemap_generator(data, comparing=False, cell_index=(10, 11), tempoffsets=0,
                                  color='red')
                         plt.plot(xvals[occ_p2 > occupancy_thresh_1d], rawrm_p2[occ_p2 > occupancy_thresh_1d], '+',
                                  color='red')
-                        
+
                         # if (max_ylim < (axis_list[count_1d].get_ylim())[1]):
                         #     max_ylim = (axis_list[count_1d].get_ylim())[1]
-                        
+
                         count_1d += 1
                         plt.xlabel('%s' % (xaxis1d[da_key]))
                         plt.subplot(cf_plot_row, cf_plot_column, subplot_index)
                         subplot_index += 1
                         vals = factor1d[da_key]
                         plt.hist(vals[~np.isnan(vals)], 40)
-                        
+
                         # start with comparing 1D plot
                         axis_list.append(plt.subplot(cf_plot_row, cf_plot_column, subplot_index))
                         subplot_index += 1
@@ -2253,7 +2170,7 @@ def ratemap_generator(data, comparing=False, cell_index=(10, 11), tempoffsets=0,
                         smoothed_occ_cf = cf_all_smoothed_occ[da_key]
                         xvals_cf, rawrm_cf, smrm_cf = get_1d_ratemap(cf_factor1d[da_key], cf_bins1d[da_key],
                                                                      occ_cf, cellocc_ind)
-                        
+
                         ICr_cf = calculate_skinfo_rate(rawrm_cf, occ_cf)
                         tit = ((da_key)[2:]).replace('_', ' ')
                         tit = 'Cf. %s (%f)' % (tit, ICr_cf)
@@ -2266,7 +2183,7 @@ def ratemap_generator(data, comparing=False, cell_index=(10, 11), tempoffsets=0,
                         occ_p1_cf = cf_p1_binnocc[da_key]
                         smocc_p1_cf = cf_p1_smoothed_occ[da_key]
                         xvals_cf, rawrm_p1_cf, smrm_p1_cf = get_1d_ratemap(cf_factor1d[da_key], cf_bins1d[da_key],
-                                                                              occ_p1_cf, cellocc_ind_p1)
+                                                                           occ_p1_cf, cellocc_ind_p1)
                         plt.plot(xvals_cf[occ_p1_cf > occupancy_thresh_1d],
                                  smrm_p1_cf[occ_p1_cf > occupancy_thresh_1d], 'o', color='green')
                         plt.plot(xvals_cf[occ_p1_cf > occupancy_thresh_1d],
@@ -2282,13 +2199,13 @@ def ratemap_generator(data, comparing=False, cell_index=(10, 11), tempoffsets=0,
                         # if (max_ylim < (axis_list[count_1d].get_ylim())[1]):
                         #     max_ylim = (axis_list[count_1d].get_ylim())[1]
                         count_1d += 1
-                        
+
                         plt.xlabel('%s' % (cf_xaxis1d[da_key]))
                         plt.subplot(cf_plot_row, cf_plot_column, subplot_index)
                         subplot_index += 1
                         vals = cf_factor1d[da_key]
                         plt.hist(vals[~np.isnan(vals)], 40)
-                        
+
                         onethingy = np.zeros((15, len(xvals_cf)))
                         onethingy[0, :] = xvals_cf
                         onethingy[1, :] = rawrm_cf
@@ -2307,40 +2224,39 @@ def ratemap_generator(data, comparing=False, cell_index=(10, 11), tempoffsets=0,
                         onethingy[14, :] = smocc_p2_cf
                         cf_ratemaps_1d_data['%s-%s-data' % (cell_names[cellnum], (da_key)[2:])] = onethingy
                         cf_ratemaps_1d_data['%s-%s-ICr' % (cell_names[cellnum], (da_key)[2:])] = ICr_cf
-                    
+
                     for j in range(count_1d):
                         axis_list[j].set_ylim([0, good_max_ylim])
-                    
+
                     # print('debug')
                     tit = "%s : %s : %f\nTop 1D info rates from: %s, %s, %s, %s" % (
                         output_file_prefix, cell_names[cellnum], tempoffsets[i], name1st, name2nd, name3rd, name4th)
                     plt.tight_layout(rect=[0, 0.03, 1, 0.95])
                     plt.gcf().suptitle(tit, fontsize=40)
-                    if (abs(tempoffsets[i] - 0) < 0.001):
+                    if abs(tempoffsets[i] - 0) < 0.001:
                         plt.savefig(
                             '%s_%04d_%s_at_zero_comparing.png' % (output_file_prefix, print_cell, cell_names[cellnum]))
-                
+
                 pdf.savefig()
                 plt.close()
-    
+
     onethingy_name = ['xvals', 'raw_ratemap', 'occ', 'smoothed_ratemap',
                       'shuffled_mean', 'shuffled_std', 'smoothed_occ',
                       'rawrm_p1', 'smrm_p1', 'occ_p1', 'smocc_p1',
                       'rawrm_p2', 'smrm_p2', 'occ_p2', 'smocc_p2']
-    
-    if (save_1d_ratemaps):
-        if (isinstance(cell_index, int)):
+
+    if save_1d_ratemaps:
+        if isinstance(cell_index, int):
             output_file_prefix = '%s_%04d_%s' % (output_file_prefix, int(cell_index), data['cell_names'][cell_index])
         else:
             output_file_prefix = '%s_%04d' % (output_file_prefix, int(cell_index[0]))
-        
+
         ratemaps_1d_data['data-names'] = onethingy_name
         scipy.io.savemat('%s_for_recreating_1D_ratemaps.mat' % output_file_prefix, ratemaps_1d_data)
-        if (comparing):
+        if comparing:
             cf_ratemaps_1d_data['data-names'] = onethingy_name
             scipy.io.savemat('%s_for_recreating_1D_ratemaps_comparing.mat' % output_file_prefix, cf_ratemaps_1d_data)
-    
-    
+
     print("\n")
     print("         \\|||||/        ")
     print("         ( O O )         ")
@@ -2352,11 +2268,3 @@ def ratemap_generator(data, comparing=False, cell_index=(10, 11), tempoffsets=0,
     print("         |__||__|        ")
     print("          ||  ||         ")
     print("         ooO  Ooo        ")
-    
-
-    
-
-
-
-
-
