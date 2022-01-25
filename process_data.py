@@ -1,6 +1,7 @@
 """
 Prepares data for rate-map analyses.
-@author: JingyiGF
+@author: Benjamin Adric Dunn
+@modified: JingyiGF
 """
 
 from .toolkits import *

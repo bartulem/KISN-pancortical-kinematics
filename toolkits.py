@@ -507,13 +507,6 @@ def soft_thresholding_operator(z, l):
     """
     Soft-thresholding operator.
 
-    Parameters
-    ----------
-    
-
-    Returns
-    -------
-
     """
     if z > l:
         val = z - l
@@ -527,13 +520,6 @@ def soft_thresholding_operator(z, l):
 def firm_func(z, l1, l2, gamma):
     """
     Firm-thresholding operator.
-
-    Parameters
-    ----------
-
-
-    Returns
-    -------
 
     """
     if z > 0:
@@ -552,13 +538,6 @@ def firm_func(z, l1, l2, gamma):
 def block_stand(x, group):
     """
     Standardised the blocks.
-
-    Parameters
-    ----------
-
-
-    Returns
-    -------
 
     """
 

@@ -58,14 +58,6 @@ class ForwardSelection(object):
         return s
 
     def fit(self, data, cell_index, models=None, avoid_feature=None, special_group=None):
-        """
-        Performs a forward model selection procedure for a single cell.
-
-        Parameters
-        ----------
-        data : the mat file from function prepare_data4glms.
-
-        """
         models = dict_like(models, 'model', True)
 
         y = data['spk_mat'][cell_index].copy()

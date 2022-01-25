@@ -70,19 +70,7 @@ def eul2rot(ang_vec, order):
 
 
 def reformat_data(mat_data):
-    """
-    Purpose
-    -------------
 
-    Inputs
-    -------------
-    mat_data :
-
-    Outputs
-    -------------
-    
-
-    """
     print('Processing re-format the original data ...... ')
     if 'pointdatadimensions' not in mat_data.keys():
         raise Exception('Check the mat. It should be a file after tracking system at least.')
@@ -153,19 +141,6 @@ def get_global_head_data(head_x, head_z):
 
 
 def get_body_rotations(sorted_point_data):
-    """
-    Purpose
-    -------------
-
-    Inputs
-    -------------
-    sorted_point_data :
-
-    Outputs
-    -------------
-    
-
-    """
     print('Processing to get body related rotation matrix ...... ')
     nf = len(sorted_point_data)  # number of frames
 
@@ -255,21 +230,6 @@ def get_body_rotations(sorted_point_data):
 
 
 def get_head_rotations(head_x, head_z, r_root_inv, r_root_inv_oriented):
-    """
-    Purpose
-    -------------
-
-    Inputs
-    -------------
-    mat :
-
-    Outputs
-    -------------
-    dx : np.ndarray
-    dy :
-    spped :
-
-    """
     print('Processing to get head related rotation matrix ...... ')
     nf = len(head_x)  # number of frames
     
@@ -367,20 +327,6 @@ def rot2euler_xzy(rot_mat):
 
 
 def rot2euler(rot_matrix, use_solution_with_least_tilt=False):
-    """
-        Purpose
-        -------------
-        Get the euler angles from the rotation matrix, assume the order of the rotation matrix is dot(Rx, dot(Ry, Rz)) !!!!
-
-        Inputs
-        -------------
-        rot_matrix : rotation matrix
-
-        Outputs
-        -------------
-        angs : euler angles on x, y, z axis
-
-        """
     r11, r12, r13, r21, r22, r23, r31, r32, r33 = np.ravel(rot_matrix)
     temp = math.sqrt(r33 * r33 + r23 * r23)
     angs = np.zeros(3)
@@ -431,27 +377,6 @@ def get_back_angles(p):
 def get_angles(r_roots, r_heads, body_turned_heads, global_head_rot_mat, dir_backs, opt_rotated_dir_back,
                head_angle_thresh, use_expmap, use_xzy_order,
                use_solution_with_least_tilt=False):
-    """
-
-    -------------
-
-    Inputs
-    -------------
-    mat : raw mat file
-
-    yvals :
-
-    bodydir :
-
-    movement_offset:
-
-    Outputs
-    -------------
-    dx : np.ndarray
-    dy :
-    spped :
-
-    """
     print('Processing to get all Euler angles ...... ')
     nf = len(r_heads)
     
@@ -500,20 +425,6 @@ def get_angles(r_roots, r_heads, body_turned_heads, global_head_rot_mat, dir_bac
 
 
 def optrotate(avec):
-    """
-    Purpose
-    -------------
-
-
-    Inputs
-    -------------
-    avec :
-
-    Outputs
-    -------------
-
-
-    """
     print('processing to get opt rotation .....')
     n = len(avec[0])
     nframe = len(avec)
@@ -620,28 +531,7 @@ def calc_der(values, framerate, bins_1st, bins_2nd, is_angle, der_2nd, session_i
 
 
 def get_selfmotion(xvals, yvals, body_dir, frame_rate, speed_def, movement_offset, session_indicator=None):
-    """
-    Purpose
-    -------------
 
-    Inputs
-    -------------
-    xvals : neck x
-
-    yvals : neck y
-
-    body_dir : -root_ang[:,2]
-
-    movement_offset: selfmotion_window_size
-
-    Outputs
-    -------------
-    dx : np.ndarray
-    dy :
-    spped :
-
-
-    """
     dx = np.zeros(len(xvals))
     dy = np.zeros(len(xvals))
     speeds = np.zeros(len(xvals))
@@ -830,23 +720,7 @@ def data_loader(mat_file, imu_file=None, sync_file=None):
 
 
 def get_cell_data(mat_data):
-    """
-    Purpose
-    -------------
 
-    Inputs
-    -------------
-    mat :
-
-    sessionTS:
-
-    Outputs
-    -------------
-    cell_names :
-
-    cell_activities :
-
-    """
     print('Processing to re-format spikes data ...... ')
     session_ts = np.ravel(mat_data['sessionTS'])
     
@@ -880,31 +754,7 @@ def get_cell_data(mat_data):
 def data_generator(data, head_angle_thresh=(0.9, -0.9, 0.9, -0.9), use_expmap=False, use_xzy_order=False,
                    use_solution_with_least_tilt=False,
                    selfmotion_window_size=(150, 250), bins_der=(10, 10)):
-    """
-    Purpose
-    -------------
-    Generate data that will be used in rate map generator.
 
-    Inputs
-    -------------
-    data : the mat_data output from function data_loader().
-    
-    use_expmap : False (default), else euler angles (shouldn't matter if things are rotated properly)
-
-    use_xzy_order : False (default), this is the assumed order of rotations in the rotation matrix -- unfortunately there is now wonderful way of picking this...
-                  read anything on gimbal lock or multiple solutions of euler angles to understand why this is so stupid.  The best solution (which perhaps should be done)
-                  would be to keep track of the rotation points and solve the equations such that there aren't any jumps ... lame
-
-
-    speed_def : parameters for self motion maps, 0 = cumulative, 1 = jump thing.
-
-    selfmotion_window_size : parameters for self motion maps, was both 250 before.
-
-    Outputs
-    -------------
-    mat_data : a new mat_data that contains the data used for rate maps.
-
-    """
     settings = {'head_angle_thresh': head_angle_thresh, 'use_expmap': use_expmap, 'use_xzy_order': use_xzy_order,
                 'use_solution_with_least_tilt': use_solution_with_least_tilt,
                 'selfmotion_window_size': selfmotion_window_size, 'bins_der': bins_der}
