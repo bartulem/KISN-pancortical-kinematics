@@ -441,7 +441,7 @@ class PlotExamples:
             ax.plot(list(range(cch.shape[0])), cch_convolved, color=cch_color_alpha['c'], alpha=cch_color_alpha['alpha'])
         if add_prob:
             for ii in range(cch.shape[0]):
-                ax.fill_between(x=[ii], y1=[0], y2=[cch[ii]], step='mid', color=cmap(normalize(log_probabilities[ii])))
+                ax.fill_between(x=[ii], y1=[0.022], y2=[cch[ii]], step='mid', color=cmap(normalize(log_probabilities[ii])))
         if mid_vline:
             ax.axvline(x=50, ls=mid_vline_params['ls'], lw=mid_vline_params['lw'], color=mid_vline_params['c'], alpha=mid_vline_params['alpha'])
         ax.set_title(f'{as_id}_{self.cell_pair_id}')
@@ -462,7 +462,7 @@ class PlotExamples:
             color_bar.ax.tick_params(size=0)
         if self.save_fig:
             if os.path.exists(self.save_dir):
-                fig.savefig(f'{self.save_dir}{os.sep}{as_id}_{self.cell_pair_id}.{self.fig_format}', dpi=300)
+                fig.savefig(f'{self.save_dir}{os.sep}{as_id}_{self.cell_pair_id}.{self.fig_format}', dpi=500)
         plt.show()
 
     def plot_cch_pairs_anatomically(self, **kwargs):
