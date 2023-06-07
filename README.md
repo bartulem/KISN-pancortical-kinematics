@@ -3,7 +3,19 @@
 ---------------------------------------------------------------------------------
 Code used to generate findings presented in "Behavioral decomposition reveals rich encoding structure employed across neocortex" ([bioRxiv](https://www.biorxiv.org/content/10.1101/2022.02.08.479515v1), 2022). The "Rat 3D Tracking & E-Phys KISN 2020 Dataset", generated for the purposes of this project, can be downloaded at [fig**share**](https://figshare.com/articles/dataset/Rat_3D_Tracking_E-Phys_KISN_2020_Dataset/17903834).
 
-To run the code, download the data and clone the repository in a virtual environment with the installed packages listed in the file requirements.txt. 
+To run the code, download the data and clone the repository in a virtual environment with the installed packages listed in the file requirements.txt. Installation time should be under one minute.
+
+## Prerequisites
+
+* [Python 3.9](https://www.python.org/downloads/release/python-390/) (and add it to top of PATH)
+* [git](https://git-scm.com/download/)  (and add it to PATH)
+
+## Installation and updating
+
+Clone repository with command below.
+```bash
+git clone https://github.com/bartulem/KISN-pancortical-kinematics.git
+```
 
 For example, to plot spiking cross-correlation examples, one would run:
 
@@ -21,7 +33,7 @@ PlotExamples(cch_data_dir='/.../noise_correlations/analyses',
                                                 plot_pair_position=False)
 ```
 
-Tested in PyCharm 2021.3.3 on Ubuntu 20.04 LTS.
+Developed and tested in PyCharm 2021.3.3 on Windows 10, Ubuntu 20.04 and 22.04 LTS.
 
 ![rat_behavior](./rat_behavior.gif)
 ![decode_behaviors](./decode_behaviors.png)
